@@ -94,6 +94,8 @@ jobs:
     - name: Build Client Docker image
       run: |
         docker build -f client/Dockerfile.prod \
+          --build-arg SERVER_URL=${{ secrets.SERVER_URL }} \
+          --build-arg GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }} \
           -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }} \
           -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:latest \
           ./client
@@ -117,7 +119,7 @@ jobs:
           --max-instances 10 \
           --concurrency 1000 \
           --timeout 300 \
-          --set-env-vars NODE_ENV=production,SERVER_URL=${{ secrets.SERVER_URL }}
+          --set-env-vars NODE_ENV=production
           
     - name: Get Client URL
       run: |

@@ -2,6 +2,14 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
+# Accept build arguments
+ARG SERVER_URL
+ARG GOOGLE_CLOUD_PROJECT
+
+# Set environment variables for build
+ENV SERVER_URL=${SERVER_URL}
+ENV GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+
 # Copy package files and install dependencies
 COPY package*.json ./
 RUN npm ci
