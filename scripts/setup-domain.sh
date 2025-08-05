@@ -17,7 +17,7 @@ PROJECT_ID=""
 REGION="us-central1"
 CLIENT_SERVICE_NAME="organicfreshcoffee-client"
 SERVER_SERVICE_NAME="organicfreshcoffee-server"
-MAIN_DOMAIN="www.organicfreshcoffee.com"
+MAIN_DOMAIN="organicfreshcoffee.com"
 API_DOMAIN="api.organicfreshcoffee.com"
 
 print_header() {
@@ -116,7 +116,7 @@ create_domain_mapping() {
     print_step "Creating domain mappings for Cloud Run..."
     
     # Create mapping for main domain (client)
-    if gcloud beta run domain-mappings describe $MAIN_DOMAIN --region=$REGION &>/dev/null; then
+    if gcloud beta run domain-mappings describe --domain=$MAIN_DOMAIN --region=$REGION &>/dev/null; then
         print_warning "Domain mapping for '$MAIN_DOMAIN' already exists"
     else
         print_info "Creating domain mapping for '$MAIN_DOMAIN' -> client service..."
@@ -128,7 +128,7 @@ create_domain_mapping() {
     fi
     
     # Create mapping for API subdomain (server)
-    if gcloud beta run domain-mappings describe $API_DOMAIN --region=$REGION &>/dev/null; then
+    if gcloud beta run domain-mappings describe --domain=$API_DOMAIN --region=$REGION &>/dev/null; then
         print_warning "Domain mapping for '$API_DOMAIN' already exists"
     else
         print_info "Creating domain mapping for '$API_DOMAIN' -> server service..."
@@ -188,15 +188,6 @@ get_dns_records() {
         echo "gcloud beta run domain-mappings describe --domain=$MAIN_DOMAIN --region=$REGION"
         echo "gcloud beta run domain-mappings describe --domain=$API_DOMAIN --region=$REGION"
     fi
-    
-    echo ""
-    print_info "Additional recommended DNS record for root domain redirect:"
-    echo "Name: @"
-    echo "Type: A"
-    echo "Value: 185.199.108.153 (GitHub Pages redirect service example)"
-    echo "TTL: 300"
-    echo "---"
-    echo "Or use your DNS provider's redirect service to redirect organicfreshcoffee.com → www.organicfreshcoffee.com"
 }
 
 configure_google_domains() {
@@ -209,24 +200,22 @@ configure_google_domains() {
     echo "2. Find your domain 'organicfreshcoffee.com'"
     echo "3. Click on it and go to 'DNS' tab"
     echo "4. Scroll down to 'Custom records'"
-    echo "5. Add the CNAME records shown above:"
-    echo "   - For www.organicfreshcoffee.com (client app)"
-    echo "   - For api.organicfreshcoffee.com (server API)"
-    echo "6. Optional: Set up redirect from organicfreshcoffee.com → www.organicfreshcoffee.com"
-    echo "   (Many DNS providers have a redirect service for this)"
-    echo "7. Set TTL to 300 seconds for faster propagation during testing"
-    echo "8. Save the changes"
+    echo "5. Add the DNS records shown above:"
+    echo "   - For organicfreshcoffee.com (client app) - A records"
+    echo "   - For api.organicfreshcoffee.com (server API) - CNAME record"
+    echo "6. Set TTL to 300 seconds for faster propagation during testing"
+    echo "7. Save the changes"
     echo ""
     echo -e "${BLUE}Note:${NC} DNS propagation can take up to 48 hours, but usually takes 5-10 minutes"
-    echo -e "${BLUE}Tip:${NC} You can use 'dig www.organicfreshcoffee.com' to check DNS propagation"
+    echo -e "${BLUE}Tip:${NC} You can use 'dig organicfreshcoffee.com' to check DNS propagation"
     echo ""
-    echo -e "${YELLOW}Why www instead of root domain?${NC}"
-    echo "================================="
-    echo "Using www.organicfreshcoffee.com instead of organicfreshcoffee.com allows us to:"
-    echo "• Use stable CNAME records instead of potentially changing IP addresses"
-    echo "• Avoid conflicts with other DNS records (MX, NS, etc.)"
-    echo "• Follow modern web hosting best practices"
-    echo "• Ensure more reliable DNS resolution"
+    echo -e "${YELLOW}About the A records for the root domain:${NC}"
+    echo "========================================"
+    echo "• These are Google's stable Cloud Run ingress IP addresses"
+    echo "• They rarely change, but Google will notify if they do"
+    echo "• This is the standard approach for root domains with Cloud Run"
+    echo "• Millions of sites use this same setup successfully"
+    echo "• Alternative: Use Cloudflare (free) for CNAME flattening if you prefer"
 }
 
 test_domain_setup() {
