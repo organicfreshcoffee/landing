@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { initializeFirebase } from './firebase';
+import { apiEndpoints } from './api';
 import axios from 'axios';
 
 interface AuthContextType {
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (user) {
             try {
               const token = await user.getIdToken();
-              await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/login`, {}, {
+              await axios.post(apiEndpoints.login(), {}, {
                 headers: {
                   Authorization: `Bearer ${token}`
                 }

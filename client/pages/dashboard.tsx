@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
+import { apiEndpoints, logApiConfig } from '../lib/api';
 import axios from 'axios';
 import styles from '../styles/Dashboard.module.css';
 
@@ -27,6 +28,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
+      // Log API configuration in development
+      logApiConfig();
       fetchServers();
     }
   }, [user]);
@@ -36,7 +39,7 @@ export default function Dashboard() {
     
     try {
       const token = await user.getIdToken();
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/servers`, {
+      const response = await axios.get(apiEndpoints.servers(), {
         headers: {
           Authorization: `Bearer ${token}`
         }

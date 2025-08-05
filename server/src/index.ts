@@ -11,18 +11,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware - Allow multiple client ports for development
+// Middleware - Configure CORS for both development and production
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? [
+      process.env.CLIENT_URL || 'https://organicfreshcoffee.com',
+      'https://organicfreshcoffee.com',
+      'https://www.organicfreshcoffee.com'
+    ]
+  : [
+      'http://localhost:3000',
+      'http://localhost:3001', 
+      'http://localhost:3002',
+      'http://localhost:3003',
+      'http://localhost:3004',
+      'http://localhost:3005'
+    ];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CLIENT_URL 
-    : [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:3002',
-        'http://localhost:3003',
-        'http://localhost:3004',
-        'http://localhost:3005'
-      ],
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(express.json());

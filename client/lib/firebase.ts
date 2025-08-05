@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { apiEndpoints } from './api';
 
 // Firebase config will be loaded from GCP Secret Manager
 let firebaseConfig: any = null;
@@ -15,7 +16,7 @@ async function getFirebaseConfig() {
     // For local development, we'll use environment variables as fallback
     if (typeof window !== 'undefined') {
       // Client-side: Firebase config should be loaded from the server
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/firebase-config`);
+      const response = await fetch(apiEndpoints.firebaseConfig());
       if (response.ok) {
         firebaseConfig = await response.json();
       } else {
