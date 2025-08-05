@@ -4,11 +4,11 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy migration script and package.json
-COPY ./init-mongo.js ./
+COPY ./migration-db.js ./
 COPY package*.json ./
 
 # Install only mongodb dependency
 RUN npm install mongodb
 
 # Run migration
-CMD ["node", "init-mongo.js"]
+CMD ["node", "migration-db.js"]
