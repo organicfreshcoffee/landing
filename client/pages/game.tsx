@@ -18,6 +18,7 @@ interface GameMessage {
 interface Player {
   id: string;
   position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
   color: string;
   mesh?: THREE.Mesh;
 }
@@ -25,6 +26,7 @@ interface Player {
 interface PlayerUpdate {
   id: string;
   position: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
 }
 
 export default function Game() {
@@ -39,6 +41,10 @@ export default function Game() {
   const animationIdRef = useRef<number | null>(null);
   const playersRef = useRef<Map<string, Player>>(new Map());
   const localPlayerRef = useRef<THREE.Mesh | null>(null);
+  const keysPressed = useRef<Set<string>>(new Set());
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const isPointerLocked = useRef(false);
+  const localPlayerRotation = useRef({ x: 0, y: 0, z: 0 });
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -79,18 +85,29 @@ export default function Game() {
     if (existingPlayer) {
       // Update existing player position
       existingPlayer.position = playerData.position;
+      if (playerData.rotation) {
+        existingPlayer.rotation = playerData.rotation;
+      }
       if (existingPlayer.mesh) {
         existingPlayer.mesh.position.set(
           playerData.position.x,
           playerData.position.y,
           playerData.position.z
         );
+        if (playerData.rotation) {
+          existingPlayer.mesh.rotation.set(
+            playerData.rotation.x,
+            playerData.rotation.y,
+            playerData.rotation.z
+          );
+        }
       }
     } else {
       // Create new player
       const newPlayer: Player = {
         id: playerData.id,
         position: playerData.position,
+        rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
         color: generatePlayerColor(playerData.id)
       };
       
@@ -162,6 +179,34 @@ export default function Game() {
     ground.receiveShadow = true;
     scene.add(ground);
 
+    // Add scenery objects (spheres) for better sense of movement
+    const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+    const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown color
+    
+    // Create a grid of spheres across the ground
+    for (let x = -40; x <= 40; x += 10) {
+      for (let z = -40; z <= 40; z += 10) {
+        if (x === 0 && z === 0) continue; // Skip center where player starts
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial.clone());
+        sphere.position.set(x + (Math.random() - 0.5) * 3, 0.5, z + (Math.random() - 0.5) * 3);
+        sphere.castShadow = true;
+        scene.add(sphere);
+      }
+    }
+
+    // Add some taller objects for variety
+    const cylinderGeometry = new THREE.CylinderGeometry(0.3, 0.3, 3, 8);
+    const cylinderMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 }); // Dark brown
+    
+    for (let i = 0; i < 20; i++) {
+      const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial.clone());
+      const x = (Math.random() - 0.5) * 80;
+      const z = (Math.random() - 0.5) * 80;
+      cylinder.position.set(x, 1.5, z);
+      cylinder.castShadow = true;
+      scene.add(cylinder);
+    }
+
     // Create local player cube (different color to distinguish from others)
     const localPlayerGeometry = new THREE.BoxGeometry(1, 1, 1);
     const localPlayerMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 }); // Green for local player
@@ -184,11 +229,129 @@ export default function Game() {
       }
     };
 
+    // Handle mouse movement for player rotation
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isPointerLocked.current) return;
+      
+      const sensitivity = 0.002;
+      localPlayerRotation.current.y -= event.movementX * sensitivity;
+      localPlayerRotation.current.x -= event.movementY * sensitivity;
+      
+      // Limit vertical rotation
+      localPlayerRotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, localPlayerRotation.current.x));
+      
+      // Apply rotation to local player
+      if (localPlayerRef.current) {
+        localPlayerRef.current.rotation.y = localPlayerRotation.current.y;
+        localPlayerRef.current.rotation.x = localPlayerRotation.current.x;
+      }
+    };
+
+    // Handle pointer lock
+    const handlePointerLockChange = () => {
+      isPointerLocked.current = document.pointerLockElement === canvasRef.current;
+    };
+
+    // Request pointer lock when canvas is clicked
+    const handleCanvasClick = () => {
+      if (canvasRef.current) {
+        canvasRef.current.requestPointerLock();
+      }
+    };
+    
     window.addEventListener('resize', handleResize);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    canvasRef.current.addEventListener('click', handleCanvasClick);
+
+    // Movement update function for smooth movement
+    const updateMovement = () => {
+      if (!localPlayerRef.current || !cameraRef.current || !gameState.connected) return;
+      
+      const moveSpeed = 0.1; // Reduced for smoother movement
+      const localPlayer = localPlayerRef.current;
+      const camera = cameraRef.current;
+      let moved = false;
+      
+      // Store old position and rotation
+      const oldPosition = { ...localPlayer.position };
+      const oldRotation = { ...localPlayerRotation.current };
+      
+      // Calculate movement direction based on player rotation
+      const forward = new THREE.Vector3(0, 0, -1);
+      const right = new THREE.Vector3(1, 0, 0);
+      forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+      right.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+
+      if (keysPressed.current.has('KeyW')) {
+        localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
+        moved = true;
+      }
+      if (keysPressed.current.has('KeyS')) {
+        localPlayer.position.add(forward.clone().multiplyScalar(-moveSpeed));
+        moved = true;
+      }
+      if (keysPressed.current.has('KeyA')) {
+        localPlayer.position.add(right.clone().multiplyScalar(-moveSpeed));
+        moved = true;
+      }
+      if (keysPressed.current.has('KeyD')) {
+        localPlayer.position.add(right.clone().multiplyScalar(moveSpeed));
+        moved = true;
+      }
+      if (keysPressed.current.has('Space')) {
+        localPlayer.position.y += moveSpeed;
+        moved = true;
+      }
+      if (keysPressed.current.has('ShiftLeft')) {
+        localPlayer.position.y -= moveSpeed;
+        moved = true;
+      }
+
+      // Update camera to follow the player (third-person view)
+      const playerPos = localPlayer.position;
+      const cameraOffset = new THREE.Vector3(0, 3, 5);
+      cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+      
+      camera.position.set(
+        playerPos.x + cameraOffset.x,
+        playerPos.y + cameraOffset.y,
+        playerPos.z + cameraOffset.z
+      );
+      camera.lookAt(playerPos.x, playerPos.y, playerPos.z);
+
+      // Send updates to server if position or rotation changed
+      if (moved || 
+          Math.abs(oldRotation.x - localPlayerRotation.current.x) > 0.01 ||
+          Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01) {
+        
+        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+          const moveMessage = {
+            type: 'player_move',
+            data: {
+              playerId: user?.uid,
+              position: {
+                x: localPlayer.position.x,
+                y: localPlayer.position.y,
+                z: localPlayer.position.z
+              },
+              rotation: {
+                x: localPlayerRotation.current.x,
+                y: localPlayerRotation.current.y,
+                z: localPlayerRotation.current.z
+              }
+            }
+          };
+          websocketRef.current.send(JSON.stringify(moveMessage));
+        }
+      }
+    };
 
     // Start animation loop
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
+      
+      updateMovement();
       
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
@@ -198,6 +361,11 @@ export default function Game() {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      if (canvasRef.current) {
+        canvasRef.current.removeEventListener('click', handleCanvasClick);
+      }
     };
   };
 
@@ -256,6 +424,11 @@ export default function Game() {
             position: {
               x: 0,
               y: 0.5,
+              z: 0
+            },
+            rotation: {
+              x: 0,
+              y: 0,
               z: 0
             }
           }
@@ -351,75 +524,21 @@ export default function Game() {
     }
   };
 
-  // Handle keyboard input for player movement
+  // Handle keyboard input for smooth player movement
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (!gameState.connected || !localPlayerRef.current || !cameraRef.current) return;
+    if (!gameState.connected) return;
 
-    const moveSpeed = 0.5;
-    const localPlayer = localPlayerRef.current;
-    const camera = cameraRef.current;
-
-    // Store old position
-    const oldPosition = {
-      x: localPlayer.position.x,
-      y: localPlayer.position.y,
-      z: localPlayer.position.z
-    };
-
-    switch (event.code) {
-      case 'KeyW':
-        localPlayer.position.z -= moveSpeed;
-        break;
-      case 'KeyS':
-        localPlayer.position.z += moveSpeed;
-        break;
-      case 'KeyA':
-        localPlayer.position.x -= moveSpeed;
-        break;
-      case 'KeyD':
-        localPlayer.position.x += moveSpeed;
-        break;
-      case 'Space':
-        event.preventDefault();
-        localPlayer.position.y += moveSpeed;
-        break;
-      case 'ShiftLeft':
-        localPlayer.position.y -= moveSpeed;
-        break;
+    // Prevent default for space key to avoid page scrolling
+    if (event.code === 'Space') {
+      event.preventDefault();
     }
 
-    // Update camera to follow the player (third-person view)
-    const playerPos = localPlayer.position;
-    camera.position.set(
-      playerPos.x,
-      playerPos.y + 3,
-      playerPos.z + 5
-    );
-    camera.lookAt(playerPos.x, playerPos.y, playerPos.z);
+    keysPressed.current.add(event.code);
+  }, [gameState.connected]);
 
-    // Send position update to server with debugging
-    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-      const moveMessage = {
-        type: 'player_move',
-        data: {
-          playerId: user?.uid,
-          position: {
-            x: localPlayer.position.x,
-            y: localPlayer.position.y,
-            z: localPlayer.position.z
-          }
-        }
-      };
-      console.log('Sending player_move message:', moveMessage);
-      websocketRef.current.send(JSON.stringify(moveMessage));
-    } else {
-      console.log('WebSocket not ready:', {
-        websocketExists: !!websocketRef.current,
-        readyState: websocketRef.current?.readyState,
-        connected: gameState.connected
-      });
-    }
-  }, [gameState.connected, user?.uid]);
+  const handleKeyUp = useCallback((event: KeyboardEvent) => {
+    keysPressed.current.delete(event.code);
+  }, []);
 
   // Cleanup function
   const cleanup = () => {
@@ -428,6 +547,15 @@ export default function Game() {
     }
     if (websocketRef.current) {
       websocketRef.current.close();
+    }
+    
+    // Clear key states
+    keysPressed.current.clear();
+    isPointerLocked.current = false;
+    
+    // Exit pointer lock if active
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
     }
     
     // Clean up all player meshes
@@ -464,10 +592,12 @@ export default function Game() {
   // Handle keyboard events
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleKeyDown]);
+  }, [handleKeyDown, handleKeyUp]);
 
   // Initialize game when component mounts and server is available
   useEffect(() => {
@@ -548,6 +678,7 @@ export default function Game() {
         {gameState.connected && (
           <div className={styles.controls}>
             <div>Controls: WASD to move, Space/Shift for up/down</div>
+            <div>Mouse: Click to lock cursor, move to look around</div>
             <div>Players online: {playersRef.current.size + 1}</div>
             <div>Your cube: Green | Other players: Various colors</div>
           </div>
