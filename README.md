@@ -199,6 +199,12 @@ cd client
 NEXT_PUBLIC_API_URL=http://localhost:3001 GOOGLE_CLOUD_PROJECT=<project_id> npm run dev
 ```
 
+## Running the MongoDB Migrations
+```
+docker build -f migration.Dockerfile -t db-migration .
+docker run --rm -e MONGODB_URI="your-mongodb-connection-string-here" db-migration
+```
+
 ## 📦 Dependencies
 
 ### Frontend (`/client`)
