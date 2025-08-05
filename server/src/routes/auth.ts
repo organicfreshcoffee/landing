@@ -8,11 +8,47 @@ const router = Router();
 // Endpoint to get Firebase client configuration
 router.get('/firebase-config', async (req: Request, res: Response) => {
   try {
+    console.log(`[${new Date().toISOString()}] Firebase config request received`);
+    console.log('Request headers:', req.headers);
+    console.log('Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT ? 'SET' : 'NOT SET',
+      GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'SET' : 'NOT SET'
+    });
+    
     const config = await getFirebaseConfig();
+    console.log('Firebase config retrieved successfully, sending response');
     res.json(config);
   } catch (error) {
     console.error('Error getting Firebase config:', error);
-    res.status(500).json({ error: 'Failed to get Firebase configuration' });
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    // Send detailed error information (you might want to remove this in production for security)
+    res.status(500).json({ 
+      error: 'Failed to get Firebase configuration',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Debug endpoint to check environment and GCP connectivity
+router.get('/debug/environment', async (req: Request, res: Response) => {
+  try {
+    const envInfo = {
+      NODE_ENV: process.env.NODE_ENV,
+      GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT ? 'SET' : 'NOT SET',
+      GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'SET' : 'NOT SET',
+      timestamp: new Date().toISOString(),
+      platform: process.platform,
+      nodeVersion: process.version
+    };
+    
+    console.log('Debug environment info:', envInfo);
+    res.json(envInfo);
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({ error: 'Debug endpoint failed' });
   }
 });
 
