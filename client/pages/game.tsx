@@ -46,6 +46,7 @@ export default function Game() {
   const isPointerLocked = useRef(false);
   const localPlayerRotation = useRef({ x: 0, y: 0, z: 0 });
   const lastUpdateTime = useRef<number>(0);
+  const updateMovementRef = useRef<(() => void) | null>(null);
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -236,6 +237,11 @@ export default function Game() {
     }
   }, [gameState.connected, user?.uid]);
 
+  // Update the ref whenever the function changes
+  useEffect(() => {
+    updateMovementRef.current = updateMovement;
+  }, [updateMovement]);
+
   // Initialize Three.js scene
   const initThreeJS = () => {
     if (!canvasRef.current) return;
@@ -371,7 +377,10 @@ export default function Game() {
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
       
-      updateMovement();
+      // Call the current updateMovement function
+      if (updateMovementRef.current) {
+        updateMovementRef.current();
+      }
       
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
@@ -638,7 +647,7 @@ export default function Game() {
       cleanup();
       if (cleanupThree) cleanupThree();
     };
-  }, [server, user, updateMovement]);
+  }, [server, user]);
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
