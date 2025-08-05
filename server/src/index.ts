@@ -33,23 +33,45 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Initialize Firebase Admin SDK
-initializeFirebaseAdmin().catch(console.error);
+// Initialize services before starting the server
+async function initializeServices() {
+  try {
+    // Initialize Firebase Admin SDK first
+    console.log('Initializing Firebase Admin SDK...');
+    await initializeFirebaseAdmin();
+    
+    // Connect to Database
+    console.log('Connecting to database...');
+    await connectToDatabase();
+    
+    console.log('All services initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize services:', error);
+    process.exit(1);
+  }
+}
 
-// Connect to Database
-connectToDatabase().catch(console.error);
+// Routes (set up after services are initialized)
+async function setupServer() {
+  await initializeServices();
+  
+  app.use('/api', authRoutes);
 
-// Routes
-app.use('/api', authRoutes);
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+  // Error handling middleware
+  app.use(errorHandler);
 
-// Error handling middleware
-app.use(errorHandler);
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Start the server
+setupServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
 });
