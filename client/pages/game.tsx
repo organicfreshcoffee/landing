@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import * as THREE from 'three';
@@ -354,7 +354,7 @@ export default function Game() {
   };
 
   // Handle keyboard input for player movement
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!gameState.connected || !localPlayerRef.current || !cameraRef.current) return;
 
     const moveSpeed = 0.5;
@@ -399,9 +399,9 @@ export default function Game() {
     );
     camera.lookAt(playerPos.x, playerPos.y, playerPos.z);
 
-    // Send position update to server
+    // Send position update to server with debugging
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-      websocketRef.current.send(JSON.stringify({
+      const moveMessage = {
         type: 'player_move',
         data: {
           playerId: user?.uid,
@@ -411,9 +411,17 @@ export default function Game() {
             z: localPlayer.position.z
           }
         }
-      }));
+      };
+      console.log('Sending player_move message:', moveMessage);
+      websocketRef.current.send(JSON.stringify(moveMessage));
+    } else {
+      console.log('WebSocket not ready:', {
+        websocketExists: !!websocketRef.current,
+        readyState: websocketRef.current?.readyState,
+        connected: gameState.connected
+      });
     }
-  };
+  }, [gameState.connected, user?.uid]);
 
   // Cleanup function
   const cleanup = () => {
@@ -455,6 +463,14 @@ export default function Game() {
     }
   }, [user, authLoading, router]);
 
+  // Handle keyboard events
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
   // Initialize game when component mounts and server is available
   useEffect(() => {
     if (!server || !user) return;
@@ -470,13 +486,9 @@ export default function Game() {
     };
     initGame();
 
-    // Add keyboard listeners
-    window.addEventListener('keydown', handleKeyDown);
-
     return () => {
       cleanup();
       if (cleanupThree) cleanupThree();
-      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [server, user]);
 

@@ -29,13 +29,7 @@ async function getFirebaseConfig() {
     return firebaseConfig;
   } catch (error) {
     console.error('Error loading Firebase config:', error);
-    // Fallback to environment variables for local development
-    firebaseConfig = {
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'your-project-id',
-      // Note: Other config values should come from Secret Manager in production
-      // This is just for local development
-    };
-    return firebaseConfig;
+    throw new Error('Failed to load Firebase configuration from server');
   }
 }
 

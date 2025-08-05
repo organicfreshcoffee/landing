@@ -184,6 +184,21 @@ docker-compose up --build
 - **Backend (Express)**: http://localhost:3001  
 - **MongoDB**: mongodb://localhost:27017
 
+### Testing Multiple Clients
+
+Run the client twice locally
+
+In one terminal, start all services:
+```
+docker-compose up
+```
+
+In another terminal, start the second client:
+```
+cd client
+NEXT_PUBLIC_API_URL=http://localhost:3001 GOOGLE_CLOUD_PROJECT=<project_id> npm run dev
+```
+
 ## 📦 Dependencies
 
 ### Frontend (`/client`)
