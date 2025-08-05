@@ -220,16 +220,14 @@ export default function Game() {
         }
       }
 
-      // Convert HTTP/HTTPS URLs to WebSocket URLs
-      let wsUrl = serverAddress;
-      if (serverAddress.startsWith('http://')) {
-        wsUrl = serverAddress.replace('http://', 'ws://');
-      } else if (serverAddress.startsWith('https://')) {
-        wsUrl = serverAddress.replace('https://', 'wss://');
-      } else if (!serverAddress.startsWith('ws://') && !serverAddress.startsWith('wss://')) {
-        // Assume it's a plain address, add ws:// prefix
-        wsUrl = `ws://${serverAddress}`;
-      }
+      // Convert to WebSocket URL with appropriate protocol
+      let wsUrl = serverAddress
+        .replace(/^https?:\/\//, '') // Remove http/https prefix if present
+        .replace(/^wss?:\/\//, '');   // Remove ws/wss prefix if present
+      
+      // Use secure WebSocket if page is served over HTTPS
+      const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      wsUrl = `${protocol}${wsUrl}`;
 
       // Add game endpoint if not present
       if (!wsUrl.includes('/game')) {
