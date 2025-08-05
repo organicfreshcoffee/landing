@@ -22,7 +22,6 @@ Before you begin, ensure you have the following installed:
 - A [Firebase](https://firebase.google.com/) account
 - A [Google Cloud Platform](https://cloud.google.com/) account
 - [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) (gcloud)
-- A [Google Cloud Platform](https://cloud.google.com/) account (optional for production)
 
 ## 🚀 Quick Start
 
@@ -38,9 +37,8 @@ cd landing
 #### Create a Firebase Project
 1. Go to the [Firebase Console](https://console.firebase.google.com/)
 2. Click "Create a project" or "Add project"  
-3. **Important**: Use the same project ID as your Google Cloud Project for seamless integration
-4. Follow the setup wizard to create your project
-5. Enable Authentication:
+3. Follow the setup wizard to create your project
+4. Enable Authentication:
    - Go to **Authentication** > **Sign-in method**
    - Enable **Email/Password** provider
 

@@ -115,11 +115,14 @@ fi
 echo "✅ Required secrets found in Secret Manager"
 
 # Check service account key
-if [ ! -f service-account-key.json ]; then
-    echo "❌ service-account-key.json not found. Please create a service account key as described in README.md"
+SERVICE_ACCOUNT_KEY=$(grep GOOGLE_APPLICATION_CREDENTIALS .env | cut -d'=' -f2)
+if [ ! -f "$SERVICE_ACCOUNT_KEY" ]; then
+    echo "❌ Service account key not found at: $SERVICE_ACCOUNT_KEY"
+    echo "   Please create a service account key as described in README.md"
+    echo "   Or update GOOGLE_APPLICATION_CREDENTIALS in .env with the correct path"
     exit 1
 fi
-echo "✅ Service account key found"
+echo "✅ Service account key found at: $SERVICE_ACCOUNT_KEY"
 
 # Install client dependencies
 echo ""
