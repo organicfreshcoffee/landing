@@ -45,6 +45,7 @@ export default function Game() {
   const mouseRef = useRef({ x: 0, y: 0 });
   const isPointerLocked = useRef(false);
   const localPlayerRotation = useRef({ x: 0, y: 0, z: 0 });
+  const lastUpdateTime = useRef<number>(0);
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -132,6 +133,108 @@ export default function Game() {
       players.delete(playerId);
     }
   };
+
+  // Movement update function for smooth movement
+  const updateMovement = useCallback(() => {
+    if (!localPlayerRef.current || !cameraRef.current || !gameState.connected) return;
+    
+    const moveSpeed = 0.1; // Reduced for smoother movement
+    const localPlayer = localPlayerRef.current;
+    const camera = cameraRef.current;
+    let moved = false;
+    
+    // Store old position and rotation
+    const oldPosition = { ...localPlayer.position };
+    const oldRotation = { ...localPlayerRotation.current };
+    
+    // Calculate movement direction based on player rotation
+    const forward = new THREE.Vector3(0, 0, -1);
+    const right = new THREE.Vector3(1, 0, 0);
+    forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+    right.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+
+    if (keysPressed.current.has('KeyW')) {
+      localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
+      moved = true;
+    }
+    if (keysPressed.current.has('KeyS')) {
+      localPlayer.position.add(forward.clone().multiplyScalar(-moveSpeed));
+      moved = true;
+    }
+    if (keysPressed.current.has('KeyA')) {
+      localPlayer.position.add(right.clone().multiplyScalar(-moveSpeed));
+      moved = true;
+    }
+    if (keysPressed.current.has('KeyD')) {
+      localPlayer.position.add(right.clone().multiplyScalar(moveSpeed));
+      moved = true;
+    }
+    if (keysPressed.current.has('Space')) {
+      localPlayer.position.y += moveSpeed;
+      moved = true;
+    }
+    if (keysPressed.current.has('ShiftLeft')) {
+      localPlayer.position.y -= moveSpeed;
+      moved = true;
+    }
+
+    // Update camera to follow the player with proper FPS-style rotation
+    const playerPos = localPlayer.position;
+    const cameraOffset = new THREE.Vector3(0, 3, 5);
+    
+    // Apply player's Y rotation to camera offset
+    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+    
+    // Set camera position
+    camera.position.set(
+      playerPos.x + cameraOffset.x,
+      playerPos.y + cameraOffset.y,
+      playerPos.z + cameraOffset.z
+    );
+    
+    // Calculate look-at point based on player rotation
+    const lookDirection = new THREE.Vector3(0, 0, -1);
+    lookDirection.applyAxisAngle(new THREE.Vector3(1, 0, 0), localPlayerRotation.current.x); // Apply X rotation
+    lookDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y); // Apply Y rotation
+    
+    const lookAtPoint = new THREE.Vector3(
+      playerPos.x + lookDirection.x,
+      playerPos.y + lookDirection.y,
+      playerPos.z + lookDirection.z
+    );
+    
+    camera.lookAt(lookAtPoint);
+
+    // Send updates to server if position or rotation changed (with throttling)
+    const now = Date.now();
+    if ((moved || 
+        Math.abs(oldRotation.x - localPlayerRotation.current.x) > 0.01 ||
+        Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01) &&
+        now - lastUpdateTime.current > 50) { // Throttle to 20 updates per second
+      
+      lastUpdateTime.current = now;
+      
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        const moveMessage = {
+          type: 'player_move',
+          data: {
+            playerId: user?.uid,
+            position: {
+              x: localPlayer.position.x,
+              y: localPlayer.position.y,
+              z: localPlayer.position.z
+            },
+            rotation: {
+              x: localPlayerRotation.current.x,
+              y: localPlayerRotation.current.y,
+              z: localPlayerRotation.current.z
+            }
+          }
+        };
+        websocketRef.current.send(JSON.stringify(moveMessage));
+      }
+    }
+  }, [gameState.connected, user?.uid]);
 
   // Initialize Three.js scene
   const initThreeJS = () => {
@@ -263,89 +366,6 @@ export default function Game() {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('pointerlockchange', handlePointerLockChange);
     canvasRef.current.addEventListener('click', handleCanvasClick);
-
-    // Movement update function for smooth movement
-    const updateMovement = () => {
-      if (!localPlayerRef.current || !cameraRef.current || !gameState.connected) return;
-      
-      const moveSpeed = 0.1; // Reduced for smoother movement
-      const localPlayer = localPlayerRef.current;
-      const camera = cameraRef.current;
-      let moved = false;
-      
-      // Store old position and rotation
-      const oldPosition = { ...localPlayer.position };
-      const oldRotation = { ...localPlayerRotation.current };
-      
-      // Calculate movement direction based on player rotation
-      const forward = new THREE.Vector3(0, 0, -1);
-      const right = new THREE.Vector3(1, 0, 0);
-      forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
-      right.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
-
-      if (keysPressed.current.has('KeyW')) {
-        localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
-        moved = true;
-      }
-      if (keysPressed.current.has('KeyS')) {
-        localPlayer.position.add(forward.clone().multiplyScalar(-moveSpeed));
-        moved = true;
-      }
-      if (keysPressed.current.has('KeyA')) {
-        localPlayer.position.add(right.clone().multiplyScalar(-moveSpeed));
-        moved = true;
-      }
-      if (keysPressed.current.has('KeyD')) {
-        localPlayer.position.add(right.clone().multiplyScalar(moveSpeed));
-        moved = true;
-      }
-      if (keysPressed.current.has('Space')) {
-        localPlayer.position.y += moveSpeed;
-        moved = true;
-      }
-      if (keysPressed.current.has('ShiftLeft')) {
-        localPlayer.position.y -= moveSpeed;
-        moved = true;
-      }
-
-      // Update camera to follow the player (third-person view)
-      const playerPos = localPlayer.position;
-      const cameraOffset = new THREE.Vector3(0, 3, 5);
-      cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
-      
-      camera.position.set(
-        playerPos.x + cameraOffset.x,
-        playerPos.y + cameraOffset.y,
-        playerPos.z + cameraOffset.z
-      );
-      camera.lookAt(playerPos.x, playerPos.y, playerPos.z);
-
-      // Send updates to server if position or rotation changed
-      if (moved || 
-          Math.abs(oldRotation.x - localPlayerRotation.current.x) > 0.01 ||
-          Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01) {
-        
-        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-          const moveMessage = {
-            type: 'player_move',
-            data: {
-              playerId: user?.uid,
-              position: {
-                x: localPlayer.position.x,
-                y: localPlayer.position.y,
-                z: localPlayer.position.z
-              },
-              rotation: {
-                x: localPlayerRotation.current.x,
-                y: localPlayerRotation.current.y,
-                z: localPlayerRotation.current.z
-              }
-            }
-          };
-          websocketRef.current.send(JSON.stringify(moveMessage));
-        }
-      }
-    };
 
     // Start animation loop
     const animate = () => {
@@ -618,7 +638,7 @@ export default function Game() {
       cleanup();
       if (cleanupThree) cleanupThree();
     };
-  }, [server, user]);
+  }, [server, user, updateMovement]);
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
@@ -678,7 +698,7 @@ export default function Game() {
         {gameState.connected && (
           <div className={styles.controls}>
             <div>Controls: WASD to move, Space/Shift for up/down</div>
-            <div>Mouse: Click to lock cursor, move to look around</div>
+            <div>Mouse: Click to lock cursor, move mouse to look around (FPS style)</div>
             <div>Players online: {playersRef.current.size + 1}</div>
             <div>Your cube: Green | Other players: Various colors</div>
           </div>
