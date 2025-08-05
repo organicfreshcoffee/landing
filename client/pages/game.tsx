@@ -15,6 +15,18 @@ interface GameMessage {
   data: any;
 }
 
+interface Player {
+  id: string;
+  position: { x: number; y: number; z: number };
+  color: string;
+  mesh?: THREE.Mesh;
+}
+
+interface PlayerUpdate {
+  id: string;
+  position: { x: number; y: number; z: number };
+}
+
 export default function Game() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -25,12 +37,84 @@ export default function Game() {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const websocketRef = useRef<WebSocket | null>(null);
   const animationIdRef = useRef<number | null>(null);
+  const playersRef = useRef<Map<string, Player>>(new Map());
+  const localPlayerRef = useRef<THREE.Mesh | null>(null);
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
     loading: true
   });
+
+  // Generate a random color for player cubes
+  const generatePlayerColor = (playerId: string): string => {
+    const colors = [
+      '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
+      '#ffeaa7', '#dda0dd', '#98d8c8', '#f7dc6f'
+    ];
+    const hash = playerId.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // Create a player cube mesh
+  const createPlayerCube = (player: Player): THREE.Mesh => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshLambertMaterial({ color: player.color });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(player.position.x, player.position.y, player.position.z);
+    mesh.castShadow = true;
+    return mesh;
+  };
+
+  // Add or update a player
+  const updatePlayer = (playerData: PlayerUpdate) => {
+    if (!sceneRef.current) return;
+
+    const players = playersRef.current;
+    const existingPlayer = players.get(playerData.id);
+
+    if (existingPlayer) {
+      // Update existing player position
+      existingPlayer.position = playerData.position;
+      if (existingPlayer.mesh) {
+        existingPlayer.mesh.position.set(
+          playerData.position.x,
+          playerData.position.y,
+          playerData.position.z
+        );
+      }
+    } else {
+      // Create new player
+      const newPlayer: Player = {
+        id: playerData.id,
+        position: playerData.position,
+        color: generatePlayerColor(playerData.id)
+      };
+      
+      const mesh = createPlayerCube(newPlayer);
+      newPlayer.mesh = mesh;
+      sceneRef.current.add(mesh);
+      players.set(playerData.id, newPlayer);
+    }
+  };
+
+  // Remove a player
+  const removePlayer = (playerId: string) => {
+    if (!sceneRef.current) return;
+
+    const players = playersRef.current;
+    const player = players.get(playerId);
+    
+    if (player && player.mesh) {
+      sceneRef.current.remove(player.mesh);
+      player.mesh.geometry.dispose();
+      (player.mesh.material as THREE.Material).dispose();
+      players.delete(playerId);
+    }
+  };
 
   // Initialize Three.js scene
   const initThreeJS = () => {
@@ -78,13 +162,18 @@ export default function Game() {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Add a test cube (will be replaced by server-provided content)
-    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-    const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
-    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    cube.position.set(0, 1, 0);
-    cube.castShadow = true;
-    scene.add(cube);
+    // Create local player cube (different color to distinguish from others)
+    const localPlayerGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const localPlayerMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 }); // Green for local player
+    const localPlayerCube = new THREE.Mesh(localPlayerGeometry, localPlayerMaterial);
+    localPlayerCube.position.set(0, 0.5, 0);
+    localPlayerCube.castShadow = true;
+    scene.add(localPlayerCube);
+    localPlayerRef.current = localPlayerCube;
+
+    // Position camera behind and above the local player
+    camera.position.set(0, 3, 5);
+    camera.lookAt(0, 0.5, 0);
 
     // Handle window resize
     const handleResize = () => {
@@ -113,8 +202,24 @@ export default function Game() {
   };
 
   // Initialize WebSocket connection
-  const initWebSocket = (serverAddress: string) => {
+  const initWebSocket = async (serverAddress: string) => {
     try {
+      // Get the Firebase auth token
+      let authToken = null;
+      if (user) {
+        try {
+          authToken = await user.getIdToken();
+        } catch (error) {
+          console.error('Error getting auth token:', error);
+          setGameState({
+            connected: false,
+            error: 'Failed to get authentication token',
+            loading: false
+          });
+          return;
+        }
+      }
+
       // Convert HTTP/HTTPS URLs to WebSocket URLs
       let wsUrl = serverAddress;
       if (serverAddress.startsWith('http://')) {
@@ -143,12 +248,18 @@ export default function Game() {
           loading: false
         });
 
-        // Send initial connection message
+        // Send initial connection message with auth token
         ws.send(JSON.stringify({
           type: 'connect',
           data: {
-            userId: user?.uid,
-            userEmail: user?.email
+            playerId: user?.uid,
+            userEmail: user?.email,
+            authToken: authToken,
+            position: {
+              x: 0,
+              y: 0.5,
+              z: 0
+            }
           }
         }));
       };
@@ -183,7 +294,7 @@ export default function Game() {
       console.error('Error initializing WebSocket:', error);
       setGameState({
         connected: false,
-        error: 'Invalid server address',
+        error: 'Invalid server address or authentication failed',
         loading: false
       });
     }
@@ -194,58 +305,110 @@ export default function Game() {
     console.log('Received message:', message);
 
     switch (message.type) {
+      case 'player_joined':
+        // New player joined the game
+        if (message.data.playerId && message.data.position) {
+          updatePlayer({
+            id: message.data.playerId,
+            position: message.data.position
+          });
+        }
+        break;
+      
+      case 'player_moved':
+        // Player position update
+        if (message.data.playerId && message.data.position) {
+          updatePlayer({
+            id: message.data.playerId,
+            position: message.data.position
+          });
+        }
+        break;
+      
+      case 'player_left':
+        // Player disconnected
+        if (message.data.playerId) {
+          removePlayer(message.data.playerId);
+        }
+        break;
+      
+      case 'players_list':
+        // Initial list of all players currently in game
+        if (message.data.players && Array.isArray(message.data.players)) {
+          message.data.players.forEach((playerData: PlayerUpdate) => {
+            // Don't add ourselves to the other players list
+            if (playerData.id !== user?.uid) {
+              updatePlayer(playerData);
+            }
+          });
+        }
+        break;
+      
       case 'world_data':
-        // Server sends world/map data - will implement based on server protocol
+        // Server sends world/map data - for future implementation
         break;
-      case 'player_update':
-        // Update other players' positions
-        break;
-      case 'game_state':
-        // Update game state
-        break;
+      
       default:
         console.log('Unknown message type:', message.type);
     }
   };
 
-  // Handle keyboard input for FPS controls
+  // Handle keyboard input for player movement
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (!gameState.connected || !cameraRef.current) return;
+    if (!gameState.connected || !localPlayerRef.current || !cameraRef.current) return;
 
     const moveSpeed = 0.5;
+    const localPlayer = localPlayerRef.current;
     const camera = cameraRef.current;
+
+    // Store old position
+    const oldPosition = {
+      x: localPlayer.position.x,
+      y: localPlayer.position.y,
+      z: localPlayer.position.z
+    };
 
     switch (event.code) {
       case 'KeyW':
-        camera.position.z -= moveSpeed;
+        localPlayer.position.z -= moveSpeed;
         break;
       case 'KeyS':
-        camera.position.z += moveSpeed;
+        localPlayer.position.z += moveSpeed;
         break;
       case 'KeyA':
-        camera.position.x -= moveSpeed;
+        localPlayer.position.x -= moveSpeed;
         break;
       case 'KeyD':
-        camera.position.x += moveSpeed;
+        localPlayer.position.x += moveSpeed;
         break;
       case 'Space':
         event.preventDefault();
-        camera.position.y += moveSpeed;
+        localPlayer.position.y += moveSpeed;
         break;
       case 'ShiftLeft':
-        camera.position.y -= moveSpeed;
+        localPlayer.position.y -= moveSpeed;
         break;
     }
+
+    // Update camera to follow the player (third-person view)
+    const playerPos = localPlayer.position;
+    camera.position.set(
+      playerPos.x,
+      playerPos.y + 3,
+      playerPos.z + 5
+    );
+    camera.lookAt(playerPos.x, playerPos.y, playerPos.z);
 
     // Send position update to server
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
       websocketRef.current.send(JSON.stringify({
         type: 'player_move',
         data: {
+          playerId: user?.uid,
           position: {
-            x: camera.position.x,
-            y: camera.position.y,
-            z: camera.position.z
+            x: localPlayer.position.x,
+            y: localPlayer.position.y,
+            z: localPlayer.position.z
           }
         }
       }));
@@ -260,6 +423,26 @@ export default function Game() {
     if (websocketRef.current) {
       websocketRef.current.close();
     }
+    
+    // Clean up all player meshes
+    const players = playersRef.current;
+    players.forEach((player) => {
+      if (player.mesh && sceneRef.current) {
+        sceneRef.current.remove(player.mesh);
+        player.mesh.geometry.dispose();
+        (player.mesh.material as THREE.Material).dispose();
+      }
+    });
+    players.clear();
+    
+    // Clean up local player
+    if (localPlayerRef.current && sceneRef.current) {
+      sceneRef.current.remove(localPlayerRef.current);
+      localPlayerRef.current.geometry.dispose();
+      (localPlayerRef.current.material as THREE.Material).dispose();
+      localPlayerRef.current = null;
+    }
+    
     if (rendererRef.current) {
       rendererRef.current.dispose();
     }
@@ -281,8 +464,11 @@ export default function Game() {
     // Initialize Three.js
     const cleanupThree = initThreeJS();
     
-    // Initialize WebSocket connection
-    initWebSocket(serverAddress);
+    // Initialize WebSocket connection (async)
+    const initGame = async () => {
+      await initWebSocket(serverAddress);
+    };
+    initGame();
 
     // Add keyboard listeners
     window.addEventListener('keydown', handleKeyDown);
@@ -352,6 +538,8 @@ export default function Game() {
         {gameState.connected && (
           <div className={styles.controls}>
             <div>Controls: WASD to move, Space/Shift for up/down</div>
+            <div>Players online: {playersRef.current.size + 1}</div>
+            <div>Your cube: Green | Other players: Various colors</div>
           </div>
         )}
       </div>
