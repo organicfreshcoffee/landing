@@ -17,7 +17,7 @@ PROJECT_ID=""
 REGION="us-central1"
 CLIENT_SERVICE_NAME="organicfreshcoffee-client"
 SERVER_SERVICE_NAME="organicfreshcoffee-server"
-MAIN_DOMAIN="organicfreshcoffee.com"
+MAIN_DOMAIN="www.organicfreshcoffee.com"
 API_DOMAIN="api.organicfreshcoffee.com"
 
 print_header() {
@@ -151,13 +151,13 @@ get_dns_records() {
     
     # Get DNS records for main domain
     print_info "For $MAIN_DOMAIN (client):"
-    MAIN_DNS_RECORDS=$(gcloud beta run domain-mappings describe $MAIN_DOMAIN --region=$REGION --format="value(status.resourceRecords[].name,status.resourceRecords[].rrdata)" 2>/dev/null || echo "")
+    MAIN_DNS_RECORDS=$(gcloud beta run domain-mappings describe --domain=$MAIN_DOMAIN --region=$REGION --format="value(status.resourceRecords[].name,status.resourceRecords[].type,status.resourceRecords[].rrdata)" 2>/dev/null || echo "")
     
     if [ -n "$MAIN_DNS_RECORDS" ]; then
-        echo "$MAIN_DNS_RECORDS" | while IFS=$'\t' read -r name rrdata; do
-            if [ -n "$name" ] && [ -n "$rrdata" ]; then
-                echo "Name: $name"
-                echo "Type: CNAME"
+        echo "$MAIN_DNS_RECORDS" | while IFS=$'\t' read -r name type rrdata; do
+            if [ -n "$type" ] && [ -n "$rrdata" ]; then
+                echo "Name: ${name:-@}"
+                echo "Type: $type"
                 echo "Value: $rrdata"
                 echo "TTL: 300"
                 echo "---"
@@ -168,13 +168,13 @@ get_dns_records() {
     echo ""
     # Get DNS records for API domain
     print_info "For $API_DOMAIN (server API):"
-    API_DNS_RECORDS=$(gcloud beta run domain-mappings describe $API_DOMAIN --region=$REGION --format="value(status.resourceRecords[].name,status.resourceRecords[].rrdata)" 2>/dev/null || echo "")
+    API_DNS_RECORDS=$(gcloud beta run domain-mappings describe --domain=$API_DOMAIN --region=$REGION --format="value(status.resourceRecords[].name,status.resourceRecords[].type,status.resourceRecords[].rrdata)" 2>/dev/null || echo "")
     
     if [ -n "$API_DNS_RECORDS" ]; then
-        echo "$API_DNS_RECORDS" | while IFS=$'\t' read -r name rrdata; do
-            if [ -n "$name" ] && [ -n "$rrdata" ]; then
-                echo "Name: $name"
-                echo "Type: CNAME"
+        echo "$API_DNS_RECORDS" | while IFS=$'\t' read -r name type rrdata; do
+            if [ -n "$type" ] && [ -n "$rrdata" ]; then
+                echo "Name: ${name:-@}"
+                echo "Type: $type"
                 echo "Value: $rrdata"
                 echo "TTL: 300"
                 echo "---"
@@ -185,9 +185,18 @@ get_dns_records() {
     if [ -z "$MAIN_DNS_RECORDS" ] && [ -z "$API_DNS_RECORDS" ]; then
         print_warning "Could not retrieve DNS records automatically"
         print_info "You can get them manually with:"
-        echo "gcloud beta run domain-mappings describe $MAIN_DOMAIN --region=$REGION"
-        echo "gcloud beta run domain-mappings describe $API_DOMAIN --region=$REGION"
+        echo "gcloud beta run domain-mappings describe --domain=$MAIN_DOMAIN --region=$REGION"
+        echo "gcloud beta run domain-mappings describe --domain=$API_DOMAIN --region=$REGION"
     fi
+    
+    echo ""
+    print_info "Additional recommended DNS record for root domain redirect:"
+    echo "Name: @"
+    echo "Type: A"
+    echo "Value: 185.199.108.153 (GitHub Pages redirect service example)"
+    echo "TTL: 300"
+    echo "---"
+    echo "Or use your DNS provider's redirect service to redirect organicfreshcoffee.com → www.organicfreshcoffee.com"
 }
 
 configure_google_domains() {
@@ -201,13 +210,23 @@ configure_google_domains() {
     echo "3. Click on it and go to 'DNS' tab"
     echo "4. Scroll down to 'Custom records'"
     echo "5. Add the CNAME records shown above:"
-    echo "   - For the main domain (organicfreshcoffee.com)"
-    echo "   - For the API subdomain (api.organicfreshcoffee.com)"
-    echo "6. Set TTL to 300 seconds for faster propagation during testing"
-    echo "7. Save the changes"
+    echo "   - For www.organicfreshcoffee.com (client app)"
+    echo "   - For api.organicfreshcoffee.com (server API)"
+    echo "6. Optional: Set up redirect from organicfreshcoffee.com → www.organicfreshcoffee.com"
+    echo "   (Many DNS providers have a redirect service for this)"
+    echo "7. Set TTL to 300 seconds for faster propagation during testing"
+    echo "8. Save the changes"
     echo ""
     echo -e "${BLUE}Note:${NC} DNS propagation can take up to 48 hours, but usually takes 5-10 minutes"
-    echo -e "${BLUE}Tip:${NC} You can use 'dig organicfreshcoffee.com' to check DNS propagation"
+    echo -e "${BLUE}Tip:${NC} You can use 'dig www.organicfreshcoffee.com' to check DNS propagation"
+    echo ""
+    echo -e "${YELLOW}Why www instead of root domain?${NC}"
+    echo "================================="
+    echo "Using www.organicfreshcoffee.com instead of organicfreshcoffee.com allows us to:"
+    echo "• Use stable CNAME records instead of potentially changing IP addresses"
+    echo "• Avoid conflicts with other DNS records (MX, NS, etc.)"
+    echo "• Follow modern web hosting best practices"
+    echo "• Ensure more reliable DNS resolution"
 }
 
 test_domain_setup() {
