@@ -43,22 +43,22 @@ router.post('/login', authenticateToken, async (req: AuthenticatedRequest, res: 
   }
 });
 
-// Endpoint to get user's login history
-router.get('/user-logins', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+
+// Endpoint to get servers list
+router.get('/servers', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const db = getDatabase();
-    const userLoginsCollection = db.collection('user_logins');
+    const serversCollection = db.collection('servers');
 
-    const userLogins = await userLoginsCollection
-      .find({ userId: req.user?.uid })
-      .sort({ loginTime: -1 })
-      .limit(50)
+    const servers = await serversCollection
+      .find({})
+      .sort({ server_name: 1 })
       .toArray();
 
-    res.json(userLogins);
+    res.json(servers);
   } catch (error) {
-    console.error('Error fetching user logins:', error);
-    res.status(500).json({ error: 'Failed to fetch login history' });
+    console.error('Error fetching servers:', error);
+    res.status(500).json({ error: 'Failed to fetch servers' });
   }
 });
 

@@ -336,6 +336,18 @@ landing/
    ```
    **Solution**: Ensure the GCP service account key file exists in the project root.
 
+6. **MongoDB Initialization Script Not Running**
+   ```
+   Initial server data not found in database
+   ```
+   **Solution**: The `init-mongo.js` script only runs when MongoDB creates a fresh database. If you need to rerun it:
+   ```bash
+   docker-compose down
+   docker volume rm landing_mongodb_data
+   docker-compose up -d
+   ```
+   **Note**: This will delete all existing MongoDB data and recreate the database with initial data.
+
 ### Debug Commands
 
 ```bash
@@ -362,6 +374,11 @@ gcloud secrets versions access latest --secret="firebase-client-config"
 # Test service account permissions
 gcloud auth activate-service-account --key-file=./service-account-key.json
 gcloud secrets versions access latest --secret="firebase-service-account"
+
+# Reset MongoDB and rerun initialization script
+docker-compose down
+docker volume rm landing_mongodb_data
+docker-compose up -d
 ```
 
 ## 🌍 Deployment

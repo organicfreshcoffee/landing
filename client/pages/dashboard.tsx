@@ -4,18 +4,20 @@ import { useAuth } from '../lib/auth';
 import axios from 'axios';
 import styles from '../styles/Dashboard.module.css';
 
-interface UserLogin {
+interface Server {
   _id: string;
-  userId: string;
-  email: string;
-  loginTime: string;
+  server_name: string;
+  server_address: string;
+  is_official: boolean;
+  is_third_party: boolean;
 }
 
 export default function Dashboard() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
-  const [userLogins, setUserLogins] = useState<UserLogin[]>([]);
-  const [loadingLogins, setLoadingLogins] = useState(true);
+  const [servers, setServers] = useState<Server[]>([]);
+  const [loadingServers, setLoadingServers] = useState(true);
+  const [customServerAddress, setCustomServerAddress] = useState('');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -25,25 +27,25 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      fetchUserLogins();
+      fetchServers();
     }
   }, [user]);
 
-  const fetchUserLogins = async () => {
+  const fetchServers = async () => {
     if (!user) return;
     
     try {
       const token = await user.getIdToken();
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/user-logins`, {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/servers`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      setUserLogins(response.data);
+      setServers(response.data);
     } catch (error) {
-      console.error('Error fetching user logins:', error);
+      console.error('Error fetching servers:', error);
     } finally {
-      setLoadingLogins(false);
+      setLoadingServers(false);
     }
   };
 
@@ -67,7 +69,7 @@ export default function Dashboard() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Dashboard</h1>
+        <h1 className={styles.title}>Organic Fresh Coffee</h1>
         <div className={styles.userInfo}>
           <span>Welcome, {user.email}</span>
           <button onClick={handleLogout} className={styles.logoutButton}>
@@ -77,30 +79,70 @@ export default function Dashboard() {
       </div>
 
       <div className={styles.content}>
-        <h2 className={styles.sectionTitle}>Your Login History</h2>
-        
-        {loadingLogins ? (
-          <div className={styles.loading}>Loading login history...</div>
+        <h2 className={styles.sectionTitle}>Game Servers</h2>
+        {loadingServers ? (
+          <div className={styles.loading}>Loading servers...</div>
         ) : (
-          <div className={styles.loginList}>
-            {userLogins.length === 0 ? (
-              <p className={styles.emptyState}>No login history found.</p>
-            ) : (
+          <div className={styles.serversList}>
+            {/* Custom Server Section */}
+            <div className={styles.serverSection}>
+                <h3 className={styles.subsectionTitle}>Custom Server</h3>
+                <div className={styles.customServerInput}>
+                <input
+                    type="text"
+                    placeholder="Enter custom server address"
+                    value={customServerAddress}
+                    onChange={(e) => setCustomServerAddress(e.target.value)}
+                    className={styles.serverInput}
+                />
+                <button 
+                    className={styles.connectButton}
+                    disabled={!customServerAddress.trim()}
+                >
+                    Connect
+                </button>
+                </div>
+            </div>
+
+            {/* Official Servers Section */}
+            <div className={styles.serverSection}>
+              <h3 className={styles.subsectionTitle}>Official Servers</h3>
               <div className={styles.table}>
                 <div className={styles.tableHeader}>
-                  <div className={styles.tableCell}>Email</div>
-                  <div className={styles.tableCell}>Login Time</div>
+                  <div className={styles.tableCell}>Server Name</div>
+                  <div className={styles.tableCell}>Server Address</div>
                 </div>
-                {userLogins.map((login) => (
-                  <div key={login._id} className={styles.tableRow}>
-                    <div className={styles.tableCell}>{login.email}</div>
-                    <div className={styles.tableCell}>
-                      {new Date(login.loginTime).toLocaleString()}
-                    </div>
+                {servers.filter(server => server.is_official).map((server) => (
+                  <div key={server._id} className={styles.tableRow}>
+                    <div className={styles.tableCell}>{server.server_name}</div>
+                    <div className={styles.tableCell}>{server.server_address}</div>
                   </div>
                 ))}
+                {servers.filter(server => server.is_official).length === 0 && (
+                  <p className={styles.emptyState}>No official servers available.</p>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Third Party Servers Section */}
+            <div className={styles.serverSection}>
+              <h3 className={styles.subsectionTitle}>Third Party Servers</h3>
+              <div className={styles.table}>
+                <div className={styles.tableHeader}>
+                  <div className={styles.tableCell}>Server Name</div>
+                  <div className={styles.tableCell}>Server Address</div>
+                </div>
+                {servers.filter(server => server.is_third_party).map((server) => (
+                  <div key={server._id} className={styles.tableRow}>
+                    <div className={styles.tableCell}>{server.server_name}</div>
+                    <div className={styles.tableCell}>{server.server_address}</div>
+                  </div>
+                ))}
+                {servers.filter(server => server.is_third_party).length === 0 && (
+                  <p className={styles.emptyState}>No third party servers available.</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
