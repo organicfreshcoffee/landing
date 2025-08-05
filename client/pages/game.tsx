@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three-stdlib';
 import styles from '../styles/Game.module.css';
 
 interface GameState {
@@ -20,7 +21,7 @@ interface Player {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   color: string;
-  mesh?: THREE.Mesh;
+  mesh?: THREE.Object3D; // Changed from THREE.Mesh to THREE.Object3D to support both meshes and groups
 }
 
 interface PlayerUpdate {
@@ -40,19 +41,50 @@ export default function Game() {
   const websocketRef = useRef<WebSocket | null>(null);
   const animationIdRef = useRef<number | null>(null);
   const playersRef = useRef<Map<string, Player>>(new Map());
-  const localPlayerRef = useRef<THREE.Mesh | null>(null);
+  const localPlayerRef = useRef<THREE.Object3D | null>(null); // Changed from THREE.Mesh to THREE.Object3D
   const keysPressed = useRef<Set<string>>(new Set());
   const mouseRef = useRef({ x: 0, y: 0 });
   const isPointerLocked = useRef(false);
   const localPlayerRotation = useRef({ x: 0, y: 0, z: 0 });
   const lastUpdateTime = useRef<number>(0);
   const updateMovementRef = useRef<(() => void) | null>(null);
+  const gltfLoaderRef = useRef<GLTFLoader | null>(null);
+  const playerModelRef = useRef<THREE.Group | null>(null); // For storing the loaded model template
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
     loading: true
   });
+
+  // Load 3D player model
+  const loadPlayerModel = async (): Promise<THREE.Group | THREE.Mesh> => {
+    // First try to load the human model (GLB format)
+    try {
+      if (!gltfLoaderRef.current) {
+        gltfLoaderRef.current = new GLTFLoader();
+      }
+      
+      console.log('Attempting to load human_male.glb...');
+      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/human_male.glb');
+      console.log('Successfully loaded human_male.glb');
+      
+      // Scale the model if needed (adjust based on your model's size)
+      gltf.scene.scale.set(0.5, 0.5, 0.5);
+      
+      return gltf.scene;
+    } catch (error) {
+      console.log('GLB model not available, using fallback cube:', error);
+      
+      // Fallback to cube geometry with improved appearance
+      const geometry = new THREE.BoxGeometry(1, 2, 0.5); // Make it more human-like proportions
+      const material = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      
+      return mesh;
+    }
+  };
 
   // Generate a random color for player cubes
   const generatePlayerColor = (playerId: string): string => {
@@ -67,18 +99,39 @@ export default function Game() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Create a player cube mesh
-  const createPlayerCube = (player: Player): THREE.Mesh => {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshLambertMaterial({ color: player.color });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(player.position.x, player.position.y, player.position.z);
-    mesh.castShadow = true;
-    return mesh;
+  // Create a player model (cube or 3D model)
+  const createPlayerModel = async (player: Player): Promise<THREE.Object3D> => {
+    const model = await loadPlayerModel();
+    
+    // Clone the model for each player instance
+    const playerModel = model.clone();
+    
+    // Apply player-specific properties
+    if (playerModel instanceof THREE.Mesh) {
+      // If it's a mesh (cube fallback), apply the player color
+      const material = (playerModel.material as THREE.MeshLambertMaterial).clone();
+      material.color.setHex(parseInt(player.color.replace('#', '0x')));
+      playerModel.material = material;
+    } else if (playerModel instanceof THREE.Group) {
+      // If it's a group (3D model), apply color to all meshes
+      playerModel.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const material = (child.material as THREE.MeshLambertMaterial).clone();
+          material.color.setHex(parseInt(player.color.replace('#', '0x')));
+          child.material = material;
+        }
+      });
+    }
+    
+    // Set position
+    playerModel.position.set(player.position.x, player.position.y, player.position.z);
+    playerModel.castShadow = true;
+    
+    return playerModel;
   };
 
   // Add or update a player
-  const updatePlayer = (playerData: PlayerUpdate) => {
+  const updatePlayer = async (playerData: PlayerUpdate) => {
     if (!sceneRef.current) return;
 
     const players = playersRef.current;
@@ -113,9 +166,9 @@ export default function Game() {
         color: generatePlayerColor(playerData.id)
       };
       
-      const mesh = createPlayerCube(newPlayer);
-      newPlayer.mesh = mesh;
-      sceneRef.current.add(mesh);
+      const model = await createPlayerModel(newPlayer);
+      newPlayer.mesh = model; // No need to cast anymore
+      sceneRef.current.add(model);
       players.set(playerData.id, newPlayer);
     }
   };
@@ -129,8 +182,21 @@ export default function Game() {
     
     if (player && player.mesh) {
       sceneRef.current.remove(player.mesh);
-      player.mesh.geometry.dispose();
-      (player.mesh.material as THREE.Material).dispose();
+      
+      // Dispose of resources properly for both meshes and groups
+      if (player.mesh instanceof THREE.Mesh) {
+        player.mesh.geometry.dispose();
+        (player.mesh.material as THREE.Material).dispose();
+      } else if (player.mesh instanceof THREE.Group) {
+        // Dispose of all meshes in the group
+        player.mesh.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose();
+            (child.material as THREE.Material).dispose();
+          }
+        });
+      }
+      
       players.delete(playerId);
     }
   };
@@ -316,14 +382,31 @@ export default function Game() {
       scene.add(cylinder);
     }
 
-    // Create local player cube (different color to distinguish from others)
-    const localPlayerGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const localPlayerMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 }); // Green for local player
-    const localPlayerCube = new THREE.Mesh(localPlayerGeometry, localPlayerMaterial);
-    localPlayerCube.position.set(0, 0.5, 0);
-    localPlayerCube.castShadow = true;
-    scene.add(localPlayerCube);
-    localPlayerRef.current = localPlayerCube;
+    // Create local player (async, so we'll add it after scene setup)
+    const createLocalPlayer = async () => {
+      const localPlayer = await loadPlayerModel();
+      
+      // Make the local player green to distinguish from others  
+      if (localPlayer instanceof THREE.Mesh) {
+        const material = (localPlayer.material as THREE.MeshLambertMaterial);
+        material.color.setHex(0x00ff00); // Green for local player
+      } else if (localPlayer instanceof THREE.Group) {
+        localPlayer.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const material = (child.material as THREE.MeshLambertMaterial);
+            material.color.setHex(0x00ff00); // Green for local player
+          }
+        });
+      }
+      
+      localPlayer.position.set(0, 0.5, 0);
+      localPlayer.castShadow = true;
+      scene.add(localPlayer);
+      localPlayerRef.current = localPlayer; // No need to cast anymore
+    };
+    
+    // Initialize local player asynchronously
+    createLocalPlayer();
 
     // Position camera behind and above the local player
     camera.position.set(0, 3, 5);
@@ -511,7 +594,7 @@ export default function Game() {
           updatePlayer({
             id: message.data.playerId,
             position: message.data.position
-          });
+          }).catch(console.error);
         }
         break;
       
@@ -521,7 +604,7 @@ export default function Game() {
           updatePlayer({
             id: message.data.playerId,
             position: message.data.position
-          });
+          }).catch(console.error);
         }
         break;
       
@@ -538,7 +621,7 @@ export default function Game() {
           message.data.players.forEach((playerData: PlayerUpdate) => {
             // Don't add ourselves to the other players list
             if (playerData.id !== user?.uid) {
-              updatePlayer(playerData);
+              updatePlayer(playerData).catch(console.error);
             }
           });
         }
@@ -592,8 +675,20 @@ export default function Game() {
     players.forEach((player) => {
       if (player.mesh && sceneRef.current) {
         sceneRef.current.remove(player.mesh);
-        player.mesh.geometry.dispose();
-        (player.mesh.material as THREE.Material).dispose();
+        
+        // Dispose of resources properly for both meshes and groups
+        if (player.mesh instanceof THREE.Mesh) {
+          player.mesh.geometry.dispose();
+          (player.mesh.material as THREE.Material).dispose();
+        } else if (player.mesh instanceof THREE.Group) {
+          // Dispose of all meshes in the group
+          player.mesh.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.geometry.dispose();
+              (child.material as THREE.Material).dispose();
+            }
+          });
+        }
       }
     });
     players.clear();
@@ -601,8 +696,21 @@ export default function Game() {
     // Clean up local player
     if (localPlayerRef.current && sceneRef.current) {
       sceneRef.current.remove(localPlayerRef.current);
-      localPlayerRef.current.geometry.dispose();
-      (localPlayerRef.current.material as THREE.Material).dispose();
+      
+      // Dispose of resources properly for both meshes and groups
+      if (localPlayerRef.current instanceof THREE.Mesh) {
+        localPlayerRef.current.geometry.dispose();
+        (localPlayerRef.current.material as THREE.Material).dispose();
+      } else if (localPlayerRef.current instanceof THREE.Group) {
+        // Dispose of all meshes in the group
+        localPlayerRef.current.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose();
+            (child.material as THREE.Material).dispose();
+          }
+        });
+      }
+      
       localPlayerRef.current = null;
     }
     

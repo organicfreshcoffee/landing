@@ -100,7 +100,48 @@ When adding new 3D models to this directory:
 
 ## Current Models
 
-*List specific model files and their sources here as they are added to the project*
+### human_male.blend
+- **Source**: [Original Blender file](https://opengameart.org/content/low-poly-human-male)
+- **License**: CC0
+- **Usage**: Character model for player avatars
+- **Status**: ✅ Source file
+
+### human_male.glb
+- **Source**: Converted from human_male.blend
+- **License**: CC0
+- **Usage**: Character model for player avatars (web-optimized)
+- **Status**: ✅ Ready for use in game
+- **Size**: 38KB
+
+### Converting Blend to GLB
+
+To use the `human_male.blend` file in the web application, it needs to be converted to GLB format:
+
+#### Method 1: Using Blender (Recommended)
+1. Open `human_male.blend` in Blender
+2. Go to **File > Export > glTF 2.0 (.glb/.gltf)**
+3. Choose **GLB** format (binary)
+4. Set filename to `human_male.glb`
+5. Click **Export glTF 2.0**
+
+#### Method 2: Using Blender Command Line
+```bash
+# Navigate to the 3d-models directory
+cd client/public/assets/3d-models/
+
+# Convert using Blender command line (requires Blender installed)
+blender human_male.blend --background --python-expr "
+import bpy
+bpy.ops.export_scene.gltf(filepath='human_male.glb', export_format='GLB')
+bpy.ops.wm.quit_blender()
+"
+```
+
+#### Method 3: Online Converters
+- [Aspose 3D Converter](https://products.aspose.app/3d/conversion/blend-to-glb)
+- [AnyConv](https://anyconv.com/blend-to-glb-converter/)
+
+**Note**: Once converted, the game will automatically use the GLB model instead of the cube fallback.
 
 ---
 
