@@ -58,6 +58,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleConnect = (serverAddress: string) => {
+    // Navigate to the game page with the server address as a query parameter
+    router.push(`/game?server=${encodeURIComponent(serverAddress)}`);
+  };
+
+  const handleCustomConnect = () => {
+    if (customServerAddress.trim()) {
+      handleConnect(customServerAddress.trim());
+    }
+  };
+
   if (loading) {
     return <div className={styles.loading}>Loading...</div>;
   }
@@ -98,6 +109,7 @@ export default function Dashboard() {
                 <button 
                     className={styles.connectButton}
                     disabled={!customServerAddress.trim()}
+                    onClick={handleCustomConnect}
                 >
                     Connect
                 </button>
@@ -111,11 +123,20 @@ export default function Dashboard() {
                 <div className={styles.tableHeader}>
                   <div className={styles.tableCell}>Server Name</div>
                   <div className={styles.tableCell}>Server Address</div>
+                  <div className={styles.tableCell}>Action</div>
                 </div>
                 {servers.filter(server => server.is_official).map((server) => (
                   <div key={server._id} className={styles.tableRow}>
                     <div className={styles.tableCell}>{server.server_name}</div>
                     <div className={styles.tableCell}>{server.server_address}</div>
+                    <div className={styles.tableCell}>
+                      <button 
+                        className={styles.tableConnectButton}
+                        onClick={() => handleConnect(server.server_address)}
+                      >
+                        Connect
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {servers.filter(server => server.is_official).length === 0 && (
@@ -131,11 +152,20 @@ export default function Dashboard() {
                 <div className={styles.tableHeader}>
                   <div className={styles.tableCell}>Server Name</div>
                   <div className={styles.tableCell}>Server Address</div>
+                  <div className={styles.tableCell}>Action</div>
                 </div>
                 {servers.filter(server => server.is_third_party).map((server) => (
                   <div key={server._id} className={styles.tableRow}>
                     <div className={styles.tableCell}>{server.server_name}</div>
                     <div className={styles.tableCell}>{server.server_address}</div>
+                    <div className={styles.tableCell}>
+                      <button 
+                        className={styles.tableConnectButton}
+                        onClick={() => handleConnect(server.server_address)}
+                      >
+                        Connect
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {servers.filter(server => server.is_third_party).length === 0 && (
