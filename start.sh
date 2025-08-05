@@ -12,6 +12,9 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Load environment variables from .env file
+export $(grep -v '^#' .env | xargs)
+
 # Check if Firebase service account key exists
 if [ ! -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
     echo "❌ Firebase service account key not found at: ${GOOGLE_APPLICATION_CREDENTIALS}"
