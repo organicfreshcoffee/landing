@@ -228,11 +228,12 @@ export default function Game() {
     
     // Set position and rotation
     playerModel.position.set(player.position.x, player.position.y, player.position.z);
-    // Set rotation with Math.PI offset to account for model's built-in rotation
+    // Set only Y rotation with Math.PI offset to account for model's built-in rotation
+    // Characters should only turn left/right, not tilt up/down
     playerModel.rotation.set(
-      player.rotation.x,
+      0, // Keep character upright
       player.rotation.y + Math.PI,
-      player.rotation.z
+      0  // Keep character upright
     );
     playerModel.castShadow = true;
     
@@ -264,11 +265,12 @@ export default function Game() {
           playerData.position.z
         );
         if (playerData.rotation) {
-          // Apply rotation with Math.PI offset to account for model's built-in rotation
+          // Apply only Y rotation with Math.PI offset to account for model's built-in rotation
+          // Other players' characters should only turn left/right, not tilt up/down
           existingPlayer.mesh.rotation.set(
-            playerData.rotation.x,
+            0, // Keep character upright
             playerData.rotation.y + Math.PI,
-            playerData.rotation.z
+            0  // Keep character upright
           );
         }
       }
@@ -417,27 +419,33 @@ export default function Game() {
 
     // Update camera to follow the player with proper FPS-style rotation
     const playerPos = localPlayer.position;
-    const cameraOffset = new THREE.Vector3(0, 2.5, 5); // Adjusted for larger skeleton model
     
-    // Apply player's Y rotation to camera offset
-    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+    // For third-person FPS camera, position camera behind and above the player
+    const cameraHeight = 1.8; // Eye level height
+    const cameraDistance = 3.5; // Distance behind player for third-person view
     
-    // Set camera position
+    // Calculate camera position based on player's Y rotation - add Math.PI to put camera behind
+    const cameraX = playerPos.x + Math.sin(localPlayerRotation.current.y) * cameraDistance;
+    const cameraZ = playerPos.z + Math.cos(localPlayerRotation.current.y) * cameraDistance;
+    
     camera.position.set(
-      playerPos.x + cameraOffset.x,
-      playerPos.y + cameraOffset.y,
-      playerPos.z + cameraOffset.z
+      cameraX,
+      playerPos.y + cameraHeight,
+      cameraZ
     );
     
-    // Calculate look-at point based on player rotation
-    const lookDirection = new THREE.Vector3(0, 0, -1);
-    lookDirection.applyAxisAngle(new THREE.Vector3(1, 0, 0), localPlayerRotation.current.x); // Apply X rotation
-    lookDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y); // Apply Y rotation
+    // Calculate look-at point based on both X and Y rotation for camera only
+    const lookDistance = 10; // How far ahead to look
+    const lookDirection = new THREE.Vector3(
+      -Math.sin(localPlayerRotation.current.y), // Negative because we're looking forward from behind
+      -Math.sin(localPlayerRotation.current.x), // Negative for correct up/down look
+      -Math.cos(localPlayerRotation.current.y)  // Negative because we're looking forward from behind
+    );
     
     const lookAtPoint = new THREE.Vector3(
-      playerPos.x + lookDirection.x,
-      playerPos.y + 2.0 + lookDirection.y, // Adjusted look height for larger skeleton
-      playerPos.z + lookDirection.z
+      playerPos.x + lookDirection.x * lookDistance,
+      playerPos.y + cameraHeight + lookDirection.y * lookDistance,
+      playerPos.z + lookDirection.z * lookDistance
     );
     
     camera.lookAt(lookAtPoint);
@@ -499,7 +507,6 @@ export default function Game() {
     // Send updates to server if position or rotation changed (with throttling)
     const now = Date.now();
     if ((moved || 
-        Math.abs(oldRotation.x - localPlayerRotation.current.x) > 0.01 ||
         Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01) &&
         now - lastUpdateTime.current > 50) { // Throttle to 20 updates per second
       
@@ -516,9 +523,9 @@ export default function Game() {
               z: localPlayer.position.z
             },
             rotation: {
-              x: localPlayerRotation.current.x,
+              x: 0, // Only send Y rotation since characters don't tilt up/down
               y: localPlayerRotation.current.y,
-              z: localPlayerRotation.current.z
+              z: 0
             },
             isMoving: isMoving.current,
             movementDirection: movementDirection.current
@@ -689,9 +696,10 @@ export default function Game() {
       });
       
       localPlayerScene.position.set(0, 0, 0); // Start at ground level (y=0)
-      // Set initial rotation to match the user's current rotation (which starts at 0, but model has Math.PI built in)
+      // Set initial rotation to match the user's current rotation (only Y rotation for character)
       localPlayerScene.rotation.y = localPlayerRotation.current.y + Math.PI;
-      localPlayerScene.rotation.x = localPlayerRotation.current.x;
+      localPlayerScene.rotation.x = 0; // Keep character upright
+      localPlayerScene.rotation.z = 0; // Keep character upright
       localPlayerScene.castShadow = true;
       scene.add(localPlayerScene);
       localPlayerRef.current = localPlayerScene;
@@ -724,10 +732,12 @@ export default function Game() {
       // Limit vertical rotation
       localPlayerRotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, localPlayerRotation.current.x));
       
-      // Apply rotation to local player - add Math.PI to account for the model's built-in 180 degree rotation
+      // Apply only Y rotation to local player - character should only turn left/right, not tilt up/down
+      // Add Math.PI to account for the model's built-in 180 degree rotation
       if (localPlayerRef.current) {
         localPlayerRef.current.rotation.y = localPlayerRotation.current.y + Math.PI;
-        localPlayerRef.current.rotation.x = localPlayerRotation.current.x;
+        localPlayerRef.current.rotation.x = 0; // Keep character upright
+        localPlayerRef.current.rotation.z = 0; // Keep character upright
       }
     };
 
@@ -1129,7 +1139,7 @@ export default function Game() {
         {gameState.connected && (
           <div className={styles.controls}>
             <div>Controls: WASD to move, Space/Shift for up/down</div>
-            <div>Mouse: Click to lock cursor, move mouse to look around (FPS style)</div>
+            <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
             <div>Players online: {playersRef.current.size + 1}</div>
             <div>Your character: Green skeleton with walking animation | Other players: Various colors</div>
           </div>
