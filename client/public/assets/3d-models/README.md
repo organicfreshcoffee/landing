@@ -88,6 +88,118 @@ When using 3D models in web applications:
 - **[Draco](https://github.com/google/draco)** - 3D geometry compression
 - **[Meshlab](https://www.meshlab.net/)** - Mesh processing and optimization
 
+## Development Scripts
+
+The following Python scripts are available for working with 3D models in this project:
+
+### verify_glb.py
+**Universal GLB verification script** - Verifies any GLB file for proper structure, animations, armatures, and meshes.
+
+```bash
+# Verify any GLB file
+blender --background --python verify_glb.py -- stickman.glb
+blender --background --python verify_glb.py -- skeleton_walk.glb
+blender --background --python verify_glb.py -- human_male.glb
+```
+
+Features:
+- Checks file structure and imports
+- Analyzes armatures, bones, and meshes
+- Verifies animations and frame ranges
+- Tests armature modifiers and vertex groups
+- Reports file size and compatibility
+
+### inspect_blend.py
+**Universal Blender file inspector** - Inspects any .blend file for animations, armatures, and rig information.
+
+```bash
+# Inspect any Blender file
+blender --background --python inspect_blend.py -- StickMan.blend
+blender --background --python inspect_blend.py -- skeleton.blend
+blender --background --python inspect_blend.py -- human_male.blend
+```
+
+Features:
+- Lists all scene objects and types
+- Analyzes armature structure and bones
+- Identifies available animations and their properties
+- Checks mesh skinning and vertex groups
+- Reports scene settings (frame range, FPS)
+
+### convert_blend_to_glb.py
+**Universal model converter** - Converts any .blend file to .glb format with optimized settings for web use.
+
+```bash
+# Convert with automatic output filename
+blender --background --python convert_blend_to_glb.py -- StickMan.blend
+# Output: StickMan.glb
+
+# Convert with custom output filename
+blender --background --python convert_blend_to_glb.py -- skeleton.blend my_skeleton.glb
+
+# Convert static model
+blender --background --python convert_blend_to_glb.py -- human_male.blend
+```
+
+Features:
+- Automatically detects animations and sets appropriate export settings
+- Handles armatures, meshes, and skinning properly
+- Exports individual animation files for multi-animation models
+- Applies transforms and fixes normals automatically
+- Optimized settings for web performance (Y-up, GLB format, etc.)
+- Reports file sizes and export status
+
+### Running Scripts
+
+All scripts are designed to run with Blender's background mode:
+
+```bash
+# Navigate to the models directory
+cd client/public/assets/3d-models/
+
+# Run any script with Blender directly
+blender --background --python <script_name>.py -- <arguments>
+
+# Or use the helper script for easier commands
+./model-tools.sh <command> <file> [output]
+```
+
+### Helper Script: model-tools.sh
+
+A convenient shell script that simplifies running the 3D model processing commands:
+
+```bash
+# Inspect a Blender file
+./model-tools.sh inspect StickMan.blend
+
+# Convert Blender file to GLB (auto-named output)
+./model-tools.sh convert StickMan.blend
+
+# Convert with custom output name
+./model-tools.sh convert skeleton.blend my_skeleton.glb
+
+# Verify a GLB file
+./model-tools.sh verify stickman.glb
+
+# Show help and available files
+./model-tools.sh help
+```
+
+### Example Workflow
+
+```bash
+# 1. Inspect the source file
+./model-tools.sh inspect MyModel.blend
+
+# 2. Convert to GLB
+./model-tools.sh convert MyModel.blend
+
+# 3. Verify the output
+./model-tools.sh verify MyModel.glb
+```
+
+**Note**: These scripts require Blender to be installed and available in your PATH. The `-- <arguments>` syntax passes arguments to the Python script after Blender's own arguments.
+
 ## Contributing
 
 When adding new 3D models to this directory:
