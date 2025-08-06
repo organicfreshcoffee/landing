@@ -88,6 +88,118 @@ When using 3D models in web applications:
 - **[Draco](https://github.com/google/draco)** - 3D geometry compression
 - **[Meshlab](https://www.meshlab.net/)** - Mesh processing and optimization
 
+## Development Scripts
+
+The following Python scripts are available for working with 3D models in this project:
+
+### verify_glb.py
+**Universal GLB verification script** - Verifies any GLB file for proper structure, animations, armatures, and meshes.
+
+```bash
+# Verify any GLB file
+blender --background --python verify_glb.py -- stickman.glb
+blender --background --python verify_glb.py -- skeleton_walk.glb
+blender --background --python verify_glb.py -- human_male.glb
+```
+
+Features:
+- Checks file structure and imports
+- Analyzes armatures, bones, and meshes
+- Verifies animations and frame ranges
+- Tests armature modifiers and vertex groups
+- Reports file size and compatibility
+
+### inspect_blend.py
+**Universal Blender file inspector** - Inspects any .blend file for animations, armatures, and rig information.
+
+```bash
+# Inspect any Blender file
+blender --background --python inspect_blend.py -- StickMan.blend
+blender --background --python inspect_blend.py -- skeleton.blend
+blender --background --python inspect_blend.py -- human_male.blend
+```
+
+Features:
+- Lists all scene objects and types
+- Analyzes armature structure and bones
+- Identifies available animations and their properties
+- Checks mesh skinning and vertex groups
+- Reports scene settings (frame range, FPS)
+
+### convert_blend_to_glb.py
+**Universal model converter** - Converts any .blend file to .glb format with optimized settings for web use.
+
+```bash
+# Convert with automatic output filename
+blender --background --python convert_blend_to_glb.py -- StickMan.blend
+# Output: StickMan.glb
+
+# Convert with custom output filename
+blender --background --python convert_blend_to_glb.py -- skeleton.blend my_skeleton.glb
+
+# Convert static model
+blender --background --python convert_blend_to_glb.py -- human_male.blend
+```
+
+Features:
+- Automatically detects animations and sets appropriate export settings
+- Handles armatures, meshes, and skinning properly
+- Exports individual animation files for multi-animation models
+- Applies transforms and fixes normals automatically
+- Optimized settings for web performance (Y-up, GLB format, etc.)
+- Reports file sizes and export status
+
+### Running Scripts
+
+All scripts are designed to run with Blender's background mode:
+
+```bash
+# Navigate to the models directory
+cd client/public/assets/3d-models/
+
+# Run any script with Blender directly
+blender --background --python <script_name>.py -- <arguments>
+
+# Or use the helper script for easier commands
+./model-tools.sh <command> <file> [output]
+```
+
+### Helper Script: model-tools.sh
+
+A convenient shell script that simplifies running the 3D model processing commands:
+
+```bash
+# Inspect a Blender file
+./model-tools.sh inspect StickMan.blend
+
+# Convert Blender file to GLB (auto-named output)
+./model-tools.sh convert StickMan.blend
+
+# Convert with custom output name
+./model-tools.sh convert skeleton.blend my_skeleton.glb
+
+# Verify a GLB file
+./model-tools.sh verify stickman.glb
+
+# Show help and available files
+./model-tools.sh help
+```
+
+### Example Workflow
+
+```bash
+# 1. Inspect the source file
+./model-tools.sh inspect MyModel.blend
+
+# 2. Convert to GLB
+./model-tools.sh convert MyModel.blend
+
+# 3. Verify the output
+./model-tools.sh verify MyModel.glb
+```
+
+**Note**: These scripts require Blender to be installed and available in your PATH. The `-- <arguments>` syntax passes arguments to the Python script after Blender's own arguments.
+
 ## Contributing
 
 When adding new 3D models to this directory:
@@ -111,37 +223,58 @@ When adding new 3D models to this directory:
 - **License**: CC0
 - **Usage**: Character model for player avatars (web-optimized)
 - **Status**: ✅ Ready for use in game
-- **Size**: 38KB
 
-### Converting Blend to GLB
+### skeleton.blend
+- **Source**: [Original Blender file](https://opengameart.org/content/skeleton-with-rig)
+- **License**: CC0
+- **Usage**: Character model for player avatars
+- **Status**: ✅ Source file (no animations)
 
-To use the `human_male.blend` file in the web application, it needs to be converted to GLB format:
+### skeleton_with_walk.blend
+- **Source**: Generated from skeleton.blend with custom walking animation
+- **License**: CC0
+- **Usage**: Character model with walking animation for gameplay
+- **Status**: ✅ Source file with animation
+- **Animation**: 40-frame walk cycle (1.33 seconds at 30fps)
 
-#### Method 1: Using Blender (Recommended)
-1. Open `human_male.blend` in Blender
-2. Go to **File > Export > glTF 2.0 (.glb/.gltf)**
-3. Choose **GLB** format (binary)
-4. Set filename to `human_male.glb`
-5. Click **Export glTF 2.0**
+### stickman.glb (ACTIVE)
+- **Source**: Exported from StickMan.blend
+- **License**: CC0
+- **Usage**: Web-optimized stick figure model with running animation for gameplay
+- **Status**: ✅ Currently used in game
+- **Animation**: 20-frame StickMan_Run cycle + SitckMan_Idle
+- **File Size**: 0.06 MB
+- **Advantages**: Professional animations, smaller file size, better performance
 
-#### Method 2: Using Blender Command Line
-```bash
-# Navigate to the 3d-models directory
-cd client/public/assets/3d-models/
+### stickman_idle.glb
+- **Source**: Exported from StickMan.blend
+- **License**: CC0
+- **Usage**: Idle animation version of stick figure
+- **Status**: ✅ Available for future use
+- **Animation**: 111-frame SitckMan_Idle cycle
+- **File Size**: 0.07 MB
 
-# Convert using Blender command line (requires Blender installed)
-blender human_male.blend --background --python-expr "
-import bpy
-bpy.ops.export_scene.gltf(filepath='human_male.glb', export_format='GLB')
-bpy.ops.wm.quit_blender()
-"
-```
+### skeleton_walk.glb (REPLACED)
+- **Source**: Exported from skeleton_with_walk.blend
+- **License**: CC0
+- **Usage**: Web-optimized skeleton model with walking animation
+- **Status**: 🔄 Replaced by stickman.glb (better performance)
+- **Animation**: Walking cycle included
+- **File Size**: 1.46 MB
 
-#### Method 3: Online Converters
-- [Aspose 3D Converter](https://products.aspose.app/3d/conversion/blend-to-glb)
-- [AnyConv](https://anyconv.com/blend-to-glb-converter/)
+### StickMan.blend
+- **Source**: [Original Blender file](https://opengameart.org/content/creomotos-stick-man-fixed-up)
+- **License**: CC0
+- **Usage**: Character model for player avatars with professional animations
+- **Status**: ✅ Source file (includes StickMan_Run and SitckMan_Idle animations)
 
-**Note**: Once converted, the game will automatically use the GLB model instead of the cube fallback.
+### Animation Support
+
+The stick figure model (`stickman.glb`) includes professional pre-built animations:
+- **StickMan_Run**: 20-frame running/walking animation (0.67 seconds, loops seamlessly)
+- **SitckMan_Idle**: 111-frame idle animation (available in stickman_idle.glb)
+- **Usage**: Game automatically uses StickMan_Run for movement animation
+- **Performance**: Much better than skeleton model (0.06 MB vs 1.46 MB)
 
 ---
 

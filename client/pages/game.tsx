@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three-stdlib';
+import { SkeletonUtils } from 'three-stdlib';
 import styles from '../styles/Game.module.css';
 
 interface GameState {
@@ -22,12 +23,16 @@ interface Player {
   rotation: { x: number; y: number; z: number };
   color: string;
   mesh?: THREE.Object3D; // Changed from THREE.Mesh to THREE.Object3D to support both meshes and groups
+  isMoving?: boolean;
+  movementDirection?: 'forward' | 'backward' | 'none';
 }
 
 interface PlayerUpdate {
   id: string;
   position: { x: number; y: number; z: number };
   rotation?: { x: number; y: number; z: number };
+  isMoving?: boolean;
+  movementDirection?: 'forward' | 'backward' | 'none';
 }
 
 export default function Game() {
@@ -50,6 +55,14 @@ export default function Game() {
   const updateMovementRef = useRef<(() => void) | null>(null);
   const gltfLoaderRef = useRef<GLTFLoader | null>(null);
   const playerModelRef = useRef<THREE.Group | null>(null); // For storing the loaded model template
+  const localPlayerMixer = useRef<THREE.AnimationMixer | null>(null); // Animation mixer for local player
+  const localPlayerActions = useRef<{ [key: string]: THREE.AnimationAction }>({});
+  const playersAnimations = useRef<Map<string, { mixer: THREE.AnimationMixer; actions: { [key: string]: THREE.AnimationAction } }>>(new Map());
+  const isMoving = useRef<boolean>(false);
+  const movementDirection = useRef<'forward' | 'backward' | 'none'>('none'); // Track movement direction for animation
+  const clockRef = useRef<THREE.Clock>(new THREE.Clock());
+  const modelGroundOffsetRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 }); // Store ground offset for consistent positioning
+  const lastSentMovementState = useRef<boolean>(false); // Track last sent isMoving state for heartbeat optimization
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -57,48 +70,75 @@ export default function Game() {
     loading: true
   });
 
-  // Load 3D player model
-  const loadPlayerModel = async (): Promise<THREE.Group | THREE.Mesh> => {
-    // First try to load the human model (GLB format)
+  // Load 3D player model with animations
+  const loadPlayerModel = async (): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[]; groundOffset?: { x: number; y: number; z: number } }> => {
+    // Try to load the animated skeleton model (GLB format)
     try {
       if (!gltfLoaderRef.current) {
         gltfLoaderRef.current = new GLTFLoader();
       }
       
-      console.log('Attempting to load human_male.glb...');
-      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/human_male.glb');
-      console.log('Successfully loaded human_male.glb');
+      console.log('Attempting to load stickman.glb...');
+      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/stickman.glb');
+      console.log('Successfully loaded stickman.glb with', gltf.animations?.length || 0, 'animations');
       
-      // Scale the model first
-      gltf.scene.scale.set(0.1, 0.1, 0.1);
+      // DEBUG: Create a properly cloned model with skeleton/animation support
+      // Use SkeletonUtils.clone to properly handle SkinnedMesh and skeleton data
+      const freshScene = SkeletonUtils.clone(gltf.scene) as THREE.Group;
       
-      // Get bounding box after scaling
-      const box = new THREE.Box3().setFromObject(gltf.scene);
+      // Debug: Log animation details
+      if (gltf.animations && gltf.animations.length > 0) {
+        gltf.animations.forEach((anim, index) => {
+          console.log(`Animation ${index}: "${anim.name}" - Duration: ${anim.duration}s - Tracks: ${anim.tracks.length}`);
+        });
+      } else {
+        console.warn('⚠️ No animations found in stickman.glb!');
+      }
+      
+      // Scale the model appropriately for the game - make twice as big
+      freshScene.scale.set(0.6, 0.6, 0.6); // Doubled from 0.3 to 0.6
+      
+      // Rotate 180 degrees around Y axis so the model faces away from the camera initially
+      freshScene.rotation.y = Math.PI;
+      
+      // Get bounding box after scaling and rotation to calculate ground offset
+      const box = new THREE.Box3().setFromObject(freshScene);
       const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
       
-      console.log('Model bounds after scaling:', {
+      console.log('Model bounds after scaling and rotation:', {
         min: box.min,
         max: box.max,
         center: center,
-        size: size
+        size: box.getSize(new THREE.Vector3())
       });
       
-      // Center the model horizontally (X and Z) but keep it above ground
-      gltf.scene.position.x = -center.x;
-      gltf.scene.position.z = -center.z;
+      // Store the ground offset for later use but don't apply it to the template
+      const groundOffset = {
+        x: -center.x,
+        z: -center.z,
+        y: -box.min.y
+      };
       
-      // Position Y so that the bottom of the model is at ground level (y=0)
-      // This means we need to move it up by the absolute value of the minimum Y
-      gltf.scene.position.y = Math.abs(box.min.y);
+      // Store globally for consistent positioning in updates
+      modelGroundOffsetRef.current = groundOffset;
       
-      console.log('Final model position:', gltf.scene.position);
+      // Reset position to origin for template - individual instances will apply offsets
+      freshScene.position.set(0, 0, 0);
       
-      // Try rotating the model in case it's facing the wrong direction
-      // gltf.scene.rotation.y = Math.PI; // 180 degrees
+      console.log('Template model reset to origin, ground offset calculated:', groundOffset);
       
-      // Ensure all materials render both sides and are properly visible
-      gltf.scene.traverse((child) => {
+      // Debug: Check for bones/skeleton structure that might be causing positioning issues
+      let foundSkeleton = false;
+      freshScene.traverse((child) => {
+        if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
+          console.log(`Found ${child.type}:`, child.name, 'position:', child.position.toArray(), 'world position:', child.getWorldPosition(new THREE.Vector3()).toArray());
+          foundSkeleton = true;
+        }
+      });
+      console.log('Has skeleton/bones:', foundSkeleton);
+      
+      // Ensure all materials render properly and are visible
+      freshScene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           if (child.material) {
             // Make sure material renders both sides
@@ -107,14 +147,12 @@ export default function Game() {
                 mat.side = THREE.DoubleSide;
                 mat.transparent = false;
                 mat.opacity = 1.0;
-                // Force material update
                 mat.needsUpdate = true;
               });
             } else {
               child.material.side = THREE.DoubleSide;
               child.material.transparent = false;
               child.material.opacity = 1.0;
-              // Force material update
               child.material.needsUpdate = true;
             }
           }
@@ -128,9 +166,9 @@ export default function Game() {
         }
       });
       
-      return gltf.scene;
+      return { scene: freshScene, animations: gltf.animations || [], groundOffset };
     } catch (error) {
-      console.log('GLB model not available, using fallback cube:', error);
+      console.log('StickMan GLB model not available, using fallback cube:', error);
       
       // Fallback to cube geometry with improved appearance
       const geometry = new THREE.BoxGeometry(0.5, 1.8, 0.3); // Human-like proportions, smaller size
@@ -139,7 +177,11 @@ export default function Game() {
       mesh.position.y = 0.9; // Half the height to center it at ground level
       mesh.castShadow = true;
       
-      return mesh;
+      // Wrap mesh in a group to maintain consistent structure
+      const group = new THREE.Group();
+      group.add(mesh);
+      
+      return { scene: group, animations: [], groundOffset: { x: 0, y: 0, z: 0 } };
     }
   };
 
@@ -156,40 +198,150 @@ export default function Game() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Create a player model (cube or 3D model)
-  const createPlayerModel = async (player: Player): Promise<THREE.Object3D> => {
-    const model = await loadPlayerModel();
+  // Create a player model with animations
+  const createPlayerModel = async (player: Player): Promise<{ model: THREE.Object3D; mixer?: THREE.AnimationMixer; actions?: { [key: string]: THREE.AnimationAction } }> => {
+    const modelData = await loadPlayerModel();
     
-    // Clone the model for each player instance
-    const playerModel = model.clone();
+    // Use the properly cloned scene directly (no additional cloning needed)
+    const playerModel = modelData.scene;
     
-    // Apply player-specific properties
-    if (playerModel instanceof THREE.Mesh) {
-      // If it's a mesh (cube fallback), apply the player color
-      const material = (playerModel.material as THREE.MeshLambertMaterial).clone();
-      material.color.setHex(parseInt(player.color.replace('#', '0x')));
-      playerModel.material = material;
-    } else if (playerModel instanceof THREE.Group) {
-      // If it's a group (3D model), apply color to all meshes
-      playerModel.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          const material = (child.material as THREE.MeshLambertMaterial).clone();
-          material.color.setHex(parseInt(player.color.replace('#', '0x')));
-          child.material = material;
+    // Debug: Log what we're working with for positioning issues
+    console.log(`Creating player model for ${player.id}:`, {
+      modelBounds: new THREE.Box3().setFromObject(playerModel),
+      playerPosition: player.position,
+      groundOffset: modelData.groundOffset
+    });
+    
+    // Check if the cloned model has proper structure
+    playerModel.traverse((child) => {
+      if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
+        console.log(`Player ${player.id} - ${child.type}:`, child.name, 'local pos:', child.position.toArray());
+        
+        // Fix SkinnedMesh coordinate system issues
+        if (child.type === 'SkinnedMesh') {
+          // Force the SkinnedMesh to respect parent transforms
+          child.updateMatrixWorld(true);
+          
+          // Reset the SkinnedMesh to origin if it's not already there
+          if (child.position.x !== 0 || child.position.y !== 0 || child.position.z !== 0) {
+            console.log(`Resetting SkinnedMesh position from:`, child.position.toArray());
+            child.position.set(0, 0, 0);
+          }
+          
+          // Ensure the SkinnedMesh doesn't have its own transform that conflicts
+          child.matrixAutoUpdate = true;
+          
+          // Additional fix: ensure the skeleton respects the parent transform
+          const skinnedMesh = child as THREE.SkinnedMesh;
+          if (skinnedMesh.skeleton) {
+            // Force skeleton to update relative to parent
+            skinnedMesh.skeleton.update();
+            console.log(`Updated skeleton for player ${player.id}`);
+          }
+          
+          console.log(`Fixed SkinnedMesh for player ${player.id}`);
+        }
+      }
+    });
+    
+    // Create animation mixer and actions if animations are available
+    let mixer: THREE.AnimationMixer | undefined;
+    let actions: { [key: string]: THREE.AnimationAction } = {};
+    
+    if (modelData.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(playerModel);
+      
+      // Create actions for each animation
+      modelData.animations.forEach((clip) => {
+        const action = mixer!.clipAction(clip);
+        actions[clip.name] = action;
+        
+        // Set default properties for walk animation
+        if (clip.name === 'StickMan_Run') {
+          action.setLoop(THREE.LoopRepeat, Infinity);
+          action.clampWhenFinished = true;
+          action.weight = 1.0;
+          // Initialize based on player's current movement state
+          action.reset();
+          action.play();
+          action.paused = !player.isMoving; // Paused if not moving, active if moving
+          action.enabled = true;
+          
+          // Set initial animation direction if player is moving
+          if (player.isMoving) {
+            if (player.movementDirection === 'backward') {
+              action.timeScale = -1;
+            } else {
+              action.timeScale = 1;
+            }
+          }
         }
       });
+      
+      console.log('Created animation actions for player:', Object.keys(actions));
     }
     
-    // Set position
-    playerModel.position.set(player.position.x, player.position.y, player.position.z);
+    // Apply player-specific properties and color
+    playerModel.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        // Clone material to avoid sharing between players
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(mat => {
+            const clonedMat = mat.clone();
+            clonedMat.color.setHex(parseInt(player.color.replace('#', '0x')));
+            return clonedMat;
+          });
+        } else {
+          const clonedMaterial = child.material.clone();
+          clonedMaterial.color.setHex(parseInt(player.color.replace('#', '0x')));
+          child.material = clonedMaterial;
+        }
+      }
+    });
+    
+    // Set world position and rotation - try without groundOffset first to isolate the issue
+    console.log(`Setting player ${player.id} position to:`, player.position);
+    playerModel.position.set(
+      player.position.x,
+      player.position.y,
+      player.position.z
+    );
+    // Set only Y rotation with Math.PI offset to account for model's built-in rotation
+    // Characters should only turn left/right, not tilt up/down
+    playerModel.rotation.set(
+      0, // Keep character upright
+      player.rotation.y + Math.PI,
+      0  // Keep character upright
+    );
     playerModel.castShadow = true;
     
-    return playerModel;
+    // Force update transforms and verify final positions
+    playerModel.updateMatrixWorld(true);
+    
+    // Debug: Check final world positions after all transforms
+    playerModel.traverse((child) => {
+      if (child.type === 'SkinnedMesh') {
+        const worldPos = child.getWorldPosition(new THREE.Vector3());
+        console.log(`Final world position for player ${player.id} SkinnedMesh:`, worldPos.toArray());
+        console.log(`Expected position:`, [player.position.x, player.position.y, player.position.z]);
+        
+        // If world position is still wrong, this indicates a deeper issue
+        if (Math.abs(worldPos.x - player.position.x) > 0.1 || 
+            Math.abs(worldPos.z - player.position.z) > 0.1) {
+          console.warn(`⚠️  Player ${player.id} SkinnedMesh world position mismatch!`);
+        }
+      }
+    });
+    
+    return { model: playerModel, mixer, actions };
   };
 
   // Add or update a player
   const updatePlayer = async (playerData: PlayerUpdate) => {
-    if (!sceneRef.current) return;
+    if (!sceneRef.current) {
+      console.warn(`❌ Scene not available for player ${playerData.id}`);
+      return;
+    }
 
     const players = playersRef.current;
     const existingPlayer = players.get(playerData.id);
@@ -200,6 +352,11 @@ export default function Game() {
       if (playerData.rotation) {
         existingPlayer.rotation = playerData.rotation;
       }
+      
+      // Update movement state for animation
+      existingPlayer.isMoving = playerData.isMoving;
+      existingPlayer.movementDirection = playerData.movementDirection;
+      
       if (existingPlayer.mesh) {
         existingPlayer.mesh.position.set(
           playerData.position.x,
@@ -207,11 +364,44 @@ export default function Game() {
           playerData.position.z
         );
         if (playerData.rotation) {
+          // Apply only Y rotation with Math.PI offset to account for model's built-in rotation
+          // Other players' characters should only turn left/right, not tilt up/down
           existingPlayer.mesh.rotation.set(
-            playerData.rotation.x,
-            playerData.rotation.y,
-            playerData.rotation.z
+            0, // Keep character upright
+            playerData.rotation.y + Math.PI,
+            0  // Keep character upright
           );
+        }
+        
+        // Force a render update
+        if (existingPlayer.mesh.parent) {
+          existingPlayer.mesh.updateMatrixWorld(true);
+        }
+      }
+      
+      // Update other player's animation based on movement state
+      const animData = playersAnimations.current.get(playerData.id);
+      if (animData && animData.actions.StickMan_Run) {
+        const walkAction = animData.actions.StickMan_Run;
+        
+        // Use the RECEIVED playerData.isMoving directly to avoid any timing issues
+        if (playerData.isMoving) {
+          // Use the same pattern as local player - only play if not running, never reset
+          if (!walkAction.isRunning()) {
+            walkAction.play();
+          }
+          walkAction.paused = false;
+          walkAction.enabled = true;
+          
+          // Set animation direction based on movement
+          if (playerData.movementDirection === 'backward') {
+            walkAction.timeScale = -1;
+          } else {
+            walkAction.timeScale = 1;
+          }
+        } else {
+          // Pause instead of stop to maintain smooth transitions
+          walkAction.paused = true;
         }
       }
     } else {
@@ -220,12 +410,23 @@ export default function Game() {
         id: playerData.id,
         position: playerData.position,
         rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
-        color: generatePlayerColor(playerData.id)
+        color: generatePlayerColor(playerData.id),
+        isMoving: playerData.isMoving || false,
+        movementDirection: playerData.movementDirection || 'none'
       };
       
-      const model = await createPlayerModel(newPlayer);
-      newPlayer.mesh = model; // No need to cast anymore
-      sceneRef.current.add(model);
+      const playerData_result = await createPlayerModel(newPlayer);
+      newPlayer.mesh = playerData_result.model;
+      sceneRef.current.add(playerData_result.model);
+      
+      // Store animation data for other players
+      if (playerData_result.mixer && playerData_result.actions) {
+        playersAnimations.current.set(playerData.id, {
+          mixer: playerData_result.mixer,
+          actions: playerData_result.actions
+        });
+      }
+      
       players.set(playerData.id, newPlayer);
     }
   };
@@ -239,6 +440,13 @@ export default function Game() {
     
     if (player && player.mesh) {
       sceneRef.current.remove(player.mesh);
+      
+      // Clean up animation data
+      const animData = playersAnimations.current.get(playerId);
+      if (animData) {
+        animData.mixer.stopAllAction();
+        playersAnimations.current.delete(playerId);
+      }
       
       // Dispose of resources properly for both meshes and groups
       if (player.mesh instanceof THREE.Mesh) {
@@ -277,21 +485,30 @@ export default function Game() {
     forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
     right.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
 
+    // Track movement direction for animation - preserve the previous direction if no new input
+    let newMovementDirection: 'forward' | 'backward' | 'none' = movementDirection.current;
+    
     if (keysPressed.current.has('KeyW')) {
       localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
       moved = true;
+      newMovementDirection = 'forward';
     }
     if (keysPressed.current.has('KeyS')) {
       localPlayer.position.add(forward.clone().multiplyScalar(-moveSpeed));
       moved = true;
+      newMovementDirection = 'backward';
     }
     if (keysPressed.current.has('KeyA')) {
       localPlayer.position.add(right.clone().multiplyScalar(-moveSpeed));
       moved = true;
+      // Side movement uses forward animation only if we weren't already moving backward
+      if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
     if (keysPressed.current.has('KeyD')) {
       localPlayer.position.add(right.clone().multiplyScalar(moveSpeed));
       moved = true;
+      // Side movement uses forward animation only if we weren't already moving backward
+      if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
     if (keysPressed.current.has('Space')) {
       localPlayer.position.y += moveSpeed;
@@ -302,41 +519,98 @@ export default function Game() {
       moved = true;
     }
 
+    // Only update movement direction if we're actually moving, otherwise keep it as 'none'
+    if (!moved) {
+      newMovementDirection = 'none';
+    }
+    movementDirection.current = newMovementDirection;
+
     // Update camera to follow the player with proper FPS-style rotation
     const playerPos = localPlayer.position;
-    const cameraOffset = new THREE.Vector3(0, 1.5, 3); // Closer and lower camera for smaller models
     
-    // Apply player's Y rotation to camera offset
-    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
+    // For third-person FPS camera, position camera behind and above the player
+    const cameraHeight = 1.8; // Eye level height
+    const cameraDistance = 3.5; // Distance behind player for third-person view
     
-    // Set camera position
+    // Calculate camera position based on player's Y rotation - add Math.PI to put camera behind
+    const cameraX = playerPos.x + Math.sin(localPlayerRotation.current.y) * cameraDistance;
+    const cameraZ = playerPos.z + Math.cos(localPlayerRotation.current.y) * cameraDistance;
+    
     camera.position.set(
-      playerPos.x + cameraOffset.x,
-      playerPos.y + cameraOffset.y,
-      playerPos.z + cameraOffset.z
+      cameraX,
+      playerPos.y + cameraHeight,
+      cameraZ
     );
     
-    // Calculate look-at point based on player rotation
-    const lookDirection = new THREE.Vector3(0, 0, -1);
-    lookDirection.applyAxisAngle(new THREE.Vector3(1, 0, 0), localPlayerRotation.current.x); // Apply X rotation
-    lookDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y); // Apply Y rotation
+    // Calculate look-at point based on both X and Y rotation for camera only
+    const lookDistance = 10; // How far ahead to look
+    const lookDirection = new THREE.Vector3(
+      -Math.sin(localPlayerRotation.current.y), // Negative because we're looking forward from behind
+      -Math.sin(localPlayerRotation.current.x), // Negative for correct up/down look
+      -Math.cos(localPlayerRotation.current.y)  // Negative because we're looking forward from behind
+    );
     
     const lookAtPoint = new THREE.Vector3(
-      playerPos.x + lookDirection.x,
-      playerPos.y + 1 + lookDirection.y, // Look at head level
-      playerPos.z + lookDirection.z
+      playerPos.x + lookDirection.x * lookDistance,
+      playerPos.y + cameraHeight + lookDirection.y * lookDistance,
+      playerPos.z + lookDirection.z * lookDistance
     );
     
     camera.lookAt(lookAtPoint);
 
+    // Handle walking animation based on movement
+    const wasMoving = isMoving.current;
+    const oldDirection = movementDirection.current;
+    isMoving.current = moved;
+    
+    // Get delta time once per frame
+    const delta = clockRef.current.getDelta();
+    
+    // Control local player animation
+    if (localPlayerMixer.current && localPlayerActions.current.StickMan_Run) {
+      const walkAction = localPlayerActions.current.StickMan_Run;
+      
+      if (isMoving.current) {
+        // Start or update walking animation
+        if (!walkAction.isRunning()) {
+          walkAction.play();
+        }
+        walkAction.paused = false;
+        
+        // Set animation direction based on movement
+        if (movementDirection.current === 'backward') {
+          walkAction.timeScale = -1;
+        } else if (movementDirection.current === 'forward') {
+          walkAction.timeScale = 1;
+        }
+      } else {
+        // Pause walking animation instead of stopping to maintain smooth transitions
+        walkAction.paused = true;
+      }
+      
+      // Always update animation mixer when it exists
+      localPlayerMixer.current.update(delta);
+    }
+    
+    // Update other players' animation mixers
+    playersAnimations.current.forEach((animData) => {
+      animData.mixer.update(delta);
+    });
+
     // Send updates to server if position or rotation changed (with throttling)
     const now = Date.now();
-    if ((moved || 
-        Math.abs(oldRotation.x - localPlayerRotation.current.x) > 0.01 ||
-        Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01) &&
-        now - lastUpdateTime.current > 50) { // Throttle to 20 updates per second
+    const movementChanged = moved || Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01;
+    const movementStateChanged = wasMoving !== isMoving.current || oldDirection !== movementDirection.current;
+    
+    // Smart heartbeat: only send "stopped moving" update if last sent state was "moving"
+    const timeSinceLastUpdate = now - lastUpdateTime.current;
+    const shouldSendHeartbeat = !isMoving.current && lastSentMovementState.current && timeSinceLastUpdate > 300; // Send heartbeat every 300ms when stopped (but only if we were previously moving)
+    const shouldSendImmediate = movementChanged || movementStateChanged;
+    
+    if ((shouldSendImmediate && timeSinceLastUpdate > 50) || shouldSendHeartbeat) { // Throttle immediate updates to 20 updates per second
       
       lastUpdateTime.current = now;
+      lastSentMovementState.current = isMoving.current; // Track what we're sending
       
       if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
         const moveMessage = {
@@ -349,10 +623,12 @@ export default function Game() {
               z: localPlayer.position.z
             },
             rotation: {
-              x: localPlayerRotation.current.x,
+              x: 0, // Only send Y rotation since characters don't tilt up/down
               y: localPlayerRotation.current.y,
-              z: localPlayerRotation.current.z
-            }
+              z: 0
+            },
+            isMoving: isMoving.current,
+            movementDirection: movementDirection.current
           }
         };
         websocketRef.current.send(JSON.stringify(moveMessage));
@@ -363,6 +639,19 @@ export default function Game() {
   // Update the ref whenever the function changes
   useEffect(() => {
     updateMovementRef.current = updateMovement;
+    
+    // Add debug info to global scope for console debugging
+    if (typeof window !== 'undefined') {
+      (window as any).gameDebug = {
+        isMoving: isMoving.current,
+        movementDirection: movementDirection.current,
+        localPlayerMixer: localPlayerMixer.current,
+        localPlayerActions: localPlayerActions.current,
+        playersAnimations: playersAnimations.current,
+        localPlayerRef: localPlayerRef,
+        keysPressed: keysPressed.current
+      };
+    }
   }, [updateMovement]);
 
   // Initialize Three.js scene
@@ -443,35 +732,80 @@ export default function Game() {
       scene.add(cylinder);
     }
 
-    // Create local player (async, so we'll add it after scene setup)
+    // Create local player with animations (async, so we'll add it after scene setup)
     const createLocalPlayer = async () => {
-      const localPlayer = await loadPlayerModel();
+      const localPlayerData = await loadPlayerModel();
+      const localPlayerScene = localPlayerData.scene;
       
-      // Make the local player green to distinguish from others  
-      if (localPlayer instanceof THREE.Mesh) {
-        const material = (localPlayer.material as THREE.MeshLambertMaterial);
-        material.color.setHex(0x00ff00); // Green for local player
-      } else if (localPlayer instanceof THREE.Group) {
-        localPlayer.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            const material = (child.material as THREE.MeshLambertMaterial);
-            material.color.setHex(0x00ff00); // Green for local player
+      // Set up animations for local player
+      if (localPlayerData.animations.length > 0) {
+        localPlayerMixer.current = new THREE.AnimationMixer(localPlayerScene);
+        
+        localPlayerData.animations.forEach((clip) => {
+          const action = localPlayerMixer.current!.clipAction(clip);
+          localPlayerActions.current[clip.name] = action;
+          
+          // Set default properties for walk animation
+          if (clip.name === 'StickMan_Run') {
+            action.setLoop(THREE.LoopRepeat, Infinity);
+            action.clampWhenFinished = true;
+            action.weight = 1.0;
+            // Prepare the action but don't play it yet
+            action.reset();
           }
         });
+        
+        // Start the walk animation in paused state so it's ready
+        if (localPlayerActions.current.StickMan_Run) {
+          const walkAction = localPlayerActions.current.StickMan_Run;
+          walkAction.reset();
+          walkAction.play();
+          walkAction.paused = true;
+          walkAction.enabled = true;
+        } else {
+          console.error('❌ StickMan_Run action was not created properly!');
+        }
       }
       
-      localPlayer.position.set(0, 0, 0); // Start at ground level (y=0)
-      localPlayer.castShadow = true;
-      scene.add(localPlayer);
-      localPlayerRef.current = localPlayer; // No need to cast anymore
+      // Make the local player green to distinguish from others  
+      localPlayerScene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // Clone the material to avoid affecting the template
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map(mat => {
+              const clonedMat = mat.clone();
+              clonedMat.color.setHex(0x00ff00); // Green for local player
+              return clonedMat;
+            });
+          } else {
+            const clonedMaterial = child.material.clone();
+            clonedMaterial.color.setHex(0x00ff00); // Green for local player
+            child.material = clonedMaterial;
+          }
+        }
+      });
+      
+      // Apply ground offset to position local player correctly
+      localPlayerScene.position.set(
+        localPlayerData.groundOffset?.x || 0,
+        localPlayerData.groundOffset?.y || 0,
+        localPlayerData.groundOffset?.z || 0
+      );
+      // Set initial rotation to match the user's current rotation (only Y rotation for character)
+      localPlayerScene.rotation.y = localPlayerRotation.current.y + Math.PI;
+      localPlayerScene.rotation.x = 0; // Keep character upright
+      localPlayerScene.rotation.z = 0; // Keep character upright
+      localPlayerScene.castShadow = true;
+      scene.add(localPlayerScene);
+      localPlayerRef.current = localPlayerScene;
     };
     
     // Initialize local player asynchronously
     createLocalPlayer();
 
     // Position camera behind and above the local player
-    camera.position.set(0, 1.5, 3); // Closer and lower for smaller models
-    camera.lookAt(0, 1, 0); // Look at head level
+    camera.position.set(0, 2.5, 5); // Adjusted for larger skeleton model
+    camera.lookAt(0, 2.0, 0); // Look at adjusted head level
 
     // Handle window resize
     const handleResize = () => {
@@ -493,10 +827,12 @@ export default function Game() {
       // Limit vertical rotation
       localPlayerRotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, localPlayerRotation.current.x));
       
-      // Apply rotation to local player
+      // Apply only Y rotation to local player - character should only turn left/right, not tilt up/down
+      // Add Math.PI to account for the model's built-in 180 degree rotation
       if (localPlayerRef.current) {
-        localPlayerRef.current.rotation.y = localPlayerRotation.current.y;
-        localPlayerRef.current.rotation.x = localPlayerRotation.current.x;
+        localPlayerRef.current.rotation.y = localPlayerRotation.current.y + Math.PI;
+        localPlayerRef.current.rotation.x = 0; // Keep character upright
+        localPlayerRef.current.rotation.z = 0; // Keep character upright
       }
     };
 
@@ -603,7 +939,9 @@ export default function Game() {
               x: 0,
               y: 0,
               z: 0
-            }
+            },
+            isMoving: false,
+            movementDirection: 'none'
           }
         }));
       };
@@ -646,15 +984,16 @@ export default function Game() {
 
   // Handle messages from game server
   const handleGameMessage = (message: GameMessage) => {
-    console.log('Received message:', message);
-
     switch (message.type) {
       case 'player_joined':
         // New player joined the game
         if (message.data.playerId && message.data.position) {
           updatePlayer({
             id: message.data.playerId,
-            position: message.data.position
+            position: message.data.position,
+            rotation: message.data.rotation,
+            isMoving: message.data.isMoving || false,
+            movementDirection: message.data.movementDirection || 'none'
           }).catch(console.error);
         }
         break;
@@ -664,7 +1003,10 @@ export default function Game() {
         if (message.data.playerId && message.data.position) {
           updatePlayer({
             id: message.data.playerId,
-            position: message.data.position
+            position: message.data.position,
+            rotation: message.data.rotation,
+            isMoving: message.data.isMoving || false,
+            movementDirection: message.data.movementDirection || 'none'
           }).catch(console.error);
         }
         break;
@@ -722,9 +1064,23 @@ export default function Game() {
       websocketRef.current.close();
     }
     
+    // Clean up animation mixers
+    if (localPlayerMixer.current) {
+      localPlayerMixer.current.stopAllAction();
+      localPlayerMixer.current = null;
+    }
+    localPlayerActions.current = {};
+    
+    playersAnimations.current.forEach((animData) => {
+      animData.mixer.stopAllAction();
+    });
+    playersAnimations.current.clear();
+    
     // Clear key states
     keysPressed.current.clear();
     isPointerLocked.current = false;
+    isMoving.current = false;
+    movementDirection.current = 'none';
     
     // Exit pointer lock if active
     if (document.pointerLockElement) {
@@ -876,9 +1232,9 @@ export default function Game() {
         {gameState.connected && (
           <div className={styles.controls}>
             <div>Controls: WASD to move, Space/Shift for up/down</div>
-            <div>Mouse: Click to lock cursor, move mouse to look around (FPS style)</div>
+            <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
             <div>Players online: {playersRef.current.size + 1}</div>
-            <div>Your character: Green | Other players: Various colors</div>
+            <div>Your character: Green skeleton with walking animation | Other players: Various colors</div>
           </div>
         )}
       </div>
