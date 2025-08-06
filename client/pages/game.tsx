@@ -323,6 +323,11 @@ export default function Game() {
 
   // Add or update a player
   const updatePlayer = async (playerData: PlayerUpdate) => {
+    console.log(`🔄 updatePlayer called for ${playerData.id} - DISABLED FOR TESTING`);
+    // DISABLED FOR TESTING - commenting out all other player logic
+    return;
+    
+    /*
     console.log(`🔄 updatePlayer called for ${playerData.id}:`, {
       position: playerData.position,
       rotation: playerData.rotation,
@@ -483,6 +488,7 @@ export default function Game() {
       
       players.set(playerData.id, newPlayer);
     }
+    */
   };
 
   // Remove a player
@@ -665,6 +671,12 @@ export default function Game() {
     playersAnimations.current.forEach((animData) => {
       animData.mixer.update(delta);
     });
+    
+    // TEST: Update test player animation
+    const testPlayer = (window as any).testPlayer;
+    if (testPlayer && testPlayer.mixer) {
+      testPlayer.mixer.update(delta);
+    }
 
     // Send updates to server if position or rotation changed (with throttling)
     const now = Date.now();
@@ -874,6 +886,77 @@ export default function Game() {
     
     // Initialize local player asynchronously
     createLocalPlayer();
+
+    // TEST: Create a second stickman model in the center for debugging
+    const createTestPlayer = async () => {
+      console.log('🧪 Creating test player in center of map...');
+      const testPlayerData = await loadPlayerModel();
+      const testPlayerScene = testPlayerData.scene.clone();
+      
+      // Apply ground offset to position correctly - same as local player
+      testPlayerScene.position.set(
+        testPlayerData.groundOffset?.x || 0,
+        testPlayerData.groundOffset?.y || 0,
+        testPlayerData.groundOffset?.z || 0
+      );
+      
+      // Make the test player red to distinguish it
+      testPlayerScene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // Clone the material to avoid affecting other models
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map(mat => {
+              const clonedMat = mat.clone();
+              clonedMat.color.setHex(0xff0000); // Red for test player
+              return clonedMat;
+            });
+          } else {
+            const clonedMaterial = child.material.clone();
+            clonedMaterial.color.setHex(0xff0000); // Red for test player
+            child.material = clonedMaterial;
+          }
+        }
+      });
+      
+      // Set up animation for test player
+      let testMixer: THREE.AnimationMixer | null = null;
+      let testActions: { [key: string]: THREE.AnimationAction } = {};
+      
+      if (testPlayerData.animations.length > 0) {
+        testMixer = new THREE.AnimationMixer(testPlayerScene);
+        
+        testPlayerData.animations.forEach((clip) => {
+          const action = testMixer!.clipAction(clip);
+          testActions[clip.name] = action;
+          
+          if (clip.name === 'StickMan_Run') {
+            action.setLoop(THREE.LoopRepeat, Infinity);
+            action.clampWhenFinished = true;
+            action.weight = 1.0;
+            action.reset();
+            action.play();
+            action.paused = false; // Start running immediately
+            action.enabled = true;
+            console.log('🧪 Test player animation started');
+          }
+        });
+      }
+      
+      testPlayerScene.castShadow = true;
+      scene.add(testPlayerScene);
+      
+      console.log('🧪 Test player created at position:', testPlayerScene.position.toArray());
+      
+      // Store test player references for animation updates
+      (window as any).testPlayer = {
+        model: testPlayerScene,
+        mixer: testMixer,
+        actions: testActions
+      };
+    };
+    
+    // Create test player
+    createTestPlayer();
 
     // Position camera behind and above the local player
     camera.position.set(0, 2.5, 5); // Adjusted for larger skeleton model
