@@ -68,7 +68,7 @@ export default function Game() {
   });
 
   // Load 3D player model with animations
-  const loadPlayerModel = async (): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> => {
+  const loadPlayerModel = async (): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[]; groundOffset?: { x: number; y: number; z: number } }> => {
     // Try to load the animated skeleton model (GLB format)
     try {
       if (!gltfLoaderRef.current) {
@@ -94,7 +94,7 @@ export default function Game() {
       // Rotate 180 degrees around Y axis so the model faces away from the camera initially
       gltf.scene.rotation.y = Math.PI;
       
-      // Get bounding box after scaling and rotation
+      // Get bounding box after scaling and rotation to calculate ground offset
       const box = new THREE.Box3().setFromObject(gltf.scene);
       const center = box.getCenter(new THREE.Vector3());
       
@@ -105,15 +105,17 @@ export default function Game() {
         size: box.getSize(new THREE.Vector3())
       });
       
-      // Center the model horizontally (X and Z) but keep it above ground
-      gltf.scene.position.x = -center.x;
-      gltf.scene.position.z = -center.z;
+      // Store the ground offset for later use but don't apply it to the template
+      const groundOffset = {
+        x: -center.x,
+        z: -center.z,
+        y: -box.min.y
+      };
       
-      // Position Y so that the bottom of the model is at ground level (y=0)
-      // Fix ground positioning by using the minimum Y value correctly
-      gltf.scene.position.y = -box.min.y;
+      // Reset position to origin for template - individual instances will apply offsets
+      gltf.scene.position.set(0, 0, 0);
       
-      console.log('Final model position:', gltf.scene.position);
+      console.log('Template model reset to origin, ground offset calculated:', groundOffset);
       
       // Ensure all materials render properly and are visible
       gltf.scene.traverse((child) => {
@@ -144,7 +146,7 @@ export default function Game() {
         }
       });
       
-      return { scene: gltf.scene, animations: gltf.animations || [] };
+      return { scene: gltf.scene, animations: gltf.animations || [], groundOffset };
     } catch (error) {
       console.log('StickMan GLB model not available, using fallback cube:', error);
       
@@ -159,7 +161,7 @@ export default function Game() {
       const group = new THREE.Group();
       group.add(mesh);
       
-      return { scene: group, animations: [] };
+      return { scene: group, animations: [], groundOffset: { x: 0, y: 0, z: 0 } };
     }
   };
 
@@ -200,8 +202,11 @@ export default function Game() {
           action.setLoop(THREE.LoopRepeat, Infinity);
           action.clampWhenFinished = true;
           action.weight = 1.0;
-          // Prepare the action but don't play it yet
+          // Prepare the action but don't play it yet - initialize properly
           action.reset();
+          action.play();
+          action.paused = true;
+          action.enabled = true;
         }
       });
       
@@ -226,8 +231,12 @@ export default function Game() {
       }
     });
     
-    // Set position and rotation
-    playerModel.position.set(player.position.x, player.position.y, player.position.z);
+    // Set world position and rotation
+    playerModel.position.set(
+      (modelData.groundOffset?.x || 0) + player.position.x,
+      (modelData.groundOffset?.y || 0) + player.position.y,
+      (modelData.groundOffset?.z || 0) + player.position.z
+    );
     // Set only Y rotation with Math.PI offset to account for model's built-in rotation
     // Characters should only turn left/right, not tilt up/down
     playerModel.rotation.set(
@@ -259,6 +268,10 @@ export default function Game() {
       existingPlayer.movementDirection = playerData.movementDirection;
       
       if (existingPlayer.mesh) {
+        console.log(`Updating position for existing player ${playerData.id}:`, {
+          from: existingPlayer.mesh.position.toArray(),
+          to: [playerData.position.x, playerData.position.y, playerData.position.z]
+        });
         existingPlayer.mesh.position.set(
           playerData.position.x,
           playerData.position.y,
@@ -280,24 +293,40 @@ export default function Game() {
       if (animData && animData.actions.StickMan_Run) {
         const walkAction = animData.actions.StickMan_Run;
         
+        console.log(`Updating other player ${playerData.id} animation - isMoving: ${existingPlayer.isMoving}, direction: ${existingPlayer.movementDirection}`);
+        
         if (existingPlayer.isMoving) {
           if (!walkAction.isRunning()) {
+            walkAction.reset();
             walkAction.play();
+            console.log(`Started walk animation for player ${playerData.id}`);
           }
           walkAction.paused = false;
+          walkAction.enabled = true;
           
           // Set animation direction based on movement
           if (existingPlayer.movementDirection === 'backward') {
             walkAction.timeScale = -1;
+            console.log(`Player ${playerData.id} walking backward`);
           } else {
             walkAction.timeScale = 1;
+            console.log(`Player ${playerData.id} walking forward`);
           }
         } else {
+          // Pause instead of stop to maintain smooth transitions
           walkAction.paused = true;
+          console.log(`Paused walk animation for player ${playerData.id}`);
         }
+      } else {
+        console.log(`No animation data found for player ${playerData.id}:`, {
+          hasAnimData: !!animData,
+          hasStickManRun: animData?.actions?.StickMan_Run ? true : false,
+          availableActions: animData ? Object.keys(animData.actions) : []
+        });
       }
     } else {
       // Create new player
+      console.log(`Creating new player ${playerData.id} at position:`, playerData.position);
       const newPlayer: Player = {
         id: playerData.id,
         position: playerData.position,
@@ -309,6 +338,7 @@ export default function Game() {
       
       const playerData_result = await createPlayerModel(newPlayer);
       newPlayer.mesh = playerData_result.model;
+      console.log(`New player ${playerData.id} mesh position:`, newPlayer.mesh.position.toArray());
       sceneRef.current.add(playerData_result.model);
       
       // Store animation data for other players
@@ -317,6 +347,9 @@ export default function Game() {
           mixer: playerData_result.mixer,
           actions: playerData_result.actions
         });
+        console.log(`Stored animation data for player ${playerData.id}:`, Object.keys(playerData_result.actions));
+      } else {
+        console.warn(`No animation data for player ${playerData.id}`);
       }
       
       players.set(playerData.id, newPlayer);
@@ -695,7 +728,12 @@ export default function Game() {
         }
       });
       
-      localPlayerScene.position.set(0, 0, 0); // Start at ground level (y=0)
+      // Apply ground offset to position local player correctly
+      localPlayerScene.position.set(
+        localPlayerData.groundOffset?.x || 0,
+        localPlayerData.groundOffset?.y || 0,
+        localPlayerData.groundOffset?.z || 0
+      );
       // Set initial rotation to match the user's current rotation (only Y rotation for character)
       localPlayerScene.rotation.y = localPlayerRotation.current.y + Math.PI;
       localPlayerScene.rotation.x = 0; // Keep character upright
