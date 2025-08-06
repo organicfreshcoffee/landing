@@ -246,6 +246,10 @@ When adding new 3D models to this directory:
 - **File Size**: 0.06 MB
 - **Advantages**: Professional animations, smaller file size, better performance
 
+### Fantasy Town Kit
+- **Source**: https://opengameart.org/content/fantasy-town-kit
+- **License**: CC0
+
 ### stickman_idle.glb
 - **Source**: Exported from StickMan.blend
 - **License**: CC0
