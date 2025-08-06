@@ -22,12 +22,16 @@ interface Player {
   rotation: { x: number; y: number; z: number };
   color: string;
   mesh?: THREE.Object3D; // Changed from THREE.Mesh to THREE.Object3D to support both meshes and groups
+  isMoving?: boolean;
+  movementDirection?: 'forward' | 'backward' | 'none';
 }
 
 interface PlayerUpdate {
   id: string;
   position: { x: number; y: number; z: number };
   rotation?: { x: number; y: number; z: number };
+  isMoving?: boolean;
+  movementDirection?: 'forward' | 'backward' | 'none';
 }
 
 export default function Game() {
@@ -54,6 +58,7 @@ export default function Game() {
   const localPlayerActions = useRef<{ [key: string]: THREE.AnimationAction }>({});
   const playersAnimations = useRef<Map<string, { mixer: THREE.AnimationMixer; actions: { [key: string]: THREE.AnimationAction } }>>(new Map());
   const isMoving = useRef<boolean>(false);
+  const movementDirection = useRef<'forward' | 'backward' | 'none'>('none'); // Track movement direction for animation
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   
   const [gameState, setGameState] = useState<GameState>({
@@ -83,14 +88,17 @@ export default function Game() {
         console.warn('⚠️ No animations found in stickman.glb!');
       }
       
-      // Scale the model appropriately for the game
-      gltf.scene.scale.set(0.3, 0.3, 0.3); // StickMan is much smaller, needs larger scale
+      // Scale the model appropriately for the game - make twice as big
+      gltf.scene.scale.set(0.6, 0.6, 0.6); // Doubled from 0.3 to 0.6
       
-      // Get bounding box after scaling
+      // Rotate 180 degrees around Y axis so the model faces away from the camera initially
+      gltf.scene.rotation.y = Math.PI;
+      
+      // Get bounding box after scaling and rotation
       const box = new THREE.Box3().setFromObject(gltf.scene);
       const center = box.getCenter(new THREE.Vector3());
       
-      console.log('Model bounds after scaling:', {
+      console.log('Model bounds after scaling and rotation:', {
         min: box.min,
         max: box.max,
         center: center,
@@ -102,7 +110,8 @@ export default function Game() {
       gltf.scene.position.z = -center.z;
       
       // Position Y so that the bottom of the model is at ground level (y=0)
-      gltf.scene.position.y = Math.abs(box.min.y);
+      // Fix ground positioning by using the minimum Y value correctly
+      gltf.scene.position.y = -box.min.y;
       
       console.log('Final model position:', gltf.scene.position);
       
@@ -217,8 +226,14 @@ export default function Game() {
       }
     });
     
-    // Set position
+    // Set position and rotation
     playerModel.position.set(player.position.x, player.position.y, player.position.z);
+    // Set rotation with Math.PI offset to account for model's built-in rotation
+    playerModel.rotation.set(
+      player.rotation.x,
+      player.rotation.y + Math.PI,
+      player.rotation.z
+    );
     playerModel.castShadow = true;
     
     return { model: playerModel, mixer, actions };
@@ -237,6 +252,11 @@ export default function Game() {
       if (playerData.rotation) {
         existingPlayer.rotation = playerData.rotation;
       }
+      
+      // Update movement state for animation
+      existingPlayer.isMoving = playerData.isMoving;
+      existingPlayer.movementDirection = playerData.movementDirection;
+      
       if (existingPlayer.mesh) {
         existingPlayer.mesh.position.set(
           playerData.position.x,
@@ -244,11 +264,34 @@ export default function Game() {
           playerData.position.z
         );
         if (playerData.rotation) {
+          // Apply rotation with Math.PI offset to account for model's built-in rotation
           existingPlayer.mesh.rotation.set(
             playerData.rotation.x,
-            playerData.rotation.y,
+            playerData.rotation.y + Math.PI,
             playerData.rotation.z
           );
+        }
+      }
+      
+      // Update other player's animation based on movement state
+      const animData = playersAnimations.current.get(playerData.id);
+      if (animData && animData.actions.StickMan_Run) {
+        const walkAction = animData.actions.StickMan_Run;
+        
+        if (existingPlayer.isMoving) {
+          if (!walkAction.isRunning()) {
+            walkAction.play();
+          }
+          walkAction.paused = false;
+          
+          // Set animation direction based on movement
+          if (existingPlayer.movementDirection === 'backward') {
+            walkAction.timeScale = -1;
+          } else {
+            walkAction.timeScale = 1;
+          }
+        } else {
+          walkAction.paused = true;
         }
       }
     } else {
@@ -257,7 +300,9 @@ export default function Game() {
         id: playerData.id,
         position: playerData.position,
         rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
-        color: generatePlayerColor(playerData.id)
+        color: generatePlayerColor(playerData.id),
+        isMoving: playerData.isMoving || false,
+        movementDirection: playerData.movementDirection || 'none'
       };
       
       const playerData_result = await createPlayerModel(newPlayer);
@@ -330,21 +375,30 @@ export default function Game() {
     forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
     right.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
 
+    // Track movement direction for animation - preserve the previous direction if no new input
+    let newMovementDirection: 'forward' | 'backward' | 'none' = movementDirection.current;
+    
     if (keysPressed.current.has('KeyW')) {
       localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
       moved = true;
+      newMovementDirection = 'forward';
     }
     if (keysPressed.current.has('KeyS')) {
       localPlayer.position.add(forward.clone().multiplyScalar(-moveSpeed));
       moved = true;
+      newMovementDirection = 'backward';
     }
     if (keysPressed.current.has('KeyA')) {
       localPlayer.position.add(right.clone().multiplyScalar(-moveSpeed));
       moved = true;
+      // Side movement uses forward animation only if we weren't already moving backward
+      if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
     if (keysPressed.current.has('KeyD')) {
       localPlayer.position.add(right.clone().multiplyScalar(moveSpeed));
       moved = true;
+      // Side movement uses forward animation only if we weren't already moving backward
+      if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
     if (keysPressed.current.has('Space')) {
       localPlayer.position.y += moveSpeed;
@@ -354,6 +408,12 @@ export default function Game() {
       localPlayer.position.y -= moveSpeed;
       moved = true;
     }
+
+    // Only update movement direction if we're actually moving, otherwise keep it as 'none'
+    if (!moved) {
+      newMovementDirection = 'none';
+    }
+    movementDirection.current = newMovementDirection;
 
     // Update camera to follow the player with proper FPS-style rotation
     const playerPos = localPlayer.position;
@@ -384,6 +444,7 @@ export default function Game() {
 
     // Handle walking animation based on movement
     const wasMoving = isMoving.current;
+    const oldDirection = movementDirection.current;
     isMoving.current = moved;
     
     // Get delta time once per frame
@@ -393,18 +454,30 @@ export default function Game() {
     if (localPlayerMixer.current && localPlayerActions.current.StickMan_Run) {
       const walkAction = localPlayerActions.current.StickMan_Run;
       
-      if (isMoving.current && !wasMoving) {
-        // Start walking animation
+      if (isMoving.current) {
+        // Start or update walking animation
         if (!walkAction.isRunning()) {
           walkAction.play();
           console.log('Walk action started (was not running)');
         }
         walkAction.paused = false;
-        console.log('Started walking animation - paused:', walkAction.paused, 'running:', walkAction.isRunning());
-      } else if (!isMoving.current && wasMoving) {
+        
+        // Only change animation direction when we have a clear forward/backward movement
+        if (movementDirection.current === 'backward') {
+          // Play animation in reverse for backward movement
+          walkAction.timeScale = -1;
+          console.log('Walking animation - direction: backward, timeScale: -1');
+        } else if (movementDirection.current === 'forward') {
+          // Play animation normally for forward movement
+          walkAction.timeScale = 1;
+          console.log('Walking animation - direction: forward, timeScale: 1');
+        }
+        // Don't change timeScale when direction is 'none' - keep previous setting
+        
+      } else {
         // Pause walking animation instead of stopping to maintain smooth transitions
         walkAction.paused = true;
-        console.log('Paused walking animation - paused:', walkAction.paused, 'running:', walkAction.isRunning());
+        console.log('Paused walking animation');
       }
       
       // Always update animation mixer when it exists
@@ -446,7 +519,9 @@ export default function Game() {
               x: localPlayerRotation.current.x,
               y: localPlayerRotation.current.y,
               z: localPlayerRotation.current.z
-            }
+            },
+            isMoving: isMoving.current,
+            movementDirection: movementDirection.current
           }
         };
         websocketRef.current.send(JSON.stringify(moveMessage));
@@ -462,6 +537,7 @@ export default function Game() {
     if (typeof window !== 'undefined') {
       (window as any).gameDebug = {
         isMoving: isMoving.current,
+        movementDirection: movementDirection.current,
         localPlayerMixer: localPlayerMixer.current,
         localPlayerActions: localPlayerActions.current,
         playersAnimations: playersAnimations.current,
@@ -613,6 +689,9 @@ export default function Game() {
       });
       
       localPlayerScene.position.set(0, 0, 0); // Start at ground level (y=0)
+      // Set initial rotation to match the user's current rotation (which starts at 0, but model has Math.PI built in)
+      localPlayerScene.rotation.y = localPlayerRotation.current.y + Math.PI;
+      localPlayerScene.rotation.x = localPlayerRotation.current.x;
       localPlayerScene.castShadow = true;
       scene.add(localPlayerScene);
       localPlayerRef.current = localPlayerScene;
@@ -645,9 +724,9 @@ export default function Game() {
       // Limit vertical rotation
       localPlayerRotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, localPlayerRotation.current.x));
       
-      // Apply rotation to local player
+      // Apply rotation to local player - add Math.PI to account for the model's built-in 180 degree rotation
       if (localPlayerRef.current) {
-        localPlayerRef.current.rotation.y = localPlayerRotation.current.y;
+        localPlayerRef.current.rotation.y = localPlayerRotation.current.y + Math.PI;
         localPlayerRef.current.rotation.x = localPlayerRotation.current.x;
       }
     };
@@ -755,7 +834,9 @@ export default function Game() {
               x: 0,
               y: 0,
               z: 0
-            }
+            },
+            isMoving: false,
+            movementDirection: 'none'
           }
         }));
       };
@@ -806,7 +887,10 @@ export default function Game() {
         if (message.data.playerId && message.data.position) {
           updatePlayer({
             id: message.data.playerId,
-            position: message.data.position
+            position: message.data.position,
+            rotation: message.data.rotation,
+            isMoving: message.data.isMoving || false,
+            movementDirection: message.data.movementDirection || 'none'
           }).catch(console.error);
         }
         break;
@@ -816,7 +900,10 @@ export default function Game() {
         if (message.data.playerId && message.data.position) {
           updatePlayer({
             id: message.data.playerId,
-            position: message.data.position
+            position: message.data.position,
+            rotation: message.data.rotation,
+            isMoving: message.data.isMoving || false,
+            movementDirection: message.data.movementDirection || 'none'
           }).catch(console.error);
         }
         break;
@@ -890,6 +977,7 @@ export default function Game() {
     keysPressed.current.clear();
     isPointerLocked.current = false;
     isMoving.current = false;
+    movementDirection.current = 'none';
     
     // Exit pointer lock if active
     if (document.pointerLockElement) {
