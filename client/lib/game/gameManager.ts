@@ -74,47 +74,56 @@ export class GameManager {
         const action = this.localPlayerMixer.current!.clipAction(clip);
         this.localPlayerActions.current[clip.name] = action;
         
+        // Set default properties for walk animation
         if (clip.name === 'StickMan_Run') {
           action.setLoop(THREE.LoopRepeat, Infinity);
           action.clampWhenFinished = true;
           action.weight = 1.0;
+          // Prepare the action but don't play it yet
           action.reset();
         }
       });
       
+      // Start the walk animation in paused state so it's ready
       if (this.localPlayerActions.current.StickMan_Run) {
         const walkAction = this.localPlayerActions.current.StickMan_Run;
         walkAction.reset();
         walkAction.play();
         walkAction.paused = true;
         walkAction.enabled = true;
+      } else {
+        console.error('❌ StickMan_Run action was not created properly!');
       }
     }
     
-    // Make the local player green
+    // Make the local player green to distinguish from others  
     localPlayerScene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
+        // Clone the material to avoid affecting the template
         if (Array.isArray(child.material)) {
           child.material = child.material.map(mat => {
             const clonedMat = mat.clone();
-            clonedMat.color.setHex(0x00ff00);
+            clonedMat.color.setHex(0x00ff00); // Green for local player
             return clonedMat;
           });
         } else {
           const clonedMaterial = child.material.clone();
-          clonedMaterial.color.setHex(0x00ff00);
+          clonedMaterial.color.setHex(0x00ff00); // Green for local player
           child.material = clonedMaterial;
         }
       }
     });
     
-    // Position local player
+    // Apply ground offset to position local player correctly
     localPlayerScene.position.set(
       localPlayerData.groundOffset?.x || 0,
       localPlayerData.groundOffset?.y || 0,
       localPlayerData.groundOffset?.z || 0
     );
-    localPlayerScene.rotation.y = Math.PI;
+    // Set initial rotation (only Y rotation for character)
+    localPlayerScene.rotation.y = Math.PI; // Face away from camera initially
+    localPlayerScene.rotation.x = 0; // Keep character upright
+    localPlayerScene.rotation.z = 0; // Keep character upright
     localPlayerScene.castShadow = true;
     
     this.sceneManager.addToScene(localPlayerScene);

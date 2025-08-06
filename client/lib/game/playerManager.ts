@@ -22,7 +22,7 @@ export class PlayerManager {
   }> {
     const modelData = await ModelLoader.loadPlayerModel();
     
-    // Use the properly cloned scene directly
+    // Use the properly cloned scene directly (loadPlayerModel already uses SkeletonUtils.clone)
     const playerModel = modelData.scene;
     
     // Debug: Log what we're working with for positioning issues
@@ -41,8 +41,8 @@ export class PlayerManager {
     // Apply player-specific properties and color
     this.applyPlayerStyling(playerModel, player);
     
-    // Set world position and rotation
-    this.positionPlayer(playerModel, player);
+    // Set world position and rotation - apply ground offset like in original
+    this.positionPlayer(playerModel, player, modelData.groundOffset);
     
     return animationResult;
   }
@@ -137,13 +137,23 @@ export class PlayerManager {
     });
   }
 
-  private static positionPlayer(playerModel: THREE.Group, player: Player): void {
+  private static positionPlayer(playerModel: THREE.Group, player: Player, groundOffset?: { x: number; y: number; z: number }): void {
     console.log(`Setting player ${player.id} position to:`, player.position);
-    playerModel.position.set(
-      player.position.x,
-      player.position.y,
-      player.position.z
-    );
+    
+    // Apply ground offset if provided, otherwise use player position directly
+    if (groundOffset) {
+      playerModel.position.set(
+        player.position.x + groundOffset.x,
+        player.position.y + groundOffset.y,
+        player.position.z + groundOffset.z
+      );
+    } else {
+      playerModel.position.set(
+        player.position.x,
+        player.position.y,
+        player.position.z
+      );
+    }
     
     // Set only Y rotation with Math.PI offset to account for model's built-in rotation
     playerModel.rotation.set(
