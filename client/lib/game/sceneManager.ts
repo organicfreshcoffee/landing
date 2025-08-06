@@ -67,7 +67,7 @@ export class SceneManager {
   }
 
   async loadScenery(): Promise<void> {
-    await SceneryGenerator.loadFantasyTownScenery(this.scene);
+    await SceneryGenerator.generateCubeRoom(this.scene);
   }
 
   private setupEventListeners(): void {
