@@ -36,6 +36,7 @@ export class SceneryGenerator {
             const treeModel = treeModels[Math.floor(Math.random() * treeModels.length)].clone();
             treeModel.position.set(x + Math.random() * 4 - 2, 0, z + Math.random() * 4 - 2);
             treeModel.rotation.y = Math.random() * Math.PI * 2;
+            treeModel.scale.set(1.5, 1.5, 1.5);
             scene.add(treeModel);
           }
         }
@@ -62,12 +63,12 @@ export class SceneryGenerator {
   }
 
   private static async generateProceduralBuildings(scene: THREE.Scene, basePath: string): Promise<void> {
-    // Define building components
+    // Define building components - more variety
     const walls = ['wall.glb', 'wall-wood.glb'];
     const corners = ['wall-corner.glb', 'wall-wood-corner.glb'];
     const doors = ['wall-door.glb', 'wall-wood-door.glb'];
-    const windows = ['wall-window-glass.glb', 'wall-wood-window-glass.glb'];
-    const roofs = ['roof.glb', 'roof-high.glb'];
+    const windows = ['wall-window-glass.glb', 'wall-wood-window-glass.glb', 'wall-window-small.glb'];
+    const roofs = ['roof.glb', 'roof-high.glb', 'roof-gable.glb'];
     const roofCorners = ['roof-corner.glb', 'roof-high-corner.glb'];
     
     // Load building component models
@@ -80,7 +81,7 @@ export class SceneryGenerator {
       roofCorners: []
     };
     
-    // Load all components
+    // Load all components with error handling
     const componentTypes = [
       { name: 'walls', assets: walls },
       { name: 'corners', assets: corners },
@@ -92,15 +93,25 @@ export class SceneryGenerator {
 
     for (const componentType of componentTypes) {
       for (const assetName of componentType.assets) {
-        const model = await ModelLoader.loadFantasyTownAsset(basePath, assetName);
-        if (model) {
-          buildingComponents[componentType.name].push(model);
+        try {
+          const model = await ModelLoader.loadFantasyTownAsset(basePath, assetName);
+          if (model) {
+            buildingComponents[componentType.name].push(model);
+          }
+        } catch (error) {
+          console.warn(`Failed to load building component: ${assetName}`, error);
         }
       }
     }
     
-    // Generate 3-5 buildings scattered around the map
-    const numBuildings = 3 + Math.floor(Math.random() * 3);
+    // Only generate buildings if we have the basic components
+    if (buildingComponents.walls.length === 0) {
+      console.warn('No wall components loaded, skipping building generation');
+      return;
+    }
+    
+    // Generate 4-6 buildings scattered around the map
+    const numBuildings = 4 + Math.floor(Math.random() * 3);
     for (let i = 0; i < numBuildings; i++) {
       this.generateSingleBuilding(scene, buildingComponents, i);
     }
@@ -109,18 +120,19 @@ export class SceneryGenerator {
   private static generateSingleBuilding(scene: THREE.Scene, components: { [key: string]: THREE.Group[] }, buildingIndex: number): void {
     if (components.walls.length === 0) return;
     
-    // Choose building position (avoid center and other buildings)
+    // Choose building position (avoid center and other buildings) - more spread out positions
     const positions = [
-      { x: 25, z: 25 }, { x: -25, z: 25 }, { x: 25, z: -25 }, { x: -25, z: -25 },
-      { x: 35, z: 0 }, { x: -35, z: 0 }, { x: 0, z: 35 }, { x: 0, z: -35 }
+      { x: 30, z: 30 }, { x: -30, z: 30 }, { x: 30, z: -30 }, { x: -30, z: -30 },
+      { x: 40, z: 0 }, { x: -40, z: 0 }, { x: 0, z: 40 }, { x: 0, z: -40 },
+      { x: 25, z: -15 }, { x: -25, z: 15 }, { x: 15, z: 35 }, { x: -15, z: -35 }
     ];
     
     if (buildingIndex >= positions.length) return;
     const pos = positions[buildingIndex];
     
-    // Building parameters
-    const width = 3 + Math.floor(Math.random() * 3); // 3-5 units wide
-    const depth = 3 + Math.floor(Math.random() * 3); // 3-5 units deep
+    // Building parameters - more variety
+    const width = 2 + Math.floor(Math.random() * 4); // 2-5 units wide
+    const depth = 2 + Math.floor(Math.random() * 4); // 2-5 units deep
     
     const buildingGroup = new THREE.Group();
     buildingGroup.position.set(pos.x, 0, pos.z);
@@ -153,7 +165,9 @@ export class SceneryGenerator {
     wallStyle: number,
     setMaterialProperties: (child: THREE.Object3D) => void
   ): void {
-    // Front wall (with door)
+    const wallSpacing = 1.0; // Reduced spacing for better connection
+    
+    // Front wall (with door) - facing forward (no rotation needed)
     for (let x = 0; x < width; x++) {
       let wallComponent;
       if (x === Math.floor(width / 2) && components.doors.length > 0) {
@@ -166,12 +180,13 @@ export class SceneryGenerator {
         wallComponent = components.walls[wallStyle % components.walls.length].clone();
       }
       
-      wallComponent.position.set(x * 2, 0, 0);
+      wallComponent.position.set(x * wallSpacing, 0, 0);
+      // No rotation for front wall - it faces forward naturally
       wallComponent.traverse(setMaterialProperties);
       buildingGroup.add(wallComponent);
     }
     
-    // Back wall
+    // Back wall - faces backward
     for (let x = 0; x < width; x++) {
       let wallComponent;
       if (Math.random() < 0.2 && components.windows.length > 0) {
@@ -181,13 +196,13 @@ export class SceneryGenerator {
         wallComponent = components.walls[wallStyle % components.walls.length].clone();
       }
       
-      wallComponent.position.set(x * 2, 0, (depth - 1) * 2);
-      wallComponent.rotation.y = Math.PI; // Rotate 180 degrees
+      wallComponent.position.set((width - 1 - x) * wallSpacing, 0, (depth - 1) * wallSpacing);
+      wallComponent.rotation.y = Math.PI; // Rotate 180 degrees to face inward
       wallComponent.traverse(setMaterialProperties);
       buildingGroup.add(wallComponent);
     }
     
-    // Left wall
+    // Left wall - faces right (toward positive X)
     for (let z = 1; z < depth - 1; z++) {
       let wallComponent;
       if (Math.random() < 0.3 && components.windows.length > 0) {
@@ -196,13 +211,13 @@ export class SceneryGenerator {
         wallComponent = components.walls[wallStyle % components.walls.length].clone();
       }
       
-      wallComponent.position.set(0, 0, z * 2);
-      wallComponent.rotation.y = -Math.PI / 2; // Rotate 90 degrees left
+      wallComponent.position.set(0, 0, z * wallSpacing);
+      wallComponent.rotation.y = Math.PI / 2; // Rotate 90 degrees right to face inward
       wallComponent.traverse(setMaterialProperties);
       buildingGroup.add(wallComponent);
     }
     
-    // Right wall
+    // Right wall - faces left (toward negative X) 
     for (let z = 1; z < depth - 1; z++) {
       let wallComponent;
       if (Math.random() < 0.3 && components.windows.length > 0) {
@@ -211,8 +226,8 @@ export class SceneryGenerator {
         wallComponent = components.walls[wallStyle % components.walls.length].clone();
       }
       
-      wallComponent.position.set((width - 1) * 2, 0, z * 2);
-      wallComponent.rotation.y = Math.PI / 2; // Rotate 90 degrees right
+      wallComponent.position.set((width - 1) * wallSpacing, 0, (depth - 1 - z) * wallSpacing);
+      wallComponent.rotation.y = -Math.PI / 2; // Rotate 90 degrees left to face inward
       wallComponent.traverse(setMaterialProperties);
       buildingGroup.add(wallComponent);
     }
@@ -228,11 +243,12 @@ export class SceneryGenerator {
   ): void {
     if (components.corners.length === 0) return;
 
+    const wallSpacing = 1.0;
     const cornerPositions = [
-      { x: 0, z: 0, rotation: 0 },
-      { x: (width - 1) * 2, z: 0, rotation: Math.PI / 2 },
-      { x: (width - 1) * 2, z: (depth - 1) * 2, rotation: Math.PI },
-      { x: 0, z: (depth - 1) * 2, rotation: -Math.PI / 2 }
+      { x: 0, z: 0, rotation: 0 }, // Front-left corner
+      { x: (width - 1) * wallSpacing, z: 0, rotation: -Math.PI / 2 }, // Front-right corner
+      { x: (width - 1) * wallSpacing, z: (depth - 1) * wallSpacing, rotation: Math.PI }, // Back-right corner
+      { x: 0, z: (depth - 1) * wallSpacing, rotation: Math.PI / 2 } // Back-left corner
     ];
 
     cornerPositions.forEach(pos => {
@@ -254,6 +270,14 @@ export class SceneryGenerator {
   ): void {
     if (components.roofs.length === 0) return;
 
+    const wallSpacing = 1.0;
+    const baseRoofHeight = 2.0; // Base height for roof
+
+    // Create a simple sloped roof - higher in the middle
+    const centerX = (width - 1) * wallSpacing / 2;
+    const centerZ = (depth - 1) * wallSpacing / 2;
+    const maxRoofHeight = baseRoofHeight + Math.min(width, depth) * 0.3; // Peak height
+
     for (let x = 0; x < width; x++) {
       for (let z = 0; z < depth; z++) {
         let roofComponent;
@@ -262,11 +286,27 @@ export class SceneryGenerator {
         if (components.roofCorners.length > 0 && 
             ((x === 0 || x === width - 1) && (z === 0 || z === depth - 1))) {
           roofComponent = components.roofCorners[wallStyle % components.roofCorners.length].clone();
+          
+          // Set proper corner rotation for roof corners
+          if (x === 0 && z === 0) roofComponent.rotation.y = 0;
+          else if (x === width - 1 && z === 0) roofComponent.rotation.y = -Math.PI / 2;
+          else if (x === width - 1 && z === depth - 1) roofComponent.rotation.y = Math.PI;
+          else if (x === 0 && z === depth - 1) roofComponent.rotation.y = Math.PI / 2;
         } else {
           roofComponent = components.roofs[wallStyle % components.roofs.length].clone();
         }
         
-        roofComponent.position.set(x * 2, 2, z * 2);
+        // Calculate sloped height - create a pyramid-like roof
+        const posX = x * wallSpacing;
+        const posZ = z * wallSpacing;
+        const distanceFromCenter = Math.sqrt(
+          Math.pow(posX - centerX, 2) + Math.pow(posZ - centerZ, 2)
+        );
+        const maxDistance = Math.sqrt(centerX * centerX + centerZ * centerZ);
+        const heightRatio = Math.max(0, 1 - (distanceFromCenter / maxDistance));
+        const roofHeight = baseRoofHeight + (maxRoofHeight - baseRoofHeight) * heightRatio;
+        
+        roofComponent.position.set(posX, roofHeight, posZ);
         roofComponent.traverse(setMaterialProperties);
         buildingGroup.add(roofComponent);
       }

@@ -152,7 +152,6 @@ export default function Game() {
             <div>Controls: WASD to move, Space/Shift for up/down</div>
             <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
             <div>Players online: {gameManagerRef.current?.playersCount || 1}</div>
-            <div>Your character: Green skeleton with walking animation | Other players: Various colors</div>
           </div>
         )}
       </div>
