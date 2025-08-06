@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three-stdlib';
+import { SkeletonUtils } from 'three-stdlib';
 import styles from '../styles/Game.module.css';
 
 interface GameState {
@@ -80,6 +81,10 @@ export default function Game() {
       const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/stickman.glb');
       console.log('Successfully loaded stickman.glb with', gltf.animations?.length || 0, 'animations');
       
+      // DEBUG: Create a properly cloned model with skeleton/animation support
+      // Use SkeletonUtils.clone to properly handle SkinnedMesh and skeleton data
+      const freshScene = SkeletonUtils.clone(gltf.scene) as THREE.Group;
+      
       // Debug: Log animation details
       if (gltf.animations && gltf.animations.length > 0) {
         gltf.animations.forEach((anim, index) => {
@@ -90,13 +95,13 @@ export default function Game() {
       }
       
       // Scale the model appropriately for the game - make twice as big
-      gltf.scene.scale.set(0.6, 0.6, 0.6); // Doubled from 0.3 to 0.6
+      freshScene.scale.set(0.6, 0.6, 0.6); // Doubled from 0.3 to 0.6
       
       // Rotate 180 degrees around Y axis so the model faces away from the camera initially
-      gltf.scene.rotation.y = Math.PI;
+      freshScene.rotation.y = Math.PI;
       
       // Get bounding box after scaling and rotation to calculate ground offset
-      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const box = new THREE.Box3().setFromObject(freshScene);
       const center = box.getCenter(new THREE.Vector3());
       
       console.log('Model bounds after scaling and rotation:', {
@@ -117,13 +122,13 @@ export default function Game() {
       modelGroundOffsetRef.current = groundOffset;
       
       // Reset position to origin for template - individual instances will apply offsets
-      gltf.scene.position.set(0, 0, 0);
+      freshScene.position.set(0, 0, 0);
       
       console.log('Template model reset to origin, ground offset calculated:', groundOffset);
       
       // Debug: Check for bones/skeleton structure that might be causing positioning issues
       let foundSkeleton = false;
-      gltf.scene.traverse((child) => {
+      freshScene.traverse((child) => {
         if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
           console.log(`Found ${child.type}:`, child.name, 'position:', child.position.toArray(), 'world position:', child.getWorldPosition(new THREE.Vector3()).toArray());
           foundSkeleton = true;
@@ -132,7 +137,7 @@ export default function Game() {
       console.log('Has skeleton/bones:', foundSkeleton);
       
       // Ensure all materials render properly and are visible
-      gltf.scene.traverse((child) => {
+      freshScene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           if (child.material) {
             // Make sure material renders both sides
@@ -160,7 +165,7 @@ export default function Game() {
         }
       });
       
-      return { scene: gltf.scene, animations: gltf.animations || [], groundOffset };
+      return { scene: freshScene, animations: gltf.animations || [], groundOffset };
     } catch (error) {
       console.log('StickMan GLB model not available, using fallback cube:', error);
       
@@ -891,7 +896,7 @@ export default function Game() {
     const createTestPlayer = async () => {
       console.log('🧪 Creating test player in center of map...');
       const testPlayerData = await loadPlayerModel();
-      const testPlayerScene = testPlayerData.scene.clone();
+      const testPlayerScene = testPlayerData.scene;
       
       // Apply ground offset to position correctly - same as local player
       testPlayerScene.position.set(
