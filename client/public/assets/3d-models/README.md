@@ -111,7 +111,28 @@ When adding new 3D models to this directory:
 - **License**: CC0
 - **Usage**: Character model for player avatars (web-optimized)
 - **Status**: ✅ Ready for use in game
-- **Size**: 38KB
+
+### skeleton.blend
+- **Source**: [Original Blender file](https://opengameart.org/content/skeleton-with-rig)
+- **License**: CC0
+- **Usage**: Character model for player avatars
+- **Status**: ✅ Source file (no animations)
+
+### skeleton_with_walk.blend
+- **Source**: Generated from skeleton.blend with custom walking animation
+- **License**: CC0
+- **Usage**: Character model with walking animation for gameplay
+- **Status**: ✅ Source file with animation
+- **Animation**: 40-frame walk cycle (1.33 seconds at 30fps)
+
+### skeleton_walk.glb
+- **Source**: Exported from skeleton_with_walk.blend
+- **License**: CC0
+- **Usage**: Web-optimized skeleton model with walking animation
+- **Status**: ✅ Ready for use in game
+- **Animation**: Walking cycle included
+- **File Size**: 1.46 MB
+
 
 ### Converting Blend to GLB
 
@@ -142,6 +163,15 @@ bpy.ops.wm.quit_blender()
 - [AnyConv](https://anyconv.com/blend-to-glb-converter/)
 
 **Note**: Once converted, the game will automatically use the GLB model instead of the cube fallback.
+
+### Animation Support
+
+The skeleton model (`skeleton_walk.glb`) includes a pre-built walking animation:
+- **Animation name**: `WalkCycle`
+- **Duration**: 1.33 seconds (loops seamlessly)
+- **Usage**: See `ANIMATION_USAGE.md` for implementation details
+
+For custom animations, use the source files (`skeleton.blend` or `skeleton_with_walk.blend`) and the animation scripts provided in this directory.
 
 ---
 
