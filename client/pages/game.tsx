@@ -50,6 +50,11 @@ export default function Game() {
   const updateMovementRef = useRef<(() => void) | null>(null);
   const gltfLoaderRef = useRef<GLTFLoader | null>(null);
   const playerModelRef = useRef<THREE.Group | null>(null); // For storing the loaded model template
+  const localPlayerMixer = useRef<THREE.AnimationMixer | null>(null); // Animation mixer for local player
+  const localPlayerActions = useRef<{ [key: string]: THREE.AnimationAction }>({});
+  const playersAnimations = useRef<Map<string, { mixer: THREE.AnimationMixer; actions: { [key: string]: THREE.AnimationAction } }>>(new Map());
+  const isMoving = useRef<boolean>(false);
+  const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -57,31 +62,30 @@ export default function Game() {
     loading: true
   });
 
-  // Load 3D player model
-  const loadPlayerModel = async (): Promise<THREE.Group | THREE.Mesh> => {
-    // First try to load the human model (GLB format)
+  // Load 3D player model with animations
+  const loadPlayerModel = async (): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> => {
+    // Try to load the animated skeleton model (GLB format)
     try {
       if (!gltfLoaderRef.current) {
         gltfLoaderRef.current = new GLTFLoader();
       }
       
-      console.log('Attempting to load human_male.glb...');
-      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/human_male.glb');
-      console.log('Successfully loaded human_male.glb');
+      console.log('Attempting to load skeleton_walk.glb...');
+      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/skeleton_walk.glb');
+      console.log('Successfully loaded skeleton_walk.glb with', gltf.animations?.length || 0, 'animations');
       
-      // Scale the model first
-      gltf.scene.scale.set(0.1, 0.1, 0.1);
+      // Scale the model appropriately for the game
+      gltf.scene.scale.set(0.015, 0.015, 0.015); // Smaller scale for skeleton
       
       // Get bounding box after scaling
       const box = new THREE.Box3().setFromObject(gltf.scene);
       const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
       
       console.log('Model bounds after scaling:', {
         min: box.min,
         max: box.max,
         center: center,
-        size: size
+        size: box.getSize(new THREE.Vector3())
       });
       
       // Center the model horizontally (X and Z) but keep it above ground
@@ -89,15 +93,11 @@ export default function Game() {
       gltf.scene.position.z = -center.z;
       
       // Position Y so that the bottom of the model is at ground level (y=0)
-      // This means we need to move it up by the absolute value of the minimum Y
       gltf.scene.position.y = Math.abs(box.min.y);
       
       console.log('Final model position:', gltf.scene.position);
       
-      // Try rotating the model in case it's facing the wrong direction
-      // gltf.scene.rotation.y = Math.PI; // 180 degrees
-      
-      // Ensure all materials render both sides and are properly visible
+      // Ensure all materials render properly and are visible
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           if (child.material) {
@@ -107,14 +107,12 @@ export default function Game() {
                 mat.side = THREE.DoubleSide;
                 mat.transparent = false;
                 mat.opacity = 1.0;
-                // Force material update
                 mat.needsUpdate = true;
               });
             } else {
               child.material.side = THREE.DoubleSide;
               child.material.transparent = false;
               child.material.opacity = 1.0;
-              // Force material update
               child.material.needsUpdate = true;
             }
           }
@@ -128,9 +126,9 @@ export default function Game() {
         }
       });
       
-      return gltf.scene;
+      return { scene: gltf.scene, animations: gltf.animations || [] };
     } catch (error) {
-      console.log('GLB model not available, using fallback cube:', error);
+      console.log('Skeleton GLB model not available, using fallback cube:', error);
       
       // Fallback to cube geometry with improved appearance
       const geometry = new THREE.BoxGeometry(0.5, 1.8, 0.3); // Human-like proportions, smaller size
@@ -139,7 +137,11 @@ export default function Game() {
       mesh.position.y = 0.9; // Half the height to center it at ground level
       mesh.castShadow = true;
       
-      return mesh;
+      // Wrap mesh in a group to maintain consistent structure
+      const group = new THREE.Group();
+      group.add(mesh);
+      
+      return { scene: group, animations: [] };
     }
   };
 
@@ -156,35 +158,58 @@ export default function Game() {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Create a player model (cube or 3D model)
-  const createPlayerModel = async (player: Player): Promise<THREE.Object3D> => {
-    const model = await loadPlayerModel();
+  // Create a player model with animations
+  const createPlayerModel = async (player: Player): Promise<{ model: THREE.Object3D; mixer?: THREE.AnimationMixer; actions?: { [key: string]: THREE.AnimationAction } }> => {
+    const modelData = await loadPlayerModel();
     
-    // Clone the model for each player instance
-    const playerModel = model.clone();
+    // Clone the model scene for each player instance
+    const playerModel = modelData.scene.clone();
     
-    // Apply player-specific properties
-    if (playerModel instanceof THREE.Mesh) {
-      // If it's a mesh (cube fallback), apply the player color
-      const material = (playerModel.material as THREE.MeshLambertMaterial).clone();
-      material.color.setHex(parseInt(player.color.replace('#', '0x')));
-      playerModel.material = material;
-    } else if (playerModel instanceof THREE.Group) {
-      // If it's a group (3D model), apply color to all meshes
-      playerModel.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          const material = (child.material as THREE.MeshLambertMaterial).clone();
-          material.color.setHex(parseInt(player.color.replace('#', '0x')));
-          child.material = material;
+    // Create animation mixer and actions if animations are available
+    let mixer: THREE.AnimationMixer | undefined;
+    let actions: { [key: string]: THREE.AnimationAction } = {};
+    
+    if (modelData.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(playerModel);
+      
+      // Create actions for each animation
+      modelData.animations.forEach((clip) => {
+        const action = mixer!.clipAction(clip);
+        actions[clip.name] = action;
+        
+        // Set default properties for walk animation
+        if (clip.name === 'WalkCycle') {
+          action.setLoop(THREE.LoopRepeat, Infinity);
+          action.clampWhenFinished = true;
         }
       });
+      
+      console.log('Created animation actions for player:', Object.keys(actions));
     }
+    
+    // Apply player-specific properties and color
+    playerModel.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        // Clone material to avoid sharing between players
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(mat => {
+            const clonedMat = mat.clone();
+            clonedMat.color.setHex(parseInt(player.color.replace('#', '0x')));
+            return clonedMat;
+          });
+        } else {
+          const clonedMaterial = child.material.clone();
+          clonedMaterial.color.setHex(parseInt(player.color.replace('#', '0x')));
+          child.material = clonedMaterial;
+        }
+      }
+    });
     
     // Set position
     playerModel.position.set(player.position.x, player.position.y, player.position.z);
     playerModel.castShadow = true;
     
-    return playerModel;
+    return { model: playerModel, mixer, actions };
   };
 
   // Add or update a player
@@ -223,9 +248,18 @@ export default function Game() {
         color: generatePlayerColor(playerData.id)
       };
       
-      const model = await createPlayerModel(newPlayer);
-      newPlayer.mesh = model; // No need to cast anymore
-      sceneRef.current.add(model);
+      const playerData_result = await createPlayerModel(newPlayer);
+      newPlayer.mesh = playerData_result.model;
+      sceneRef.current.add(playerData_result.model);
+      
+      // Store animation data for other players
+      if (playerData_result.mixer && playerData_result.actions) {
+        playersAnimations.current.set(playerData.id, {
+          mixer: playerData_result.mixer,
+          actions: playerData_result.actions
+        });
+      }
+      
       players.set(playerData.id, newPlayer);
     }
   };
@@ -239,6 +273,13 @@ export default function Game() {
     
     if (player && player.mesh) {
       sceneRef.current.remove(player.mesh);
+      
+      // Clean up animation data
+      const animData = playersAnimations.current.get(playerId);
+      if (animData) {
+        animData.mixer.stopAllAction();
+        playersAnimations.current.delete(playerId);
+      }
       
       // Dispose of resources properly for both meshes and groups
       if (player.mesh instanceof THREE.Mesh) {
@@ -328,6 +369,35 @@ export default function Game() {
     );
     
     camera.lookAt(lookAtPoint);
+
+    // Handle walking animation based on movement
+    const wasMoving = isMoving.current;
+    isMoving.current = moved;
+    
+    // Control local player animation
+    if (localPlayerMixer.current && localPlayerActions.current.WalkCycle) {
+      if (isMoving.current && !wasMoving) {
+        // Start walking animation
+        localPlayerActions.current.WalkCycle.play();
+        console.log('Started walking animation');
+      } else if (!isMoving.current && wasMoving) {
+        // Stop walking animation
+        localPlayerActions.current.WalkCycle.stop();
+        console.log('Stopped walking animation');
+      }
+    }
+    
+    // Update animation mixer
+    if (localPlayerMixer.current) {
+      const delta = clockRef.current.getDelta();
+      localPlayerMixer.current.update(delta);
+    }
+    
+    // Update other players' animation mixers
+    playersAnimations.current.forEach((animData) => {
+      const delta = clockRef.current.getDelta();
+      animData.mixer.update(delta);
+    });
 
     // Send updates to server if position or rotation changed (with throttling)
     const now = Date.now();
@@ -443,27 +513,51 @@ export default function Game() {
       scene.add(cylinder);
     }
 
-    // Create local player (async, so we'll add it after scene setup)
+    // Create local player with animations (async, so we'll add it after scene setup)
     const createLocalPlayer = async () => {
-      const localPlayer = await loadPlayerModel();
+      const localPlayerData = await loadPlayerModel();
+      const localPlayerScene = localPlayerData.scene;
       
-      // Make the local player green to distinguish from others  
-      if (localPlayer instanceof THREE.Mesh) {
-        const material = (localPlayer.material as THREE.MeshLambertMaterial);
-        material.color.setHex(0x00ff00); // Green for local player
-      } else if (localPlayer instanceof THREE.Group) {
-        localPlayer.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            const material = (child.material as THREE.MeshLambertMaterial);
-            material.color.setHex(0x00ff00); // Green for local player
+      // Set up animations for local player
+      if (localPlayerData.animations.length > 0) {
+        localPlayerMixer.current = new THREE.AnimationMixer(localPlayerScene);
+        
+        localPlayerData.animations.forEach((clip) => {
+          const action = localPlayerMixer.current!.clipAction(clip);
+          localPlayerActions.current[clip.name] = action;
+          
+          // Set default properties for walk animation
+          if (clip.name === 'WalkCycle') {
+            action.setLoop(THREE.LoopRepeat, Infinity);
+            action.clampWhenFinished = true;
           }
         });
+        
+        console.log('Created local player animation actions:', Object.keys(localPlayerActions.current));
       }
       
-      localPlayer.position.set(0, 0, 0); // Start at ground level (y=0)
-      localPlayer.castShadow = true;
-      scene.add(localPlayer);
-      localPlayerRef.current = localPlayer; // No need to cast anymore
+      // Make the local player green to distinguish from others  
+      localPlayerScene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // Clone the material to avoid affecting the template
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map(mat => {
+              const clonedMat = mat.clone();
+              clonedMat.color.setHex(0x00ff00); // Green for local player
+              return clonedMat;
+            });
+          } else {
+            const clonedMaterial = child.material.clone();
+            clonedMaterial.color.setHex(0x00ff00); // Green for local player
+            child.material = clonedMaterial;
+          }
+        }
+      });
+      
+      localPlayerScene.position.set(0, 0, 0); // Start at ground level (y=0)
+      localPlayerScene.castShadow = true;
+      scene.add(localPlayerScene);
+      localPlayerRef.current = localPlayerScene;
     };
     
     // Initialize local player asynchronously
@@ -722,9 +816,22 @@ export default function Game() {
       websocketRef.current.close();
     }
     
+    // Clean up animation mixers
+    if (localPlayerMixer.current) {
+      localPlayerMixer.current.stopAllAction();
+      localPlayerMixer.current = null;
+    }
+    localPlayerActions.current = {};
+    
+    playersAnimations.current.forEach((animData) => {
+      animData.mixer.stopAllAction();
+    });
+    playersAnimations.current.clear();
+    
     // Clear key states
     keysPressed.current.clear();
     isPointerLocked.current = false;
+    isMoving.current = false;
     
     // Exit pointer lock if active
     if (document.pointerLockElement) {
