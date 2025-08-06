@@ -60,6 +60,7 @@ export default function Game() {
   const isMoving = useRef<boolean>(false);
   const movementDirection = useRef<'forward' | 'backward' | 'none'>('none'); // Track movement direction for animation
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
+  const modelGroundOffsetRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 }); // Store ground offset for consistent positioning
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -112,10 +113,23 @@ export default function Game() {
         y: -box.min.y
       };
       
+      // Store globally for consistent positioning in updates
+      modelGroundOffsetRef.current = groundOffset;
+      
       // Reset position to origin for template - individual instances will apply offsets
       gltf.scene.position.set(0, 0, 0);
       
       console.log('Template model reset to origin, ground offset calculated:', groundOffset);
+      
+      // Debug: Check for bones/skeleton structure that might be causing positioning issues
+      let foundSkeleton = false;
+      gltf.scene.traverse((child) => {
+        if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
+          console.log(`Found ${child.type}:`, child.name, 'position:', child.position.toArray(), 'world position:', child.getWorldPosition(new THREE.Vector3()).toArray());
+          foundSkeleton = true;
+        }
+      });
+      console.log('Has skeleton/bones:', foundSkeleton);
       
       // Ensure all materials render properly and are visible
       gltf.scene.traverse((child) => {
@@ -185,6 +199,45 @@ export default function Game() {
     // Clone the model scene for each player instance
     const playerModel = modelData.scene.clone();
     
+    // Debug: Log what we're working with for positioning issues
+    console.log(`Creating player model for ${player.id}:`, {
+      modelBounds: new THREE.Box3().setFromObject(playerModel),
+      playerPosition: player.position,
+      groundOffset: modelData.groundOffset
+    });
+    
+    // Check if the cloned model has proper structure
+    playerModel.traverse((child) => {
+      if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
+        console.log(`Player ${player.id} - ${child.type}:`, child.name, 'local pos:', child.position.toArray());
+        
+        // Fix SkinnedMesh coordinate system issues
+        if (child.type === 'SkinnedMesh') {
+          // Force the SkinnedMesh to respect parent transforms
+          child.updateMatrixWorld(true);
+          
+          // Reset the SkinnedMesh to origin if it's not already there
+          if (child.position.x !== 0 || child.position.y !== 0 || child.position.z !== 0) {
+            console.log(`Resetting SkinnedMesh position from:`, child.position.toArray());
+            child.position.set(0, 0, 0);
+          }
+          
+          // Ensure the SkinnedMesh doesn't have its own transform that conflicts
+          child.matrixAutoUpdate = true;
+          
+          // Additional fix: ensure the skeleton respects the parent transform
+          const skinnedMesh = child as THREE.SkinnedMesh;
+          if (skinnedMesh.skeleton) {
+            // Force skeleton to update relative to parent
+            skinnedMesh.skeleton.update();
+            console.log(`Updated skeleton for player ${player.id}`);
+          }
+          
+          console.log(`Fixed SkinnedMesh for player ${player.id}`);
+        }
+      }
+    });
+    
     // Create animation mixer and actions if animations are available
     let mixer: THREE.AnimationMixer | undefined;
     let actions: { [key: string]: THREE.AnimationAction } = {};
@@ -202,7 +255,7 @@ export default function Game() {
           action.setLoop(THREE.LoopRepeat, Infinity);
           action.clampWhenFinished = true;
           action.weight = 1.0;
-          // Prepare the action but don't play it yet - initialize properly
+          // Initialize the same way as local player
           action.reset();
           action.play();
           action.paused = true;
@@ -231,11 +284,12 @@ export default function Game() {
       }
     });
     
-    // Set world position and rotation
+    // Set world position and rotation - try without groundOffset first to isolate the issue
+    console.log(`Setting player ${player.id} position to:`, player.position);
     playerModel.position.set(
-      (modelData.groundOffset?.x || 0) + player.position.x,
-      (modelData.groundOffset?.y || 0) + player.position.y,
-      (modelData.groundOffset?.z || 0) + player.position.z
+      player.position.x,
+      player.position.y,
+      player.position.z
     );
     // Set only Y rotation with Math.PI offset to account for model's built-in rotation
     // Characters should only turn left/right, not tilt up/down
@@ -246,17 +300,46 @@ export default function Game() {
     );
     playerModel.castShadow = true;
     
+    // Force update transforms and verify final positions
+    playerModel.updateMatrixWorld(true);
+    
+    // Debug: Check final world positions after all transforms
+    playerModel.traverse((child) => {
+      if (child.type === 'SkinnedMesh') {
+        const worldPos = child.getWorldPosition(new THREE.Vector3());
+        console.log(`Final world position for player ${player.id} SkinnedMesh:`, worldPos.toArray());
+        console.log(`Expected position:`, [player.position.x, player.position.y, player.position.z]);
+        
+        // If world position is still wrong, this indicates a deeper issue
+        if (Math.abs(worldPos.x - player.position.x) > 0.1 || 
+            Math.abs(worldPos.z - player.position.z) > 0.1) {
+          console.warn(`⚠️  Player ${player.id} SkinnedMesh world position mismatch!`);
+        }
+      }
+    });
+    
     return { model: playerModel, mixer, actions };
   };
 
   // Add or update a player
   const updatePlayer = async (playerData: PlayerUpdate) => {
-    if (!sceneRef.current) return;
+    console.log(`🔄 updatePlayer called for ${playerData.id}:`, {
+      position: playerData.position,
+      rotation: playerData.rotation,
+      isMoving: playerData.isMoving,
+      movementDirection: playerData.movementDirection
+    });
+    
+    if (!sceneRef.current) {
+      console.warn(`❌ Scene not available for player ${playerData.id}`);
+      return;
+    }
 
     const players = playersRef.current;
     const existingPlayer = players.get(playerData.id);
 
     if (existingPlayer) {
+      console.log(`📝 Updating existing player ${playerData.id}`);
       // Update existing player position
       existingPlayer.position = playerData.position;
       if (playerData.rotation) {
@@ -268,10 +351,9 @@ export default function Game() {
       existingPlayer.movementDirection = playerData.movementDirection;
       
       if (existingPlayer.mesh) {
-        console.log(`Updating position for existing player ${playerData.id}:`, {
-          from: existingPlayer.mesh.position.toArray(),
-          to: [playerData.position.x, playerData.position.y, playerData.position.z]
-        });
+        const beforePosition = existingPlayer.mesh.position.toArray();
+        const beforeRotation = existingPlayer.mesh.rotation.toArray();
+        
         existingPlayer.mesh.position.set(
           playerData.position.x,
           playerData.position.y,
@@ -286,6 +368,45 @@ export default function Game() {
             0  // Keep character upright
           );
         }
+        
+        const afterPosition = existingPlayer.mesh.position.toArray();
+        const afterRotation = existingPlayer.mesh.rotation.toArray();
+        
+        console.log(`📍 Player ${playerData.id} position update:`, {
+          before: beforePosition,
+          after: afterPosition,
+          target: [playerData.position.x, playerData.position.y, playerData.position.z],
+          changed: beforePosition[0] !== afterPosition[0] || beforePosition[1] !== afterPosition[1] || beforePosition[2] !== afterPosition[2]
+        });
+        
+        // Calculate distance from local player for visibility debugging
+        if (localPlayerRef.current) {
+          const localPos = localPlayerRef.current.position;
+          const otherPos = existingPlayer.mesh.position;
+          const distance = Math.sqrt(
+            Math.pow(localPos.x - otherPos.x, 2) + 
+            Math.pow(localPos.y - otherPos.y, 2) + 
+            Math.pow(localPos.z - otherPos.z, 2)
+          );
+          console.log(`👁️ Player ${playerData.id} visibility:`, {
+            localPlayerPos: [localPos.x, localPos.y, localPos.z],
+            otherPlayerPos: [otherPos.x, otherPos.y, otherPos.z],
+            distance: distance,
+            cameraPos: cameraRef.current ? [cameraRef.current.position.x, cameraRef.current.position.y, cameraRef.current.position.z] : 'no camera'
+          });
+        }
+        
+        console.log(`🔄 Player ${playerData.id} rotation update:`, {
+          before: beforeRotation,
+          after: afterRotation,
+          target: playerData.rotation ? [0, playerData.rotation.y + Math.PI, 0] : 'none',
+          changed: beforeRotation[1] !== afterRotation[1]
+        });
+        
+        // Force a render update
+        if (existingPlayer.mesh.parent) {
+          existingPlayer.mesh.updateMatrixWorld(true);
+        }
       }
       
       // Update other player's animation based on movement state
@@ -296,8 +417,8 @@ export default function Game() {
         console.log(`Updating other player ${playerData.id} animation - isMoving: ${existingPlayer.isMoving}, direction: ${existingPlayer.movementDirection}`);
         
         if (existingPlayer.isMoving) {
+          // Use the same pattern as local player - only play if not running, never reset
           if (!walkAction.isRunning()) {
-            walkAction.reset();
             walkAction.play();
             console.log(`Started walk animation for player ${playerData.id}`);
           }
@@ -312,6 +433,14 @@ export default function Game() {
             walkAction.timeScale = 1;
             console.log(`Player ${playerData.id} walking forward`);
           }
+          
+          console.log(`Animation state for player ${playerData.id}:`, {
+            isRunning: walkAction.isRunning(),
+            paused: walkAction.paused,
+            enabled: walkAction.enabled,
+            timeScale: walkAction.timeScale,
+            weight: walkAction.weight
+          });
         } else {
           // Pause instead of stop to maintain smooth transitions
           walkAction.paused = true;
@@ -927,7 +1056,13 @@ export default function Game() {
 
   // Handle messages from game server
   const handleGameMessage = (message: GameMessage) => {
-    console.log('Received message:', message);
+    console.log(`📨 WebSocket message received:`, {
+      type: message.type,
+      playerId: message.data?.playerId,
+      position: message.data?.position,
+      isMoving: message.data?.isMoving,
+      movementDirection: message.data?.movementDirection
+    });
 
     switch (message.type) {
       case 'player_joined':
