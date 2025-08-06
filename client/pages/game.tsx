@@ -63,6 +63,15 @@ export default function Game() {
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const modelGroundOffsetRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 }); // Store ground offset for consistent positioning
   const lastSentMovementState = useRef<boolean>(false); // Track last sent isMoving state for heartbeat optimization
+  const reconnectAttempts = useRef<number>(0);
+  const maxReconnectAttempts = useRef<number>(5);
+  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const pingInterval = useRef<NodeJS.Timeout | null>(null);
+  const lastPongTime = useRef<number>(Date.now());
+  const connectionCheckInterval = useRef<NodeJS.Timeout | null>(null);
+  const isReconnecting = useRef<boolean>(false);
+  const messageQueue = useRef<string[]>([]);
+  const maxQueueSize = useRef<number>(50); // Limit queue size to prevent memory issues
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -979,7 +988,39 @@ export default function Game() {
             movementDirection: movementDirection.current
           }
         };
-        websocketRef.current.send(JSON.stringify(moveMessage));
+        
+        try {
+          websocketRef.current.send(JSON.stringify(moveMessage));
+        } catch (error) {
+          console.error('Error sending movement message:', error);
+          // If send fails, add to queue and attempt reconnection
+          queueMessage(JSON.stringify(moveMessage));
+          if (websocketRef.current.readyState !== WebSocket.OPEN) {
+            console.log('WebSocket connection lost, attempting reconnection...');
+            attemptReconnection();
+          }
+        }
+      } else {
+        // If not connected, queue the message for later
+        const moveMessage = {
+          type: 'player_move',
+          data: {
+            playerId: user?.uid,
+            position: {
+              x: localPlayer.position.x,
+              y: localPlayer.position.y,
+              z: localPlayer.position.z
+            },
+            rotation: {
+              x: 0, // Only send Y rotation since characters don't tilt up/down
+              y: localPlayerRotation.current.y,
+              z: 0
+            },
+            isMoving: isMoving.current,
+            movementDirection: movementDirection.current
+          }
+        };
+        queueMessage(JSON.stringify(moveMessage));
       }
     }
   }, [gameState.connected, user?.uid]);
@@ -1201,6 +1242,35 @@ export default function Game() {
     };
   };
 
+  // Message queue management
+  const queueMessage = (message: string) => {
+    if (messageQueue.current.length >= maxQueueSize.current) {
+      // Remove oldest message if queue is full
+      messageQueue.current.shift();
+    }
+    messageQueue.current.push(message);
+  };
+
+  const sendQueuedMessages = () => {
+    if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    while (messageQueue.current.length > 0) {
+      const message = messageQueue.current.shift();
+      if (message) {
+        try {
+          websocketRef.current.send(message);
+        } catch (error) {
+          console.error('Error sending queued message:', error);
+          // Put the message back at the front of the queue
+          messageQueue.current.unshift(message);
+          break;
+        }
+      }
+    }
+  };
+
   // Initialize WebSocket connection
   const initWebSocket = async (serverAddress: string) => {
     try {
@@ -1238,8 +1308,21 @@ export default function Game() {
       const ws = new WebSocket(wsUrl);
       websocketRef.current = ws;
 
+      // Connection timeout - if not connected within 10 seconds, consider it failed
+      const connectionTimeout = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          console.log('Connection timeout, closing WebSocket...');
+          ws.close();
+        }
+      }, 10000);
+
       ws.onopen = () => {
         console.log('Connected to game server');
+        clearTimeout(connectionTimeout);
+        reconnectAttempts.current = 0; // Reset reconnect attempts on successful connection
+        isReconnecting.current = false;
+        lastPongTime.current = Date.now();
+        
         setGameState({
           connected: true,
           error: null,
@@ -1247,31 +1330,51 @@ export default function Game() {
         });
 
         // Send initial connection message with auth token
-        ws.send(JSON.stringify({
-          type: 'connect',
-          data: {
-            playerId: user?.uid,
-            userEmail: user?.email,
-            authToken: authToken,
-            position: {
-              x: 0,
-              y: 0, // Ground level
-              z: 0
-            },
-            rotation: {
-              x: 0,
-              y: 0,
-              z: 0
-            },
-            isMoving: false,
-            movementDirection: 'none'
-          }
-        }));
+        try {
+          ws.send(JSON.stringify({
+            type: 'connect',
+            data: {
+              playerId: user?.uid,
+              userEmail: user?.email,
+              authToken: authToken,
+              position: {
+                x: 0,
+                y: 0, // Ground level
+                z: 0
+              },
+              rotation: {
+                x: 0,
+                y: 0,
+                z: 0
+              },
+              isMoving: false,
+              movementDirection: 'none'
+            }
+          }));
+        } catch (error) {
+          console.error('Error sending initial connection message:', error);
+        }
+
+        // Start ping/pong heartbeat
+        startHeartbeat();
+        
+        // Start connection health monitoring
+        startConnectionHealthCheck();
+        
+        // Send any queued messages
+        setTimeout(() => sendQueuedMessages(), 100); // Small delay to ensure connection is stable
       };
 
       ws.onmessage = (event) => {
         try {
           const message: GameMessage = JSON.parse(event.data);
+          
+          // Handle pong messages for heartbeat
+          if (message.type === 'pong') {
+            lastPongTime.current = Date.now();
+            return;
+          }
+          
           handleGameMessage(message);
         } catch (error) {
           console.error('Error parsing message:', error);
@@ -1280,19 +1383,33 @@ export default function Game() {
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setGameState({
-          connected: false,
-          error: 'Failed to connect to game server',
-          loading: false
-        });
+        clearTimeout(connectionTimeout);
+        
+        // Don't immediately set error state if we're reconnecting
+        if (!isReconnecting.current) {
+          setGameState({
+            connected: false,
+            error: 'Connection error occurred',
+            loading: false
+          });
+        }
       };
 
-      ws.onclose = () => {
-        console.log('Disconnected from game server');
+      ws.onclose = (event) => {
+        console.log('Disconnected from game server. Code:', event.code, 'Reason:', event.reason);
+        clearTimeout(connectionTimeout);
+        stopHeartbeat();
+        stopConnectionHealthCheck();
+        
         setGameState(prev => ({
           ...prev,
           connected: false
         }));
+
+        // Attempt reconnection unless it was a manual close (code 1000) or auth failure (code 1008)
+        if (event.code !== 1000 && event.code !== 1008 && !isReconnecting.current) {
+          attemptReconnection(serverAddress);
+        }
       };
 
     } catch (error) {
@@ -1302,6 +1419,89 @@ export default function Game() {
         error: 'Invalid server address or authentication failed',
         loading: false
       });
+    }
+  };
+
+  // Automatic reconnection logic
+  const attemptReconnection = (serverAddress?: string) => {
+    if (isReconnecting.current || reconnectAttempts.current >= maxReconnectAttempts.current) {
+      if (reconnectAttempts.current >= maxReconnectAttempts.current) {
+        console.log('Max reconnection attempts reached');
+        setGameState({
+          connected: false,
+          error: 'Connection lost. Please refresh to reconnect.',
+          loading: false
+        });
+      }
+      return;
+    }
+
+    isReconnecting.current = true;
+    reconnectAttempts.current++;
+    
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 30000); // Exponential backoff, max 30s
+    console.log(`Attempting reconnection ${reconnectAttempts.current}/${maxReconnectAttempts.current} in ${delay}ms...`);
+    
+    setGameState(prev => ({
+      ...prev,
+      connected: false,
+      error: `Reconnecting... (${reconnectAttempts.current}/${maxReconnectAttempts.current})`,
+      loading: true
+    }));
+
+    reconnectTimeout.current = setTimeout(() => {
+      if (serverAddress) {
+        initWebSocket(serverAddress);
+      } else if (router.query.server) {
+        initWebSocket(decodeURIComponent(router.query.server as string));
+      }
+    }, delay);
+  };
+
+  // Ping/pong heartbeat to keep connection alive
+  const startHeartbeat = () => {
+    stopHeartbeat(); // Clear any existing interval
+    
+    pingInterval.current = setInterval(() => {
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        try {
+          websocketRef.current.send(JSON.stringify({ type: 'ping' }));
+        } catch (error) {
+          console.error('Error sending ping:', error);
+        }
+      }
+    }, 30000); // Send ping every 30 seconds
+  };
+
+  const stopHeartbeat = () => {
+    if (pingInterval.current) {
+      clearInterval(pingInterval.current);
+      pingInterval.current = null;
+    }
+  };
+
+  // Connection health monitoring
+  const startConnectionHealthCheck = () => {
+    stopConnectionHealthCheck(); // Clear any existing interval
+    
+    connectionCheckInterval.current = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastPong = now - lastPongTime.current;
+      
+      // If we haven't received a pong in 60 seconds, consider connection dead
+      if (timeSinceLastPong > 60000) {
+        console.log('Connection appears to be dead (no pong received), closing...');
+        if (websocketRef.current) {
+          websocketRef.current.close();
+        }
+      }
+    }, 5000); // Check every 5 seconds
+  };
+
+  const stopConnectionHealthCheck = () => {
+    if (connectionCheckInterval.current) {
+      clearInterval(connectionCheckInterval.current);
+      connectionCheckInterval.current = null;
     }
   };
 
@@ -1384,8 +1584,19 @@ export default function Game() {
       cancelAnimationFrame(animationIdRef.current);
     }
     if (websocketRef.current) {
-      websocketRef.current.close();
+      websocketRef.current.close(1000, 'Component unmounting'); // Normal closure
     }
+    
+    // Clean up reconnection and heartbeat timers
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+    stopHeartbeat();
+    stopConnectionHealthCheck();
+    isReconnecting.current = false;
+    reconnectAttempts.current = 0;
+    messageQueue.current = []; // Clear message queue
     
     // Clean up animation mixers
     if (localPlayerMixer.current) {
@@ -1476,6 +1687,65 @@ export default function Game() {
     };
   }, [handleKeyDown, handleKeyUp]);
 
+  // Handle page visibility changes to manage connection
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is hidden - reduce ping frequency to conserve resources
+        if (pingInterval.current) {
+          clearInterval(pingInterval.current);
+          pingInterval.current = setInterval(() => {
+            if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+              try {
+                websocketRef.current.send(JSON.stringify({ type: 'ping' }));
+              } catch (error) {
+                console.error('Error sending ping:', error);
+              }
+            }
+          }, 60000); // Ping every 60 seconds when hidden
+        }
+      } else {
+        // Page is visible - restore normal ping frequency
+        if (gameState.connected) {
+          startHeartbeat(); // This will reset to 30-second intervals
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [gameState.connected]);
+
+  // Handle network connectivity changes
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('Network connection restored');
+      if (!gameState.connected && !isReconnecting.current) {
+        console.log('Attempting reconnection after network restore...');
+        handleManualReconnect();
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('Network connection lost');
+      setGameState(prev => ({
+        ...prev,
+        connected: false,
+        error: 'Network connection lost'
+      }));
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [gameState.connected]);
+
   // Initialize game when component mounts and server is available
   useEffect(() => {
     if (!server || !user) return;
@@ -1501,6 +1771,30 @@ export default function Game() {
   const handleBackToDashboard = () => {
     cleanup();
     router.push('/dashboard');
+  };
+
+  // Manual reconnect handler
+  const handleManualReconnect = () => {
+    if (!server || isReconnecting.current) return;
+    
+    // Reset reconnection state
+    reconnectAttempts.current = 0;
+    isReconnecting.current = false;
+    
+    // Clear any existing reconnection timeout
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+    
+    const serverAddress = decodeURIComponent(server as string);
+    setGameState({
+      connected: false,
+      error: null,
+      loading: true
+    });
+    
+    initWebSocket(serverAddress);
   };
 
   if (authLoading || !user) {
@@ -1533,7 +1827,10 @@ export default function Game() {
         
         <div className={styles.topRight}>
           <div className={styles.connectionStatus}>
-            Status: {gameState.connected ? 'Connected' : 'Disconnected'}
+            Status: {gameState.connected ? 'Connected' : gameState.loading ? 'Connecting...' : 'Disconnected'}
+            {reconnectAttempts.current > 0 && (
+              <span> (Attempt {reconnectAttempts.current}/{maxReconnectAttempts.current})</span>
+            )}
           </div>
         </div>
 
@@ -1546,9 +1843,30 @@ export default function Game() {
         {gameState.error && (
           <div className={styles.centerMessage}>
             <div className={styles.error}>{gameState.error}</div>
-            <button onClick={handleBackToDashboard} className={styles.backButton}>
-              Back to Dashboard
-            </button>
+            <div>
+              <button onClick={handleBackToDashboard} className={styles.backButton}>
+                Back to Dashboard
+              </button>
+              {!gameState.loading && (
+                <button onClick={handleManualReconnect} className={styles.backButton} style={{ marginLeft: '10px' }}>
+                  Reconnect
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!gameState.connected && !gameState.error && !gameState.loading && (
+          <div className={styles.centerMessage}>
+            <div className={styles.error}>Connection lost</div>
+            <div>
+              <button onClick={handleBackToDashboard} className={styles.backButton}>
+                Back to Dashboard
+              </button>
+              <button onClick={handleManualReconnect} className={styles.backButton} style={{ marginLeft: '10px' }}>
+                Reconnect
+              </button>
+            </div>
           </div>
         )}
 
