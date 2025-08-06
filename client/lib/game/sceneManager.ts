@@ -56,7 +56,17 @@ export class SceneManager {
   }
 
   async loadScenery(): Promise<void> {
-    await SceneryGenerator.generateRoom(this.scene);
+    // Generate a complete floor with multiple rooms and hallways
+    const floorResult = SceneryGenerator.generateCompleteFloor(this.scene, {
+      minRooms: 3,
+      maxRooms: 5,
+      floorWidth: 60,
+      floorHeight: 60,
+      cubeSize: 1,
+      roomHeight: 5
+    });
+    
+    console.log(`Generated floor with ${floorResult.floorLayout.rooms.length} rooms`);
   }
 
   private setupEventListeners(): void {
