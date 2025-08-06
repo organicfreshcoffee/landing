@@ -69,17 +69,66 @@ export default function Game() {
       const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/human_male.glb');
       console.log('Successfully loaded human_male.glb');
       
-      // Scale the model if needed (adjust based on your model's size)
-      gltf.scene.scale.set(0.5, 0.5, 0.5);
+      // Scale the model first
+      gltf.scene.scale.set(0.1, 0.1, 0.1);
+      
+      // Get bounding box after scaling
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      console.log('Model bounds after scaling:', {
+        min: box.min,
+        max: box.max,
+        center: center,
+        size: size
+      });
+      
+      // Center the model horizontally (X and Z) but keep it above ground
+      gltf.scene.position.x = -center.x;
+      gltf.scene.position.z = -center.z;
+      
+      // Position Y so that the bottom of the model is at ground level (y=0)
+      // This means we need to move it up by the absolute value of the minimum Y
+      gltf.scene.position.y = Math.abs(box.min.y);
+      
+      console.log('Final model position:', gltf.scene.position);
+      
+      // Ensure all materials render both sides and are properly visible
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.material) {
+            // Make sure material renders both sides
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => {
+                mat.side = THREE.DoubleSide;
+                mat.transparent = false;
+                mat.opacity = 1.0;
+              });
+            } else {
+              child.material.side = THREE.DoubleSide;
+              child.material.transparent = false;
+              child.material.opacity = 1.0;
+            }
+          }
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      
+      // Remove the wireframe helper - it was just for debugging
+      // const helper = new THREE.BoxHelper(gltf.scene, 0xff0000);
+      // gltf.scene.add(helper);
       
       return gltf.scene;
     } catch (error) {
       console.log('GLB model not available, using fallback cube:', error);
       
       // Fallback to cube geometry with improved appearance
-      const geometry = new THREE.BoxGeometry(1, 2, 0.5); // Make it more human-like proportions
+      const geometry = new THREE.BoxGeometry(0.5, 1.8, 0.3); // Human-like proportions, smaller size
       const material = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.y = 0.9; // Half the height to center it at ground level
       mesh.castShadow = true;
       
       return mesh;
@@ -247,7 +296,7 @@ export default function Game() {
 
     // Update camera to follow the player with proper FPS-style rotation
     const playerPos = localPlayer.position;
-    const cameraOffset = new THREE.Vector3(0, 3, 5);
+    const cameraOffset = new THREE.Vector3(0, 1.5, 3); // Closer and lower camera for smaller models
     
     // Apply player's Y rotation to camera offset
     cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
@@ -266,7 +315,7 @@ export default function Game() {
     
     const lookAtPoint = new THREE.Vector3(
       playerPos.x + lookDirection.x,
-      playerPos.y + lookDirection.y,
+      playerPos.y + 1 + lookDirection.y, // Look at head level
       playerPos.z + lookDirection.z
     );
     
@@ -321,7 +370,7 @@ export default function Game() {
     const camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
-      0.1,
+      0.01, // Much smaller near plane to avoid clipping
       1000
     );
     camera.position.set(0, 5, 10);
@@ -335,6 +384,10 @@ export default function Game() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Disable frustum culling to ensure model parts aren't clipped prematurely
+    renderer.localClippingEnabled = false;
+    
     rendererRef.current = renderer;
 
     // Add basic lighting
@@ -399,7 +452,7 @@ export default function Game() {
         });
       }
       
-      localPlayer.position.set(0, 0.5, 0);
+      localPlayer.position.set(0, 0, 0); // Start at ground level (y=0)
       localPlayer.castShadow = true;
       scene.add(localPlayer);
       localPlayerRef.current = localPlayer; // No need to cast anymore
@@ -409,8 +462,8 @@ export default function Game() {
     createLocalPlayer();
 
     // Position camera behind and above the local player
-    camera.position.set(0, 3, 5);
-    camera.lookAt(0, 0.5, 0);
+    camera.position.set(0, 1.5, 3); // Closer and lower for smaller models
+    camera.lookAt(0, 1, 0); // Look at head level
 
     // Handle window resize
     const handleResize = () => {
@@ -535,7 +588,7 @@ export default function Game() {
             authToken: authToken,
             position: {
               x: 0,
-              y: 0.5,
+              y: 0, // Ground level
               z: 0
             },
             rotation: {
@@ -817,7 +870,7 @@ export default function Game() {
             <div>Controls: WASD to move, Space/Shift for up/down</div>
             <div>Mouse: Click to lock cursor, move mouse to look around (FPS style)</div>
             <div>Players online: {playersRef.current.size + 1}</div>
-            <div>Your cube: Green | Other players: Various colors</div>
+            <div>Your character: Green | Other players: Various colors</div>
           </div>
         )}
       </div>
