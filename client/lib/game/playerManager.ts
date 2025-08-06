@@ -41,8 +41,9 @@ export class PlayerManager {
     // Apply player-specific properties and color
     this.applyPlayerStyling(playerModel, player);
     
-    // Set world position and rotation - apply ground offset like in original
-    this.positionPlayer(playerModel, player, modelData.groundOffset);
+    // Set world position and rotation - DON'T apply ground offset for other players
+    // Other players' positions come from server and are already correctly positioned
+    this.positionPlayer(playerModel, player, undefined);
     
     return animationResult;
   }
@@ -69,7 +70,9 @@ export class PlayerManager {
           // Additional fix: ensure the skeleton respects the parent transform
           const skinnedMesh = child as THREE.SkinnedMesh;
           if (skinnedMesh.skeleton) {
-            skinnedMesh.skeleton.calculateInverses();
+            // Force skeleton to update relative to parent
+            skinnedMesh.skeleton.update();
+            console.log(`Updated skeleton for player ${playerId}`);
           }
           
           console.log(`Fixed SkinnedMesh for player ${playerId}`);
