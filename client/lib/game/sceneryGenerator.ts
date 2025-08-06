@@ -15,7 +15,7 @@ export class SceneryGenerator {
    * @param wallColor - Color of the wall cubes (default: light gray)
    * @param floorColor - Color of the floor (default: dark gray)
    */
-  static generateCubeRoom(
+  static generateRoom(
     scene: THREE.Scene,
     cubeSize: number = 1,
     roomHeight: number = 5,
@@ -45,7 +45,7 @@ export class SceneryGenerator {
     const floorGeometry = new THREE.PlaneGeometry(floorWidth, floorLength);
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-    floor.position.y = -cubeSize / 2; // Position at ground level
+    floor.position.y = 0; // Position at same level as bottom of wall cubes
     floor.name = 'Floor';
     roomGroup.add(floor);
 

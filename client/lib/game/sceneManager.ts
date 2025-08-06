@@ -12,7 +12,6 @@ export class SceneManager {
     this.camera = this.createCamera();
     this.renderer = this.createRenderer(canvas);
     this.setupLighting();
-    this.setupGround();
     this.setupEventListeners();
   }
 
@@ -56,18 +55,8 @@ export class SceneManager {
     this.scene.add(directionalLight);
   }
 
-  private setupGround(): void {
-    // Add a basic ground plane
-    const groundGeometry = new THREE.PlaneGeometry(100, 100);
-    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    this.scene.add(ground);
-  }
-
   async loadScenery(): Promise<void> {
-    await SceneryGenerator.generateCubeRoom(this.scene);
+    await SceneryGenerator.generateRoom(this.scene);
   }
 
   private setupEventListeners(): void {
