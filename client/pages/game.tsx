@@ -62,6 +62,7 @@ export default function Game() {
   const movementDirection = useRef<'forward' | 'backward' | 'none'>('none'); // Track movement direction for animation
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const modelGroundOffsetRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 }); // Store ground offset for consistent positioning
+  const lastSentMovementState = useRef<boolean>(false); // Track last sent isMoving state for heartbeat optimization
   
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -337,13 +338,6 @@ export default function Game() {
 
   // Add or update a player
   const updatePlayer = async (playerData: PlayerUpdate) => {
-    console.log(`🔄 updatePlayer called for ${playerData.id}:`, {
-      position: playerData.position,
-      rotation: playerData.rotation,
-      isMoving: playerData.isMoving,
-      movementDirection: playerData.movementDirection
-    });
-    
     if (!sceneRef.current) {
       console.warn(`❌ Scene not available for player ${playerData.id}`);
       return;
@@ -353,7 +347,6 @@ export default function Game() {
     const existingPlayer = players.get(playerData.id);
 
     if (existingPlayer) {
-      console.log(`📝 Updating existing player ${playerData.id}`);
       // Update existing player position
       existingPlayer.position = playerData.position;
       if (playerData.rotation) {
@@ -365,9 +358,6 @@ export default function Game() {
       existingPlayer.movementDirection = playerData.movementDirection;
       
       if (existingPlayer.mesh) {
-        const beforePosition = existingPlayer.mesh.position.toArray();
-        const beforeRotation = existingPlayer.mesh.rotation.toArray();
-        
         existingPlayer.mesh.position.set(
           playerData.position.x,
           playerData.position.y,
@@ -383,40 +373,6 @@ export default function Game() {
           );
         }
         
-        const afterPosition = existingPlayer.mesh.position.toArray();
-        const afterRotation = existingPlayer.mesh.rotation.toArray();
-        
-        console.log(`📍 Player ${playerData.id} position update:`, {
-          before: beforePosition,
-          after: afterPosition,
-          target: [playerData.position.x, playerData.position.y, playerData.position.z],
-          changed: beforePosition[0] !== afterPosition[0] || beforePosition[1] !== afterPosition[1] || beforePosition[2] !== afterPosition[2]
-        });
-        
-        // Calculate distance from local player for visibility debugging
-        if (localPlayerRef.current) {
-          const localPos = localPlayerRef.current.position;
-          const otherPos = existingPlayer.mesh.position;
-          const distance = Math.sqrt(
-            Math.pow(localPos.x - otherPos.x, 2) + 
-            Math.pow(localPos.y - otherPos.y, 2) + 
-            Math.pow(localPos.z - otherPos.z, 2)
-          );
-          console.log(`👁️ Player ${playerData.id} visibility:`, {
-            localPlayerPos: [localPos.x, localPos.y, localPos.z],
-            otherPlayerPos: [otherPos.x, otherPos.y, otherPos.z],
-            distance: distance,
-            cameraPos: cameraRef.current ? [cameraRef.current.position.x, cameraRef.current.position.y, cameraRef.current.position.z] : 'no camera'
-          });
-        }
-        
-        console.log(`🔄 Player ${playerData.id} rotation update:`, {
-          before: beforeRotation,
-          after: afterRotation,
-          target: playerData.rotation ? [0, playerData.rotation.y + Math.PI, 0] : 'none',
-          changed: beforeRotation[1] !== afterRotation[1]
-        });
-        
         // Force a render update
         if (existingPlayer.mesh.parent) {
           existingPlayer.mesh.updateMatrixWorld(true);
@@ -428,21 +384,11 @@ export default function Game() {
       if (animData && animData.actions.StickMan_Run) {
         const walkAction = animData.actions.StickMan_Run;
         
-        console.log(`🎭 Updating other player ${playerData.id} animation:`, {
-          receivedIsMoving: playerData.isMoving,
-          existingPlayerIsMoving: existingPlayer.isMoving,
-          direction: existingPlayer.movementDirection,
-          currentlyPaused: walkAction.paused,
-          currentlyRunning: walkAction.isRunning(),
-          timeScale: walkAction.timeScale
-        });
-        
         // Use the RECEIVED playerData.isMoving directly to avoid any timing issues
         if (playerData.isMoving) {
           // Use the same pattern as local player - only play if not running, never reset
           if (!walkAction.isRunning()) {
             walkAction.play();
-            console.log(`▶️ Started walk animation for player ${playerData.id}`);
           }
           walkAction.paused = false;
           walkAction.enabled = true;
@@ -450,35 +396,16 @@ export default function Game() {
           // Set animation direction based on movement
           if (playerData.movementDirection === 'backward') {
             walkAction.timeScale = -1;
-            console.log(`🔄 Player ${playerData.id} walking backward`);
           } else {
             walkAction.timeScale = 1;
-            console.log(`➡️ Player ${playerData.id} walking forward`);
           }
-          
-          console.log(`✅ Animation PLAYING for player ${playerData.id}:`, {
-            isRunning: walkAction.isRunning(),
-            paused: walkAction.paused,
-            enabled: walkAction.enabled,
-            timeScale: walkAction.timeScale,
-            weight: walkAction.weight
-          });
         } else {
           // Pause instead of stop to maintain smooth transitions
-          console.log(`⏸️ PAUSING animation for player ${playerData.id} - received isMoving: ${playerData.isMoving}, stored isMoving: ${existingPlayer.isMoving}`);
           walkAction.paused = true;
-          console.log(`❌ Animation PAUSED for player ${playerData.id} - paused: ${walkAction.paused}, isRunning: ${walkAction.isRunning()}`);
         }
-      } else {
-        console.log(`No animation data found for player ${playerData.id}:`, {
-          hasAnimData: !!animData,
-          hasStickManRun: animData?.actions?.StickMan_Run ? true : false,
-          availableActions: animData ? Object.keys(animData.actions) : []
-        });
       }
     } else {
       // Create new player
-      console.log(`Creating new player ${playerData.id} at position:`, playerData.position);
       const newPlayer: Player = {
         id: playerData.id,
         position: playerData.position,
@@ -490,7 +417,6 @@ export default function Game() {
       
       const playerData_result = await createPlayerModel(newPlayer);
       newPlayer.mesh = playerData_result.model;
-      console.log(`New player ${playerData.id} mesh position:`, newPlayer.mesh.position.toArray());
       sceneRef.current.add(playerData_result.model);
       
       // Store animation data for other players
@@ -499,9 +425,6 @@ export default function Game() {
           mixer: playerData_result.mixer,
           actions: playerData_result.actions
         });
-        console.log(`Stored animation data for player ${playerData.id}:`, Object.keys(playerData_result.actions));
-      } else {
-        console.warn(`No animation data for player ${playerData.id}`);
       }
       
       players.set(playerData.id, newPlayer);
@@ -564,19 +487,6 @@ export default function Game() {
 
     // Track movement direction for animation - preserve the previous direction if no new input
     let newMovementDirection: 'forward' | 'backward' | 'none' = movementDirection.current;
-    
-    // Debug: Log current keys pressed for movement debugging
-    const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
-    const pressedMovementKeys = movementKeys.filter(key => keysPressed.current.has(key));
-    
-    if (pressedMovementKeys.length > 0 || (pressedMovementKeys.length === 0 && isMoving.current)) {
-      console.log(`⌨️ Movement keys check:`, {
-        allKeysPressed: Array.from(keysPressed.current),
-        movementKeysPressed: pressedMovementKeys,
-        currentlyMoving: isMoving.current,
-        willMove: pressedMovementKeys.length > 0
-      });
-    }
     
     if (keysPressed.current.has('KeyW')) {
       localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
@@ -653,14 +563,6 @@ export default function Game() {
     const oldDirection = movementDirection.current;
     isMoving.current = moved;
     
-    // Debug logging for movement state changes
-    if (wasMoving !== isMoving.current) {
-      console.log(`🚶 Movement state changed: ${wasMoving} → ${isMoving.current}`);
-    }
-    if (oldDirection !== movementDirection.current) {
-      console.log(`🔄 Movement direction changed: ${oldDirection} → ${movementDirection.current}`);
-    }
-    
     // Get delta time once per frame
     const delta = clockRef.current.getDelta();
     
@@ -672,37 +574,22 @@ export default function Game() {
         // Start or update walking animation
         if (!walkAction.isRunning()) {
           walkAction.play();
-          console.log('Walk action started (was not running)');
         }
         walkAction.paused = false;
         
-        // Only change animation direction when we have a clear forward/backward movement
+        // Set animation direction based on movement
         if (movementDirection.current === 'backward') {
-          // Play animation in reverse for backward movement
           walkAction.timeScale = -1;
-          console.log('Walking animation - direction: backward, timeScale: -1');
         } else if (movementDirection.current === 'forward') {
-          // Play animation normally for forward movement
           walkAction.timeScale = 1;
-          console.log('Walking animation - direction: forward, timeScale: 1');
         }
-        // Don't change timeScale when direction is 'none' - keep previous setting
-        
       } else {
         // Pause walking animation instead of stopping to maintain smooth transitions
         walkAction.paused = true;
-        console.log('Paused walking animation');
       }
       
       // Always update animation mixer when it exists
       localPlayerMixer.current.update(delta);
-    } else {
-      // Log missing components for debugging
-      if (!localPlayerMixer.current) {
-        console.log('No local player mixer available');
-      } else if (!localPlayerActions.current.StickMan_Run) {
-        console.log('No StickMan_Run action available. Available actions:', Object.keys(localPlayerActions.current));
-      }
     }
     
     // Update other players' animation mixers
@@ -715,28 +602,15 @@ export default function Game() {
     const movementChanged = moved || Math.abs(oldRotation.y - localPlayerRotation.current.y) > 0.01;
     const movementStateChanged = wasMoving !== isMoving.current || oldDirection !== movementDirection.current;
     
-    // Periodic heartbeat: if we haven't moved in a while but were moving before, send a status update
+    // Smart heartbeat: only send "stopped moving" update if last sent state was "moving"
     const timeSinceLastUpdate = now - lastUpdateTime.current;
-    const shouldSendHeartbeat = !isMoving.current && timeSinceLastUpdate > 200; // Send heartbeat every 200ms when stopped
+    const shouldSendHeartbeat = !isMoving.current && lastSentMovementState.current && timeSinceLastUpdate > 300; // Send heartbeat every 300ms when stopped (but only if we were previously moving)
     const shouldSendImmediate = movementChanged || movementStateChanged;
     
     if ((shouldSendImmediate && timeSinceLastUpdate > 50) || shouldSendHeartbeat) { // Throttle immediate updates to 20 updates per second
       
       lastUpdateTime.current = now;
-      
-      // Debug logging for WebSocket messages
-      console.log(`📡 Sending WebSocket update:`, {
-        isMoving: isMoving.current,
-        movementDirection: movementDirection.current,
-        position: [localPlayer.position.x, localPlayer.position.y, localPlayer.position.z],
-        movementChanged,
-        movementStateChanged,
-        shouldSendHeartbeat,
-        shouldSendImmediate,
-        timeSinceLastUpdate,
-        wasMoving,
-        oldDirection
-      });
+      lastSentMovementState.current = isMoving.current; // Track what we're sending
       
       if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
         const moveMessage = {
@@ -881,8 +755,6 @@ export default function Game() {
           }
         });
         
-        console.log('Created local player animation actions:', Object.keys(localPlayerActions.current));
-        
         // Start the walk animation in paused state so it's ready
         if (localPlayerActions.current.StickMan_Run) {
           const walkAction = localPlayerActions.current.StickMan_Run;
@@ -890,14 +762,6 @@ export default function Game() {
           walkAction.play();
           walkAction.paused = true;
           walkAction.enabled = true;
-          console.log('Walk animation prepared in paused state');
-          console.log('Walk action details:', {
-            duration: walkAction.getClip().duration,
-            weight: walkAction.weight,
-            enabled: walkAction.enabled,
-            paused: walkAction.paused,
-            running: walkAction.isRunning()
-          });
         } else {
           console.error('❌ StickMan_Run action was not created properly!');
         }
@@ -1120,14 +984,6 @@ export default function Game() {
 
   // Handle messages from game server
   const handleGameMessage = (message: GameMessage) => {
-    console.log(`📨 WebSocket message received:`, {
-      type: message.type,
-      playerId: message.data?.playerId,
-      position: message.data?.position,
-      isMoving: message.data?.isMoving,
-      movementDirection: message.data?.movementDirection
-    });
-
     switch (message.type) {
       case 'player_joined':
         // New player joined the game
@@ -1192,21 +1048,11 @@ export default function Game() {
       event.preventDefault();
     }
 
-    // Debug key events for movement keys
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) {
-      console.log(`🔽 Key DOWN: ${event.code}, keys pressed: ${Array.from(keysPressed.current).join(', ')}`);
-    }
-
     keysPressed.current.add(event.code);
   }, [gameState.connected]);
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     keysPressed.current.delete(event.code);
-    
-    // Debug key events for movement keys
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) {
-      console.log(`🔼 Key UP: ${event.code}, keys pressed: ${Array.from(keysPressed.current).join(', ')}`);
-    }
   }, []);
 
   // Cleanup function
