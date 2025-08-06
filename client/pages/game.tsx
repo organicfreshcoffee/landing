@@ -94,6 +94,9 @@ export default function Game() {
       
       console.log('Final model position:', gltf.scene.position);
       
+      // Try rotating the model in case it's facing the wrong direction
+      // gltf.scene.rotation.y = Math.PI; // 180 degrees
+      
       // Ensure all materials render both sides and are properly visible
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
@@ -104,21 +107,40 @@ export default function Game() {
                 mat.side = THREE.DoubleSide;
                 mat.transparent = false;
                 mat.opacity = 1.0;
+                // Force material update
+                mat.needsUpdate = true;
               });
             } else {
               child.material.side = THREE.DoubleSide;
               child.material.transparent = false;
               child.material.opacity = 1.0;
+              // Force material update
+              child.material.needsUpdate = true;
             }
           }
           child.castShadow = true;
           child.receiveShadow = true;
+          
+          // Check if geometry has proper normals
+          if (child.geometry && !child.geometry.attributes.normal) {
+            child.geometry.computeVertexNormals();
+          }
         }
       });
       
-      // Remove the wireframe helper - it was just for debugging
-      // const helper = new THREE.BoxHelper(gltf.scene, 0xff0000);
-      // gltf.scene.add(helper);
+      // Add wireframe helper back temporarily to see the full model bounds
+      const helper = new THREE.BoxHelper(gltf.scene, 0xff0000);
+      gltf.scene.add(helper);
+      
+      // Also add a simple wireframe of the model itself to see its geometry
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const wireframe = new THREE.WireframeGeometry(child.geometry);
+          const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+          const wireframeLines = new THREE.LineSegments(wireframe, wireframeMaterial);
+          gltf.scene.add(wireframeLines);
+        }
+      });
       
       return gltf.scene;
     } catch (error) {
