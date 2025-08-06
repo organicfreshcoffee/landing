@@ -125,53 +125,44 @@ When adding new 3D models to this directory:
 - **Status**: ✅ Source file with animation
 - **Animation**: 40-frame walk cycle (1.33 seconds at 30fps)
 
-### skeleton_walk.glb
+### stickman.glb (ACTIVE)
+- **Source**: Exported from StickMan.blend
+- **License**: CC0
+- **Usage**: Web-optimized stick figure model with running animation for gameplay
+- **Status**: ✅ Currently used in game
+- **Animation**: 20-frame StickMan_Run cycle + SitckMan_Idle
+- **File Size**: 0.06 MB
+- **Advantages**: Professional animations, smaller file size, better performance
+
+### stickman_idle.glb
+- **Source**: Exported from StickMan.blend
+- **License**: CC0
+- **Usage**: Idle animation version of stick figure
+- **Status**: ✅ Available for future use
+- **Animation**: 111-frame SitckMan_Idle cycle
+- **File Size**: 0.07 MB
+
+### skeleton_walk.glb (REPLACED)
 - **Source**: Exported from skeleton_with_walk.blend
 - **License**: CC0
 - **Usage**: Web-optimized skeleton model with walking animation
-- **Status**: ✅ Ready for use in game
+- **Status**: 🔄 Replaced by stickman.glb (better performance)
 - **Animation**: Walking cycle included
 - **File Size**: 1.46 MB
 
-
-### Converting Blend to GLB
-
-To use the `human_male.blend` file in the web application, it needs to be converted to GLB format:
-
-#### Method 1: Using Blender (Recommended)
-1. Open `human_male.blend` in Blender
-2. Go to **File > Export > glTF 2.0 (.glb/.gltf)**
-3. Choose **GLB** format (binary)
-4. Set filename to `human_male.glb`
-5. Click **Export glTF 2.0**
-
-#### Method 2: Using Blender Command Line
-```bash
-# Navigate to the 3d-models directory
-cd client/public/assets/3d-models/
-
-# Convert using Blender command line (requires Blender installed)
-blender human_male.blend --background --python-expr "
-import bpy
-bpy.ops.export_scene.gltf(filepath='human_male.glb', export_format='GLB')
-bpy.ops.wm.quit_blender()
-"
-```
-
-#### Method 3: Online Converters
-- [Aspose 3D Converter](https://products.aspose.app/3d/conversion/blend-to-glb)
-- [AnyConv](https://anyconv.com/blend-to-glb-converter/)
-
-**Note**: Once converted, the game will automatically use the GLB model instead of the cube fallback.
+### StickMan.blend
+- **Source**: [Original Blender file](https://opengameart.org/content/creomotos-stick-man-fixed-up)
+- **License**: CC0
+- **Usage**: Character model for player avatars with professional animations
+- **Status**: ✅ Source file (includes StickMan_Run and SitckMan_Idle animations)
 
 ### Animation Support
 
-The skeleton model (`skeleton_walk.glb`) includes a pre-built walking animation:
-- **Animation name**: `WalkCycle`
-- **Duration**: 1.33 seconds (loops seamlessly)
-- **Usage**: See `ANIMATION_USAGE.md` for implementation details
-
-For custom animations, use the source files (`skeleton.blend` or `skeleton_with_walk.blend`) and the animation scripts provided in this directory.
+The stick figure model (`stickman.glb`) includes professional pre-built animations:
+- **StickMan_Run**: 20-frame running/walking animation (0.67 seconds, loops seamlessly)
+- **SitckMan_Idle**: 111-frame idle animation (available in stickman_idle.glb)
+- **Usage**: Game automatically uses StickMan_Run for movement animation
+- **Performance**: Much better than skeleton model (0.06 MB vs 1.46 MB)
 
 ---
 

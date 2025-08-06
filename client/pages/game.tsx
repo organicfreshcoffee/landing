@@ -70,12 +70,21 @@ export default function Game() {
         gltfLoaderRef.current = new GLTFLoader();
       }
       
-      console.log('Attempting to load skeleton_walk.glb...');
-      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/skeleton_walk.glb');
-      console.log('Successfully loaded skeleton_walk.glb with', gltf.animations?.length || 0, 'animations');
+      console.log('Attempting to load stickman.glb...');
+      const gltf = await gltfLoaderRef.current.loadAsync('/assets/3d-models/stickman.glb');
+      console.log('Successfully loaded stickman.glb with', gltf.animations?.length || 0, 'animations');
+      
+      // Debug: Log animation details
+      if (gltf.animations && gltf.animations.length > 0) {
+        gltf.animations.forEach((anim, index) => {
+          console.log(`Animation ${index}: "${anim.name}" - Duration: ${anim.duration}s - Tracks: ${anim.tracks.length}`);
+        });
+      } else {
+        console.warn('⚠️ No animations found in stickman.glb!');
+      }
       
       // Scale the model appropriately for the game
-      gltf.scene.scale.set(0.015, 0.015, 0.015); // Smaller scale for skeleton
+      gltf.scene.scale.set(0.3, 0.3, 0.3); // StickMan is much smaller, needs larger scale
       
       // Get bounding box after scaling
       const box = new THREE.Box3().setFromObject(gltf.scene);
@@ -128,7 +137,7 @@ export default function Game() {
       
       return { scene: gltf.scene, animations: gltf.animations || [] };
     } catch (error) {
-      console.log('Skeleton GLB model not available, using fallback cube:', error);
+      console.log('StickMan GLB model not available, using fallback cube:', error);
       
       // Fallback to cube geometry with improved appearance
       const geometry = new THREE.BoxGeometry(0.5, 1.8, 0.3); // Human-like proportions, smaller size
@@ -178,9 +187,12 @@ export default function Game() {
         actions[clip.name] = action;
         
         // Set default properties for walk animation
-        if (clip.name === 'WalkCycle') {
+        if (clip.name === 'StickMan_Run') {
           action.setLoop(THREE.LoopRepeat, Infinity);
           action.clampWhenFinished = true;
+          action.weight = 1.0;
+          // Prepare the action but don't play it yet
+          action.reset();
         }
       });
       
@@ -345,7 +357,7 @@ export default function Game() {
 
     // Update camera to follow the player with proper FPS-style rotation
     const playerPos = localPlayer.position;
-    const cameraOffset = new THREE.Vector3(0, 1.5, 3); // Closer and lower camera for smaller models
+    const cameraOffset = new THREE.Vector3(0, 2.5, 5); // Adjusted for larger skeleton model
     
     // Apply player's Y rotation to camera offset
     cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayerRotation.current.y);
@@ -364,7 +376,7 @@ export default function Game() {
     
     const lookAtPoint = new THREE.Vector3(
       playerPos.x + lookDirection.x,
-      playerPos.y + 1 + lookDirection.y, // Look at head level
+      playerPos.y + 2.0 + lookDirection.y, // Adjusted look height for larger skeleton
       playerPos.z + lookDirection.z
     );
     
@@ -374,28 +386,40 @@ export default function Game() {
     const wasMoving = isMoving.current;
     isMoving.current = moved;
     
+    // Get delta time once per frame
+    const delta = clockRef.current.getDelta();
+    
     // Control local player animation
-    if (localPlayerMixer.current && localPlayerActions.current.WalkCycle) {
+    if (localPlayerMixer.current && localPlayerActions.current.StickMan_Run) {
+      const walkAction = localPlayerActions.current.StickMan_Run;
+      
       if (isMoving.current && !wasMoving) {
         // Start walking animation
-        localPlayerActions.current.WalkCycle.play();
-        console.log('Started walking animation');
+        if (!walkAction.isRunning()) {
+          walkAction.play();
+          console.log('Walk action started (was not running)');
+        }
+        walkAction.paused = false;
+        console.log('Started walking animation - paused:', walkAction.paused, 'running:', walkAction.isRunning());
       } else if (!isMoving.current && wasMoving) {
-        // Stop walking animation
-        localPlayerActions.current.WalkCycle.stop();
-        console.log('Stopped walking animation');
+        // Pause walking animation instead of stopping to maintain smooth transitions
+        walkAction.paused = true;
+        console.log('Paused walking animation - paused:', walkAction.paused, 'running:', walkAction.isRunning());
       }
-    }
-    
-    // Update animation mixer
-    if (localPlayerMixer.current) {
-      const delta = clockRef.current.getDelta();
+      
+      // Always update animation mixer when it exists
       localPlayerMixer.current.update(delta);
+    } else {
+      // Log missing components for debugging
+      if (!localPlayerMixer.current) {
+        console.log('No local player mixer available');
+      } else if (!localPlayerActions.current.StickMan_Run) {
+        console.log('No StickMan_Run action available. Available actions:', Object.keys(localPlayerActions.current));
+      }
     }
     
     // Update other players' animation mixers
     playersAnimations.current.forEach((animData) => {
-      const delta = clockRef.current.getDelta();
       animData.mixer.update(delta);
     });
 
@@ -433,6 +457,18 @@ export default function Game() {
   // Update the ref whenever the function changes
   useEffect(() => {
     updateMovementRef.current = updateMovement;
+    
+    // Add debug info to global scope for console debugging
+    if (typeof window !== 'undefined') {
+      (window as any).gameDebug = {
+        isMoving: isMoving.current,
+        localPlayerMixer: localPlayerMixer.current,
+        localPlayerActions: localPlayerActions.current,
+        playersAnimations: playersAnimations.current,
+        localPlayerRef: localPlayerRef,
+        keysPressed: keysPressed.current
+      };
+    }
   }, [updateMovement]);
 
   // Initialize Three.js scene
@@ -527,13 +563,35 @@ export default function Game() {
           localPlayerActions.current[clip.name] = action;
           
           // Set default properties for walk animation
-          if (clip.name === 'WalkCycle') {
+          if (clip.name === 'StickMan_Run') {
             action.setLoop(THREE.LoopRepeat, Infinity);
             action.clampWhenFinished = true;
+            action.weight = 1.0;
+            // Prepare the action but don't play it yet
+            action.reset();
           }
         });
         
         console.log('Created local player animation actions:', Object.keys(localPlayerActions.current));
+        
+        // Start the walk animation in paused state so it's ready
+        if (localPlayerActions.current.StickMan_Run) {
+          const walkAction = localPlayerActions.current.StickMan_Run;
+          walkAction.reset();
+          walkAction.play();
+          walkAction.paused = true;
+          walkAction.enabled = true;
+          console.log('Walk animation prepared in paused state');
+          console.log('Walk action details:', {
+            duration: walkAction.getClip().duration,
+            weight: walkAction.weight,
+            enabled: walkAction.enabled,
+            paused: walkAction.paused,
+            running: walkAction.isRunning()
+          });
+        } else {
+          console.error('❌ StickMan_Run action was not created properly!');
+        }
       }
       
       // Make the local player green to distinguish from others  
@@ -564,8 +622,8 @@ export default function Game() {
     createLocalPlayer();
 
     // Position camera behind and above the local player
-    camera.position.set(0, 1.5, 3); // Closer and lower for smaller models
-    camera.lookAt(0, 1, 0); // Look at head level
+    camera.position.set(0, 2.5, 5); // Adjusted for larger skeleton model
+    camera.lookAt(0, 2.0, 0); // Look at adjusted head level
 
     // Handle window resize
     const handleResize = () => {
@@ -985,7 +1043,7 @@ export default function Game() {
             <div>Controls: WASD to move, Space/Shift for up/down</div>
             <div>Mouse: Click to lock cursor, move mouse to look around (FPS style)</div>
             <div>Players online: {playersRef.current.size + 1}</div>
-            <div>Your character: Green | Other players: Various colors</div>
+            <div>Your character: Green skeleton with walking animation | Other players: Various colors</div>
           </div>
         )}
       </div>
