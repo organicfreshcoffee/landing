@@ -198,6 +198,354 @@ export default function Game() {
     return colors[Math.abs(hash) % colors.length];
   };
 
+  // Load and place fantasy town kit assets for scenery
+  const loadFantasyTownScenery = async (scene: THREE.Scene): Promise<void> => {
+    if (!gltfLoaderRef.current) {
+      gltfLoaderRef.current = new GLTFLoader();
+    }
+    
+    const loader = gltfLoaderRef.current;
+    const basePath = '/assets/3d-models/kenney_fantasy-town-kit_2.0/Models/GLB format/';
+    
+    // Define available assets
+    const trees = ['tree.glb', 'tree-crooked.glb', 'tree-high.glb', 'tree-high-crooked.glb', 'tree-high-round.glb'];
+    const rocks = ['rock-large.glb', 'rock-small.glb', 'rock-wide.glb'];
+    
+    // Load tree models
+    const treeModels: THREE.Group[] = [];
+    for (const treeName of trees) {
+      try {
+        const gltf = await loader.loadAsync(basePath + treeName);
+        const treeModel = gltf.scene.clone();
+        treeModel.scale.set(1.5, 1.5, 1.5); // Scale up trees
+        treeModel.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        treeModels.push(treeModel);
+      } catch (error) {
+        console.warn(`Failed to load tree model ${treeName}:`, error);
+      }
+    }
+    
+    // Load rock models
+    const rockModels: THREE.Group[] = [];
+    for (const rockName of rocks) {
+      try {
+        const gltf = await loader.loadAsync(basePath + rockName);
+        const rockModel = gltf.scene.clone();
+        rockModel.scale.set(1.2, 1.2, 1.2); // Scale up rocks slightly
+        rockModel.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        rockModels.push(rockModel);
+      } catch (error) {
+        console.warn(`Failed to load rock model ${rockName}:`, error);
+      }
+    }
+    
+    // Place trees in a scattered pattern
+    if (treeModels.length > 0) {
+      for (let x = -40; x <= 40; x += 8) {
+        for (let z = -40; z <= 40; z += 8) {
+          if (Math.abs(x) < 5 && Math.abs(z) < 5) continue; // Skip center area
+          if (Math.random() < 0.6) { // 60% chance to place a tree
+            const treeModel = treeModels[Math.floor(Math.random() * treeModels.length)].clone();
+            const offsetX = x + (Math.random() - 0.5) * 6;
+            const offsetZ = z + (Math.random() - 0.5) * 6;
+            treeModel.position.set(offsetX, 0, offsetZ);
+            treeModel.rotation.y = Math.random() * Math.PI * 2; // Random rotation
+            scene.add(treeModel);
+          }
+        }
+      }
+    }
+    
+    // Place rocks scattered around
+    if (rockModels.length > 0) {
+      for (let i = 0; i < 30; i++) {
+        const rockModel = rockModels[Math.floor(Math.random() * rockModels.length)].clone();
+        const x = (Math.random() - 0.5) * 90;
+        const z = (Math.random() - 0.5) * 90;
+        if (Math.abs(x) < 5 && Math.abs(z) < 5) continue; // Skip center area
+        rockModel.position.set(x, 0, z);
+        rockModel.rotation.y = Math.random() * Math.PI * 2; // Random rotation
+        scene.add(rockModel);
+      }
+    }
+    
+    // Generate procedural buildings
+    await generateProceduralBuildings(scene, loader, basePath);
+  };
+
+  // Generate procedural buildings using the fantasy town kit
+  const generateProceduralBuildings = async (scene: THREE.Scene, loader: GLTFLoader, basePath: string): Promise<void> => {
+    // Define building components
+    const walls = ['wall.glb', 'wall-wood.glb'];
+    const corners = ['wall-corner.glb', 'wall-wood-corner.glb'];
+    const doors = ['wall-door.glb', 'wall-wood-door.glb'];
+    const windows = ['wall-window-glass.glb', 'wall-wood-window-glass.glb'];
+    const roofs = ['roof.glb', 'roof-high.glb'];
+    const roofCorners = ['roof-corner.glb', 'roof-high-corner.glb'];
+    
+    // Load building component models
+    const buildingComponents: { [key: string]: THREE.Group[] } = {
+      walls: [],
+      corners: [],
+      doors: [],
+      windows: [],
+      roofs: [],
+      roofCorners: []
+    };
+    
+    // Load wall components
+    for (const wallName of walls) {
+      try {
+        const gltf = await loader.loadAsync(basePath + wallName);
+        buildingComponents.walls.push(gltf.scene.clone());
+      } catch (error) {
+        console.warn(`Failed to load wall ${wallName}:`, error);
+      }
+    }
+    
+    // Load corner components
+    for (const cornerName of corners) {
+      try {
+        const gltf = await loader.loadAsync(basePath + cornerName);
+        buildingComponents.corners.push(gltf.scene.clone());
+      } catch (error) {
+        console.warn(`Failed to load corner ${cornerName}:`, error);
+      }
+    }
+    
+    // Load door components
+    for (const doorName of doors) {
+      try {
+        const gltf = await loader.loadAsync(basePath + doorName);
+        buildingComponents.doors.push(gltf.scene.clone());
+      } catch (error) {
+        console.warn(`Failed to load door ${doorName}:`, error);
+      }
+    }
+    
+    // Load window components
+    for (const windowName of windows) {
+      try {
+        const gltf = await loader.loadAsync(basePath + windowName);
+        buildingComponents.windows.push(gltf.scene.clone());
+      } catch (error) {
+        console.warn(`Failed to load window ${windowName}:`, error);
+      }
+    }
+    
+    // Load roof components
+    for (const roofName of roofs) {
+      try {
+        const gltf = await loader.loadAsync(basePath + roofName);
+        buildingComponents.roofs.push(gltf.scene.clone());
+      } catch (error) {
+        console.warn(`Failed to load roof ${roofName}:`, error);
+      }
+    }
+    
+    // Load roof corner components
+    for (const roofCornerName of roofCorners) {
+      try {
+        const gltf = await loader.loadAsync(basePath + roofCornerName);
+        buildingComponents.roofCorners.push(gltf.scene.clone());
+      } catch (error) {
+        console.warn(`Failed to load roof corner ${roofCornerName}:`, error);
+      }
+    }
+    
+    // Generate 3-5 buildings scattered around the map
+    const numBuildings = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < numBuildings; i++) {
+      generateSingleBuilding(scene, buildingComponents, i);
+    }
+  };
+
+  // Generate a single procedural building
+  const generateSingleBuilding = (scene: THREE.Scene, components: { [key: string]: THREE.Group[] }, buildingIndex: number): void => {
+    if (components.walls.length === 0) return;
+    
+    // Choose building position (avoid center and other buildings)
+    const positions = [
+      { x: 25, z: 25 }, { x: -25, z: 25 }, { x: 25, z: -25 }, { x: -25, z: -25 },
+      { x: 35, z: 0 }, { x: -35, z: 0 }, { x: 0, z: 35 }, { x: 0, z: -35 }
+    ];
+    
+    if (buildingIndex >= positions.length) return;
+    const pos = positions[buildingIndex];
+    
+    // Building parameters
+    const width = 3 + Math.floor(Math.random() * 3); // 3-5 units wide
+    const depth = 3 + Math.floor(Math.random() * 3); // 3-5 units deep
+    const wallHeight = 2; // Standard wall height
+    
+    const buildingGroup = new THREE.Group();
+    buildingGroup.position.set(pos.x, 0, pos.z);
+    
+    // Choose consistent style (stone or wood)
+    const useWood = Math.random() < 0.5;
+    const wallStyle = useWood ? 1 : 0; // Index for wall style
+    
+    // Build walls
+    // Front wall (with door)
+    for (let x = 0; x < width; x++) {
+      let wallComponent;
+      if (x === Math.floor(width / 2) && components.doors.length > 0) {
+        // Place door in the middle of front wall
+        wallComponent = components.doors[wallStyle % components.doors.length].clone();
+      } else if (Math.random() < 0.3 && components.windows.length > 0) {
+        // 30% chance for window
+        wallComponent = components.windows[wallStyle % components.windows.length].clone();
+      } else {
+        wallComponent = components.walls[wallStyle % components.walls.length].clone();
+      }
+      
+      wallComponent.position.set(x * 2, 0, 0);
+      wallComponent.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(wallComponent);
+    }
+    
+    // Back wall
+    for (let x = 0; x < width; x++) {
+      let wallComponent;
+      if (Math.random() < 0.2 && components.windows.length > 0) {
+        // 20% chance for window on back wall
+        wallComponent = components.windows[wallStyle % components.windows.length].clone();
+      } else {
+        wallComponent = components.walls[wallStyle % components.walls.length].clone();
+      }
+      
+      wallComponent.position.set(x * 2, 0, (depth - 1) * 2);
+      wallComponent.rotation.y = Math.PI; // Rotate 180 degrees
+      wallComponent.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(wallComponent);
+    }
+    
+    // Left wall
+    for (let z = 1; z < depth - 1; z++) {
+      let wallComponent;
+      if (Math.random() < 0.3 && components.windows.length > 0) {
+        wallComponent = components.windows[wallStyle % components.windows.length].clone();
+      } else {
+        wallComponent = components.walls[wallStyle % components.walls.length].clone();
+      }
+      
+      wallComponent.position.set(0, 0, z * 2);
+      wallComponent.rotation.y = -Math.PI / 2; // Rotate 90 degrees left
+      wallComponent.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(wallComponent);
+    }
+    
+    // Right wall
+    for (let z = 1; z < depth - 1; z++) {
+      let wallComponent;
+      if (Math.random() < 0.3 && components.windows.length > 0) {
+        wallComponent = components.windows[wallStyle % components.windows.length].clone();
+      } else {
+        wallComponent = components.walls[wallStyle % components.walls.length].clone();
+      }
+      
+      wallComponent.position.set((width - 1) * 2, 0, z * 2);
+      wallComponent.rotation.y = Math.PI / 2; // Rotate 90 degrees right
+      wallComponent.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(wallComponent);
+    }
+    
+    // Add corners if available
+    if (components.corners.length > 0) {
+      const corner1 = components.corners[wallStyle % components.corners.length].clone();
+      corner1.position.set(0, 0, 0);
+      corner1.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(corner1);
+      
+      const corner2 = components.corners[wallStyle % components.corners.length].clone();
+      corner2.position.set((width - 1) * 2, 0, 0);
+      corner2.rotation.y = Math.PI / 2;
+      corner2.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(corner2);
+      
+      const corner3 = components.corners[wallStyle % components.corners.length].clone();
+      corner3.position.set((width - 1) * 2, 0, (depth - 1) * 2);
+      corner3.rotation.y = Math.PI;
+      corner3.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(corner3);
+      
+      const corner4 = components.corners[wallStyle % components.corners.length].clone();
+      corner4.position.set(0, 0, (depth - 1) * 2);
+      corner4.rotation.y = -Math.PI / 2;
+      corner4.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      buildingGroup.add(corner4);
+    }
+    
+    // Add roof
+    if (components.roofs.length > 0) {
+      for (let x = 0; x < width; x++) {
+        for (let z = 0; z < depth; z++) {
+          const roof = components.roofs[wallStyle % components.roofs.length].clone();
+          roof.position.set(x * 2, wallHeight, z * 2);
+          roof.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+          buildingGroup.add(roof);
+        }
+      }
+    }
+    
+    scene.add(buildingGroup);
+  };
+
   // Create a player model with animations
   const createPlayerModel = async (player: Player): Promise<{ model: THREE.Object3D; mixer?: THREE.AnimationMixer; actions?: { [key: string]: THREE.AnimationAction } }> => {
     const modelData = await loadPlayerModel();
@@ -655,7 +1003,7 @@ export default function Game() {
   }, [updateMovement]);
 
   // Initialize Three.js scene
-  const initThreeJS = () => {
+  const initThreeJS = async () => {
     if (!canvasRef.current) return;
 
     // Scene
@@ -704,33 +1052,8 @@ export default function Game() {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Add scenery objects (spheres) for better sense of movement
-    const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 16);
-    const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown color
-    
-    // Create a grid of spheres across the ground
-    for (let x = -40; x <= 40; x += 10) {
-      for (let z = -40; z <= 40; z += 10) {
-        if (x === 0 && z === 0) continue; // Skip center where player starts
-        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial.clone());
-        sphere.position.set(x + (Math.random() - 0.5) * 3, 0.5, z + (Math.random() - 0.5) * 3);
-        sphere.castShadow = true;
-        scene.add(sphere);
-      }
-    }
-
-    // Add some taller objects for variety
-    const cylinderGeometry = new THREE.CylinderGeometry(0.3, 0.3, 3, 8);
-    const cylinderMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 }); // Dark brown
-    
-    for (let i = 0; i < 20; i++) {
-      const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial.clone());
-      const x = (Math.random() - 0.5) * 80;
-      const z = (Math.random() - 0.5) * 80;
-      cylinder.position.set(x, 1.5, z);
-      cylinder.castShadow = true;
-      scene.add(cylinder);
-    }
+    // Load fantasy town kit assets for scenery
+    await loadFantasyTownScenery(scene);
 
     // Create local player with animations (async, so we'll add it after scene setup)
     const createLocalPlayer = async () => {
@@ -1159,11 +1482,11 @@ export default function Game() {
 
     const serverAddress = decodeURIComponent(server as string);
     
-    // Initialize Three.js
-    const cleanupThree = initThreeJS();
+    let cleanupThree: (() => void) | undefined;
     
-    // Initialize WebSocket connection (async)
+    // Initialize Three.js and WebSocket connection (async)
     const initGame = async () => {
+      cleanupThree = await initThreeJS();
       await initWebSocket(serverAddress);
     };
     initGame();
