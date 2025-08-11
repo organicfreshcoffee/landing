@@ -190,11 +190,11 @@ export class ServerSceneryGenerator {
       if (childHallway && 'length' in childHallway) { // It's a hallway
         console.log(`🚪 Child hallway ${childId}: parentDirection=${childHallway.parentDirection}, parentDoorOffset=${childHallway.parentDoorOffset}`);
         
-        const doorInfo = this.calculateDoorPosition(
+        // For child doors, calculate relative to the room's entrance direction
+        const doorInfo = this.calculateChildDoorPosition(
           room, 
           childHallway.parentDirection || "center", 
-          childHallway.parentDoorOffset || room.width / 2,
-          room.id === floorLayout.rootNode // Pass isRootRoom flag
+          childHallway.parentDoorOffset || room.width / 2
         );
         
         doors.push({
@@ -243,6 +243,79 @@ export class ServerSceneryGenerator {
       width: room.width,
       height: room.height
     };
+  }
+
+  /**
+   * Calculates child door position relative to the room's entrance direction
+   * Takes into account how the room is oriented relative to its parent
+   */
+  private static calculateChildDoorPosition(
+    room: any, 
+    childDirection: "left" | "right" | "center", 
+    childDoorOffset: number
+  ): { edgeIndex: number; position: number } {
+    let edgeIndex = 0;
+    let position = 0.5;
+    
+    // Get the room's own parent direction to understand entrance orientation
+    const roomParentDirection = room.parentDirection;
+    
+    // Map child direction relative to entrance direction
+    if (roomParentDirection === "right") {
+      // Room is to the RIGHT of its parent, so entrance is from the LEFT
+      // From entrance perspective facing into room: left=back, right=front, center=back
+      switch (childDirection) {
+        case "center":
+          edgeIndex = 2; // Top edge (back from entrance)
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
+          break;
+        case "left": 
+          edgeIndex = 2; // Top edge (back from entrance)
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
+          break;
+        case "right":
+          edgeIndex = 2; // Top edge (back from entrance) 
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
+          break;
+      }
+    } else if (roomParentDirection === "left") {
+      // Room is to the LEFT of its parent, so entrance is from the RIGHT
+      // From entrance perspective: left=front, right=back, center=left side
+      switch (childDirection) {
+        case "center":
+          edgeIndex = 3; // Left edge (left side from entrance)
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.height));
+          break;
+        case "left":
+          edgeIndex = 0; // Bottom edge (front from entrance)
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
+          break;
+        case "right":
+          edgeIndex = 2; // Top edge (back from entrance)
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
+          break;
+      }
+    } else { // roomParentDirection === "center"
+      // Room is BELOW its parent, so entrance is from the TOP
+      // From entrance perspective: left=left, right=right, center=back
+      switch (childDirection) {
+        case "center":
+          edgeIndex = 0; // Bottom edge (back from entrance)
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
+          break;
+        case "left":
+          edgeIndex = 3; // Left edge
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.height));
+          break;
+        case "right":
+          edgeIndex = 1; // Right edge
+          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.height));
+          break;
+      }
+    }
+    
+    console.log(`🚪 Child door calc (room entrance from ${roomParentDirection}): ${childDirection} -> edge ${edgeIndex}, offset ${childDoorOffset} -> position ${position}`);
+    return { edgeIndex, position };
   }
 
   /**
