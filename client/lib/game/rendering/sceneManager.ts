@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ServerSceneryGenerator } from './serverSceneryGenerator';
+import { ServerSceneryGenerator } from '../generators/serverSceneryGenerator';
 
 export class SceneManager {
   scene: THREE.Scene;

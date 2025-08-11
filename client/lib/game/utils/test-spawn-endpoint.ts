@@ -3,7 +3,7 @@
  * Run this with: npm run test:manual
  */
 
-import { DungeonApi } from './dungeonApi';
+import { DungeonApi } from '../network/dungeonApi';
 
 async function testSpawnEndpointCalling() {
   console.log('🔥 Testing Spawn Endpoint API Calls');

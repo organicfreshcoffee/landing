@@ -1,4 +1,4 @@
-import { GameMessage, GameState } from './types';
+import { GameMessage, GameState } from '../types';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;

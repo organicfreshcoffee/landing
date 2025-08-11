@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three-stdlib';
 import { SkeletonUtils } from 'three-stdlib';
-import { ModelData } from './types';
+import { ModelData } from '../types';
 
 export class ModelLoader {
   private static loader: GLTFLoader | null = null;

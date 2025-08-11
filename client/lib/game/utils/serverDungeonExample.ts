@@ -8,7 +8,8 @@
  * 4. Handle player movement between floors
  */
 
-import { ServerSceneryGenerator, ServerFloorGenerator, DungeonApi } from './index';
+import { ServerSceneryGenerator, ServerFloorGenerator } from '../generators';
+import { DungeonApi } from '../network';
 import * as THREE from 'three';
 
 /**

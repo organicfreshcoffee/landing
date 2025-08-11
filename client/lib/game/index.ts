@@ -1,12 +1,7 @@
+// Re-export all modules from their organized folders
 export * from './types';
-export * from './roomTypes';
-export { ModelLoader } from './modelLoader';
-export { PlayerManager } from './playerManager';
-export { ServerSceneryGenerator } from './serverSceneryGenerator';
-export { ServerFloorGenerator } from './serverFloorGenerator';
-export { ServerHallwayGenerator } from './serverHallwayGenerator';
-export { DungeonApi } from './dungeonApi';
-export { WebSocketManager } from './webSocketManager';
-export { MovementController } from './movementController';
-export { SceneManager } from './sceneManager';
-export { GameManager } from './gameManager';
+export * from './core';
+export * from './network';
+export * from './rendering';
+export * from './generators';
+export * from './utils';

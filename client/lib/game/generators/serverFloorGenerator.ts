@@ -1,55 +1,15 @@
 import * as THREE from 'three';
-import { DungeonApi, DungeonNode, FloorLayoutResponse } from './dungeonApi';
-
-// Updated interfaces to match server data structure
-export interface ServerRoom {
-  id: string;
-  name: string;
-  position: THREE.Vector2;
-  width: number;
-  height: number;
-  hasUpwardStair: boolean;
-  hasDownwardStair: boolean;
-  stairLocationX?: number;
-  stairLocationY?: number;
-  children: string[];
-  parentDirection?: "left" | "right" | "center";
-  parentDoorOffset?: number;
-  // Door position calculated from parentDirection and parentDoorOffset
-  doorPosition?: THREE.Vector2;
-  doorSide?: "top" | "right" | "bottom" | "left";
-}
-
-export interface ServerHallway {
-  id: string;
-  name: string;
-  length: number;
-  parentDirection?: "left" | "right" | "center";
-  parentDoorOffset?: number;
-  children: string[];
-  // Calculated fields for rendering
-  startPosition?: THREE.Vector2;
-  endPosition?: THREE.Vector2;
-  direction?: THREE.Vector2; // normalized direction vector
-  segments?: HallwaySegment[];
-}
-
-export interface HallwaySegment {
-  start: THREE.Vector2;
-  end: THREE.Vector2;
-  direction: THREE.Vector2;
-  length: number;
-}
-
-export interface ServerFloorLayout {
-  dungeonDagNodeName: string;
-  rooms: ServerRoom[];
-  hallways: ServerHallway[];
-  bounds: { width: number; height: number };
-  // Hierarchy map for easy lookup
-  nodeMap: Map<string, ServerRoom | ServerHallway>;
-  rootNode: string;
-}
+import { DungeonApi } from '../network/dungeonApi';
+import { 
+  DungeonNode, 
+  FloorLayoutResponse 
+} from '../types/api';
+import {
+  ServerRoom,
+  ServerHallway,
+  FloorHallwaySegment,
+  ServerFloorLayout
+} from '../types/generator';
 
 export class ServerFloorGenerator {
   /**
@@ -138,7 +98,6 @@ export class ServerFloorGenerator {
 
   /**
    * Calculate positions for all nodes using hierarchy-based layout algorithm
-   * LIMITED TO 2 LEVELS: root + children + grandchildren only
    */
   private static calculateHierarchicalLayout(
     nodeMap: Map<string, ServerRoom | ServerHallway>, 
@@ -153,17 +112,17 @@ export class ServerFloorGenerator {
       this.calculateDoorPosition(rootNode);
     }
 
-    console.log(`🎯 2-Level hierarchy: Root node: ${rootNodeName}, children: ${rootNode.children.length}`);
+    console.log(`🎯 Full hierarchy: Root node: ${rootNodeName}, children: ${rootNode.children.length}`);
     
     // Track positioned nodes
     const positioned = new Set<string>([rootNodeName]);
     
-    // Use breadth-first traversal limited to 2 levels deep
+    // Use breadth-first traversal to render entire tree
     const queue: Array<{
       nodeName: string; 
       parentNode: ServerRoom | ServerHallway;
       parentDirection: "left" | "right" | "center";
-      level: number; // Track depth level
+      level: number; // Track depth level for debugging
     }> = [];
 
     // Add root's children to queue (level 1)
@@ -193,27 +152,23 @@ export class ServerFloorGenerator {
       this.positionNodeRelativeToParent(currentNode, parentNode, parentDirection);
       positioned.add(nodeName);
 
-      // Only add children if we're not at max depth (level 2 = grandchildren)
-      if (level < 2) {
-        currentNode.children.forEach(childName => {
-          if (!positioned.has(childName)) {
-            const childNode = nodeMap.get(childName);
-            if (childNode) {
-              queue.push({
-                nodeName: childName,
-                parentNode: currentNode,
-                parentDirection: childNode.parentDirection || "center",
-                level: level + 1
-              });
-            }
+      // Add all children to the queue for processing
+      currentNode.children.forEach(childName => {
+        if (!positioned.has(childName)) {
+          const childNode = nodeMap.get(childName);
+          if (childNode) {
+            queue.push({
+              nodeName: childName,
+              parentNode: currentNode,
+              parentDirection: childNode.parentDirection || "center",
+              level: level + 1
+            });
           }
-        });
-      } else {
-        console.log(`🎯 Skipping children of ${nodeName} - reached max depth (level ${level})`);
-      }
+        }
+      });
     }
     
-    console.log(`🎯 Positioned ${positioned.size} nodes total (2 levels deep)`);
+    console.log(`🎯 Positioned ${positioned.size} nodes total (full tree)`);
   }
 
   /**
@@ -390,7 +345,7 @@ export class ServerFloorGenerator {
       let finalY = hallwayEnd.y + newDirection.y * forwardBackOffset;
       
       // Apply left/right adjustment (perpendicular to the new direction)
-      if (ROOM_LEFT_RIGHT_CLEARANCE !== 0) {
+      if (ROOM_LEFT_RIGHT_CLEARANCE) {
         const perpDirection = new THREE.Vector2(-newDirection.y, newDirection.x); // 90-degree rotation
         finalX += perpDirection.x * ROOM_LEFT_RIGHT_CLEARANCE;
         finalY += perpDirection.y * ROOM_LEFT_RIGHT_CLEARANCE;
@@ -419,7 +374,7 @@ export class ServerFloorGenerator {
       let startY = hallwayEnd.y + newDirection.y * forwardBackOffset;
       
       // Apply left/right adjustment (perpendicular to the new direction)
-      if (HALLWAY_LEFT_RIGHT_OFFSET !== 0) {
+      if (HALLWAY_LEFT_RIGHT_OFFSET) {
         const perpDirection = new THREE.Vector2(-newDirection.y, newDirection.x); // 90-degree rotation
         startX += perpDirection.x * HALLWAY_LEFT_RIGHT_OFFSET;
         startY += perpDirection.y * HALLWAY_LEFT_RIGHT_OFFSET;
@@ -509,7 +464,7 @@ export class ServerFloorGenerator {
 
     // For now, create a simple straight line segment
     // This can be enhanced later to handle more complex paths
-    const segment: HallwaySegment = {
+    const segment: FloorHallwaySegment = {
       start: hallway.startPosition,
       end: hallway.endPosition,
       direction: hallway.endPosition.clone().sub(hallway.startPosition).normalize(),
@@ -626,15 +581,16 @@ export class ServerFloorGenerator {
 
   /**
    * Get direction vector for hallway based on parentDirection
+   * Direction is relative to the entrance direction into the room
    */
   private static getDirectionVector(parentDirection: "left" | "right" | "center"): THREE.Vector2 {
     switch (parentDirection) {
       case "center":
-        return new THREE.Vector2(0, -1); // Down from bottom edge
+        return new THREE.Vector2(0, -1); // Down (straight ahead from entrance)
       case "left":
-        return new THREE.Vector2(-1, 0); // Left from left edge
+        return new THREE.Vector2(1, 0); // Right (left turn from entrance becomes right direction)
       case "right":
-        return new THREE.Vector2(1, 0); // Right from right edge
+        return new THREE.Vector2(-1, 0); // Left (right turn from entrance becomes left direction)
       default:
         return new THREE.Vector2(0, -1); // Default down
     }

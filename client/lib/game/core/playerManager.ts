@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { Player, PlayerUpdate, ModelData, PlayerAnimationData } from './types';
-import { ModelLoader } from './modelLoader';
+import { Player, PlayerUpdate, ModelData, PlayerAnimationData } from '../types';
+import { ModelLoader } from '../utils';
 
 export class PlayerManager {
   static generatePlayerColor(playerId: string): string {

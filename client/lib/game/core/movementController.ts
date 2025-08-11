@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PlayerAnimationData } from './types';
+import { PlayerAnimationData } from '../types';
 
 export class MovementController {
   private keysPressed = new Set<string>();

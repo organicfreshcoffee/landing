@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ServerRoom, ServerFloorLayout, ServerHallway } from './serverFloorGenerator';
+import { ServerRoom, ServerFloorLayout, ServerHallway } from '../types/generator';
 
 // Simplified door interface for server-based rooms
 export interface ServerDoor {

@@ -1,18 +1,9 @@
 import * as THREE from 'three';
-import { ServerFloorGenerator, ServerFloorLayout } from './serverFloorGenerator';
+import { ServerFloorGenerator } from './serverFloorGenerator';
+import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
 import { ServerHallwayGenerator } from './serverHallwayGenerator';
-import { RoomRenderer } from './roomRenderer';
-import { HallwayRenderer } from './hallwayRenderer';
-
-export interface ServerSceneryOptions {
-  cubeSize?: number;
-  roomHeight?: number;
-  hallwayHeight?: number;
-  wallColor?: number;
-  floorColor?: number;
-  hallwayWallColor?: number;
-  hallwayFloorColor?: number;
-}
+import { RoomRenderer } from '../rendering/roomRenderer';
+import { HallwayRenderer } from '../rendering/hallwayRenderer';
 
 export class ServerSceneryGenerator {
   /**
@@ -52,38 +43,23 @@ export class ServerSceneryGenerator {
       console.log(`📡 ServerSceneryGenerator: Fetching floor layout...`);
       const floorLayout = await ServerFloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
 
-      // 2-LEVEL DEEP: Filter to root + children + grandchildren
-      const rootNode = floorLayout.nodeMap.get(floorLayout.rootNode);
-      const immediateChildren = rootNode ? rootNode.children : [];
+      // Get all nodes for full tree rendering
+      const allNodeIds = Array.from(floorLayout.nodeMap.keys());
       
-      // Get grandchildren (children of immediate children)
-      const grandchildren: string[] = [];
-      immediateChildren.forEach(childId => {
-        const childNode = floorLayout.nodeMap.get(childId);
-        if (childNode) {
-          grandchildren.push(...childNode.children);
-        }
-      });
-      
-      // Combine all nodes to render (root + children + grandchildren)
-      const nodesToRender = [floorLayout.rootNode, ...immediateChildren, ...grandchildren];
-      
-      console.log(`🎯 2-Level Deep: Root: ${floorLayout.rootNode}`);
-      console.log(`🎯 Children: [${immediateChildren.join(', ')}]`);
-      console.log(`🎯 Grandchildren: [${grandchildren.join(', ')}]`);
-      console.log(`🎯 Total nodes to render: ${nodesToRender.length}`);
+      console.log(`🎯 Full Tree: Root: ${floorLayout.rootNode}`);
+      console.log(`🎯 Total nodes to render: ${allNodeIds.length}`);
       
       const roomsToRender = floorLayout.rooms.filter(room => 
-        nodesToRender.includes(room.id)
+        allNodeIds.includes(room.id)
       );
       
       const hallwaysToRender = floorLayout.hallways.filter(hallway =>
-        nodesToRender.includes(hallway.id)
+        allNodeIds.includes(hallway.id)
       );
 
-      console.log(`🎯 Rendering ${roomsToRender.length} rooms and ${hallwaysToRender.length} hallways (2 levels deep)`);
+      console.log(`🎯 Rendering ${roomsToRender.length} rooms and ${hallwaysToRender.length} hallways (full tree)`);
 
-      // Step 2: Generate hallway network based on filtered nodes
+      // Step 2: Generate hallway network based on all nodes
       const filteredLayout = {
         ...floorLayout,
         rooms: roomsToRender,
@@ -103,7 +79,7 @@ export class ServerSceneryGenerator {
         3 // hallway width
       );
 
-      // Step 3: Render filtered rooms (2 levels deep)
+      // Step 3: Render all rooms (full tree)
       const roomGroups: THREE.Group[] = [];
       roomsToRender.forEach((room) => {
         console.log(`🏠 Rendering room: ${room.id} at (${room.position.x}, ${room.position.y})`);
@@ -138,7 +114,7 @@ export class ServerSceneryGenerator {
       });
 
       console.log(`Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`2-Level Deep: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
+      console.log(`Full Tree: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
 
       return {
         floorLayout: filteredLayout,

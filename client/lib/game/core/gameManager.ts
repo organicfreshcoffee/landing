@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from './types';
-import { ModelLoader } from './modelLoader';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from '../types';
+import { ModelLoader } from '../utils';
 import { PlayerManager } from './playerManager';
-import { WebSocketManager } from './webSocketManager';
+import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
-import { SceneManager } from './sceneManager';
+import { SceneManager } from '../rendering';
 
 export class GameManager {
   private sceneManager: SceneManager;

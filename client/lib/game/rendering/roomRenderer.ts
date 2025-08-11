@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RoomShape, Door } from './roomTypes';
+import { RoomShape, Door } from '../types';
 
 export interface RoomRenderOptions {
   cubeSize?: number;
