@@ -89,12 +89,37 @@ export class HallwayRenderer {
       (segment.start.y + segment.end.y) / 2
     );
     
+    console.log(`🛤️ Hallway ${segment.id}: direction=(${direction.x.toFixed(2)}, ${direction.y.toFixed(2)}), length=${length.toFixed(2)}`);
+    console.log(`🛤️ Start: (${segment.start.x}, ${segment.start.y}), End: (${segment.end.x}, ${segment.end.y})`);
+    
     floor.position.set(floorCenter.x, -cubeSize * 0.01, floorCenter.y);
+    
     // Rotate floor to be horizontal (XZ plane)
-    floor.rotation.x = Math.PI / 2;
-    floor.rotation.z = Math.PI / 2;
-    // Rotate around Y axis to align with hallway direction
-    floor.rotation.y = Math.atan2(direction.x, direction.y);
+    floor.rotation.x = -Math.PI / 2;
+    
+    // Calculate Y rotation based on hallway direction
+    // We need to map 2D direction to 3D rotation around Y axis
+    let rotationY = Math.atan2(direction.y, direction.x);
+    
+    // Special handling for different directions to ensure floors are right-side up
+    if (Math.abs(direction.x) > Math.abs(direction.y)) {
+      // Horizontal hallway (left/right dominant)
+      if (direction.x < 0) {
+        // Going left - add 180° to flip
+        rotationY += Math.PI;
+      }
+    } else {
+      // Vertical hallway (up/down dominant)  
+      if (direction.y > 0) {
+        // Going up - add 180° to flip
+        rotationY += Math.PI;
+      }
+    }
+    
+    floor.rotation.y = rotationY;
+    
+    console.log(`🛤️ Floor rotation: x=${floor.rotation.x.toFixed(2)}, y=${floor.rotation.y.toFixed(2)} (${(rotationY * 180 / Math.PI).toFixed(1)}°)`);
+    
     floor.name = 'HallwayFloor';
     segmentGroup.add(floor);
 
