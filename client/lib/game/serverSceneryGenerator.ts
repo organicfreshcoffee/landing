@@ -175,16 +175,26 @@ export class ServerSceneryGenerator {
   }
 
   /**
-   * Clear all scenery from the scene
+   * Clear all scenery from the scene while preserving important objects
    */
   static clearScene(scene: THREE.Scene): void {
     const objectsToRemove: THREE.Object3D[] = [];
     
     scene.traverse((child) => {
-      if (child !== scene && child.type !== 'Camera' && child.type !== 'Light') {
+      // Preserve essential objects: scene, cameras, lights, and player models
+      if (child !== scene && 
+          child.type !== 'Camera' && 
+          child.type !== 'Light' &&
+          child.type !== 'AmbientLight' &&
+          child.type !== 'DirectionalLight' &&
+          child.type !== 'PointLight' &&
+          child.type !== 'HemisphereLight' &&
+          !child.userData.isPlayer) { // Preserve objects marked as players
         objectsToRemove.push(child);
       }
     });
+    
+    console.log(`🧹 Clearing ${objectsToRemove.length} scenery objects while preserving players and lighting`);
     
     objectsToRemove.forEach((obj) => {
       scene.remove(obj);

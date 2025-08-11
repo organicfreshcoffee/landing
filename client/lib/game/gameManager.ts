@@ -123,6 +123,10 @@ export class GameManager {
     localPlayerScene.rotation.z = 0; // Keep character upright
     localPlayerScene.castShadow = true;
     
+    // Mark as player object to prevent it from being cleared by scenery loading
+    localPlayerScene.userData.isPlayer = true;
+    localPlayerScene.userData.playerId = this.user?.uid || 'local';
+    
     this.sceneManager.addToScene(localPlayerScene);
     this.localPlayerRef.current = localPlayerScene;
   }

@@ -47,14 +47,56 @@ export class SceneManager {
   }
 
   private setupLighting(): void {
-    // Add basic lighting
+    // Enhanced lighting setup for better 3D visualization
+    
+    // Ambient light - provides soft overall illumination (slightly brighter)
     const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 10, 5);
+    // Main directional light - simulates sunlight (positioned closer for stronger effect)
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    directionalLight.position.set(10, 15, 5);
     directionalLight.castShadow = true;
+    
+    // Configure shadow properties for better quality
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -25;
+    directionalLight.shadow.camera.right = 25;
+    directionalLight.shadow.camera.top = 25;
+    directionalLight.shadow.camera.bottom = -25;
     this.scene.add(directionalLight);
+
+    // Secondary directional light for fill lighting (warmer tone)
+    const fillLight = new THREE.DirectionalLight(0xffd68a, 0.5);
+    fillLight.position.set(-8, 8, -3);
+    this.scene.add(fillLight);
+
+    // Point lights for dynamic lighting in rooms (positioned lower and brighter)
+    const pointLight1 = new THREE.PointLight(0xffaa44, 1.2, 20);
+    pointLight1.position.set(0, 6, 0);
+    pointLight1.castShadow = true;
+    pointLight1.shadow.mapSize.width = 1024;
+    pointLight1.shadow.mapSize.height = 1024;
+    this.scene.add(pointLight1);
+
+    const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 15);
+    pointLight2.position.set(8, 4, 8);
+    pointLight2.castShadow = true;
+    pointLight2.shadow.mapSize.width = 1024;
+    pointLight2.shadow.mapSize.height = 1024;
+    this.scene.add(pointLight2);
+
+    const pointLight3 = new THREE.PointLight(0xffffff, 0.8, 15);
+    pointLight3.position.set(-8, 4, -8);
+    pointLight3.castShadow = true;
+    pointLight3.shadow.mapSize.width = 1024;
+    pointLight3.shadow.mapSize.height = 1024;
+    this.scene.add(pointLight3);
+
+    console.log('🔆 Enhanced lighting system initialized with stronger illumination');
   }
 
   /**
@@ -110,25 +152,57 @@ export class SceneManager {
   private loadFallbackScenery(): void {
     // Create a simple ground plane
     const groundGeometry = new THREE.PlaneGeometry(100, 100);
-    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+    const groundMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x666666,
+      roughness: 0.8,
+      metalness: 0.2
+    });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // Add a simple test room
+    // Add walls with better materials to show lighting
     const wallGeometry = new THREE.BoxGeometry(1, 5, 20);
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    const wallMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0xdddddd,
+      roughness: 0.7,
+      metalness: 0.1
+    });
     
     const wall1 = new THREE.Mesh(wallGeometry, wallMaterial);
     wall1.position.set(-10, 2.5, 0);
+    wall1.castShadow = true;
+    wall1.receiveShadow = true;
     this.scene.add(wall1);
     
     const wall2 = new THREE.Mesh(wallGeometry, wallMaterial);
     wall2.position.set(10, 2.5, 0);
+    wall2.castShadow = true;
+    wall2.receiveShadow = true;
     this.scene.add(wall2);
 
-    console.log('Loaded fallback scenery');
+    // Add some test cubes to better show lighting effects
+    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+    const cubeMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0xff6b6b,
+      roughness: 0.5,
+      metalness: 0.3
+    });
+    
+    const cube1 = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    cube1.position.set(0, 1, 5);
+    cube1.castShadow = true;
+    cube1.receiveShadow = true;
+    this.scene.add(cube1);
+    
+    const cube2 = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    cube2.position.set(5, 1, -5);
+    cube2.castShadow = true;
+    cube2.receiveShadow = true;
+    this.scene.add(cube2);
+
+    console.log('Loaded enhanced fallback scenery with better lighting materials');
   }
 
   /**

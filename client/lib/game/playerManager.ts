@@ -45,6 +45,10 @@ export class PlayerManager {
     // Other players' positions come from server and are already correctly positioned
     this.positionPlayer(playerModel, player, undefined);
     
+    // Mark as player object to prevent it from being cleared by scenery loading
+    playerModel.userData.isPlayer = true;
+    playerModel.userData.playerId = player.id;
+    
     return animationResult;
   }
 
