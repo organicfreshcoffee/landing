@@ -53,19 +53,39 @@ export class ServerHallwayGenerator {
     const intersections: HallwayIntersection[] = [];
     const deadEnds: THREE.Vector2[] = [];
     
-    // Convert server hallways to segments
-    layout.hallways.forEach((hallway, index) => {
-      if (hallway.segments) {
+    // Convert server hallways to segments using their calculated positions
+    layout.hallways.forEach((hallway) => {
+      console.log(`🛤️ Processing hallway ${hallway.id} for segment generation`);
+      
+      if (hallway.segments && hallway.segments.length > 0) {
         hallway.segments.forEach((segment, segIndex) => {
           const hallwaySegment: HallwaySegment = {
             id: `${hallway.id}_segment_${segIndex}`,
-            start: segment.start,
-            end: segment.end,
+            start: segment.start.clone(),
+            end: segment.end.clone(),
             width: hallwayWidth,
             connectionIds: [hallway.id]
           };
           segments.push(hallwaySegment);
+          console.log(`✅ Created segment: ${hallwaySegment.id} from (${segment.start.x}, ${segment.start.y}) to (${segment.end.x}, ${segment.end.y})`);
         });
+      } else {
+        console.log(`⚠️ Hallway ${hallway.id} has no segments calculated`);
+        
+        // Fallback: if no segments calculated, try to create from start/end positions
+        if (hallway.startPosition && hallway.endPosition) {
+          const hallwaySegment: HallwaySegment = {
+            id: `${hallway.id}_fallback_segment`,
+            start: hallway.startPosition.clone(),
+            end: hallway.endPosition.clone(),
+            width: hallwayWidth,
+            connectionIds: [hallway.id]
+          };
+          segments.push(hallwaySegment);
+          console.log(`✅ Created fallback segment: ${hallwaySegment.id} from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y})`);
+        } else {
+          console.log(`❌ Hallway ${hallway.id} has no position data at all`);
+        }
       }
     });
 
@@ -145,22 +165,26 @@ export class ServerHallwayGenerator {
   private static getNodeConnectionPoint(node: ServerRoom | ServerHallway): ServerDoor | null {
     if (this.isRoom(node)) {
       const room = node as ServerRoom;
-      const position = room.doorPosition || room.position;
+      // For rooms, use the room center as the connection point
+      // The actual door positions are handled by the room renderer
       return {
-        position,
+        position: room.position.clone(),
         width: 2,
         roomId: room.id
       };
     } else {
       const hallway = node as ServerHallway;
-      const position = hallway.startPosition || hallway.endPosition;
-      if (!position) return null;
+      // For hallways, use the start position as the connection point
+      if (hallway.startPosition) {
+        return {
+          position: hallway.startPosition.clone(),
+          width: 2,
+          roomId: hallway.id
+        };
+      }
       
-      return {
-        position,
-        width: 2,
-        roomId: hallway.id
-      };
+      console.log(`⚠️ Hallway ${hallway.id} has no start position`);
+      return null;
     }
   }
 

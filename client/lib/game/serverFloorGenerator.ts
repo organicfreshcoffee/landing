@@ -153,31 +153,23 @@ export class ServerFloorGenerator {
       this.calculateDoorPosition(rootNode);
     }
 
-    // SIMPLIFIED: Only position immediate children of root
+    // SIMPLIFIED: Position immediate children based on their parentDirection and parentDoorOffset
     console.log(`🎯 Root node: ${rootNodeName}, children: ${rootNode.children}`);
     
-    rootNode.children.forEach((childName, index) => {
+    rootNode.children.forEach((childName) => {
       const childNode = nodeMap.get(childName);
       if (!childNode) return;
 
       console.log(`🎯 Positioning child: ${childName}, type: ${this.isRoom(childNode) ? 'room' : 'hallway'}`);
 
-      // Simple circular arrangement around root
-      const angle = (index / rootNode.children.length) * Math.PI * 2;
-      const radius = 40; // Fixed spacing
-      
-      const offsetX = Math.cos(angle) * radius;
-      const offsetY = Math.sin(angle) * radius;
-
-      if (this.isRoom(childNode)) {
-        childNode.position.set(offsetX, offsetY);
+      if (this.isHallway(childNode)) {
+        // For hallways, position them to start at the exact door location
+        this.positionHallwayFromParent(rootNode, childNode);
+      } else if (this.isRoom(childNode)) {
+        // For rooms that are children, position them at end of their parent hallway
+        // This would be used if we had room->hallway->room chains
+        childNode.position.set(0, 0); // Placeholder for now
         this.calculateDoorPosition(childNode);
-      } else {
-        // For hallways, set start and end positions
-        const hallway = childNode as ServerHallway;
-        hallway.startPosition = new THREE.Vector2(offsetX * 0.5, offsetY * 0.5);
-        hallway.endPosition = new THREE.Vector2(offsetX, offsetY);
-        this.calculateHallwaySegments(hallway);
       }
     });
 
@@ -422,6 +414,110 @@ export class ServerFloorGenerator {
    */
   private static isRoom(node: ServerRoom | ServerHallway): node is ServerRoom {
     return 'width' in node && 'height' in node;
+  }
+
+  /**
+   * Type guard to check if a node is a hallway
+   */
+  private static isHallway(node: ServerRoom | ServerHallway): node is ServerHallway {
+    return 'length' in node;
+  }
+
+  /**
+   * Position a hallway to start at the parent room's door with correct direction
+   */
+  private static positionHallwayFromParent(
+    parentRoom: ServerRoom | ServerHallway,
+    hallway: ServerHallway
+  ): void {
+    if (!this.isRoom(parentRoom)) {
+      console.log(`⚠️ Parent is not a room, cannot position hallway ${hallway.id}`);
+      return;
+    }
+
+    const room = parentRoom as ServerRoom;
+    const parentDirection = hallway.parentDirection || "center";
+    const parentDoorOffset = hallway.parentDoorOffset || (room.width / 2);
+
+    console.log(`🚪➡️ Positioning hallway ${hallway.id} from room ${room.id}`);
+    console.log(`🚪➡️ Direction: ${parentDirection}, Door offset: ${parentDoorOffset}, Hallway length: ${hallway.length}`);
+
+    // Calculate door position on the parent room
+    const doorPosition = this.calculateDoorWorldPosition(room, parentDirection, parentDoorOffset);
+    
+    // Calculate hallway direction vector based on parentDirection
+    const directionVector = this.getDirectionVector(parentDirection);
+    
+    // Set hallway start and end positions
+    hallway.startPosition = doorPosition.clone();
+    hallway.endPosition = doorPosition.clone().add(directionVector.multiplyScalar(hallway.length));
+    
+    console.log(`🚪➡️ Hallway ${hallway.id}:`);
+    console.log(`   Start: (${hallway.startPosition.x}, ${hallway.startPosition.y})`);
+    console.log(`   End: (${hallway.endPosition.x}, ${hallway.endPosition.y})`);
+    console.log(`   Direction vector: (${directionVector.x}, ${directionVector.y})`);
+
+    // Create hallway segments
+    this.calculateHallwaySegments(hallway);
+  }
+
+  /**
+   * Calculate the world position of a door on a room
+   */
+  private static calculateDoorWorldPosition(
+    room: ServerRoom,
+    parentDirection: "left" | "right" | "center",
+    parentDoorOffset: number
+  ): THREE.Vector2 {
+    const roomPos = room.position;
+    const halfWidth = room.width / 2;
+    const halfHeight = room.height / 2;
+
+    let doorLocalPos = new THREE.Vector2();
+
+    // Calculate door position relative to room center based on direction
+    switch (parentDirection) {
+      case "center":
+        // Bottom edge
+        doorLocalPos.set(
+          -halfWidth + parentDoorOffset,
+          -halfHeight
+        );
+        break;
+      case "left":
+        // Left edge
+        doorLocalPos.set(
+          -halfWidth,
+          -halfHeight + parentDoorOffset
+        );
+        break;
+      case "right":
+        // Right edge
+        doorLocalPos.set(
+          halfWidth,
+          -halfHeight + parentDoorOffset
+        );
+        break;
+    }
+
+    // Convert to world position
+    return roomPos.clone().add(doorLocalPos);
+  }
+
+  /**
+   * Get direction vector for hallway based on parentDirection
+   */
+  private static getDirectionVector(parentDirection: "left" | "right" | "center"): THREE.Vector2 {
+    switch (parentDirection) {
+      case "center":
+        return new THREE.Vector2(0, -1); // Down from bottom edge
+      case "left":
+        return new THREE.Vector2(-1, 0); // Left from left edge
+      case "right":
+        return new THREE.Vector2(1, 0); // Right from right edge
+      default:
+        return new THREE.Vector2(0, -1); // Default down
+    }
   }
 
   /**

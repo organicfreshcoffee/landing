@@ -75,6 +75,14 @@ export class ServerSceneryGenerator {
         hallways: hallwaysToRender
       };
       
+      console.log(`📊 Layout summary before hallway generation:`);
+      simplifiedLayout.hallways.forEach(h => {
+        console.log(`  Hallway ${h.id}: parentDirection=${h.parentDirection}, parentDoorOffset=${h.parentDoorOffset}, length=${h.length}`);
+        console.log(`    Start: ${h.startPosition ? `(${h.startPosition.x}, ${h.startPosition.y})` : 'not set'}`);
+        console.log(`    End: ${h.endPosition ? `(${h.endPosition.x}, ${h.endPosition.y})` : 'not set'}`);
+        console.log(`    Segments: ${h.segments ? h.segments.length : 0}`);
+      });
+      
       const hallwayNetwork = ServerHallwayGenerator.generateHallwayNetwork(
         simplifiedLayout,
         3 // hallway width
