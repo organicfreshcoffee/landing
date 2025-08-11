@@ -51,11 +51,7 @@ export interface ServerFloorLayout {
 
 export interface ServerSceneryOptions {
   cubeSize?: number;
-  roomHeight?: number;
-  hallwayHeight?: number;
-  wallColor?: number;
   floorColor?: number;
-  hallwayWallColor?: number;
   hallwayFloorColor?: number;
 }
 

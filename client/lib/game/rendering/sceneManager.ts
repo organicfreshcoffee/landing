@@ -131,9 +131,7 @@ export class SceneManager {
         this.serverAddress, 
         floorName, 
         {
-          cubeSize: 1,
-          roomHeight: 5,
-          hallwayHeight: 5
+          cubeSize: 1
         }
       );
       

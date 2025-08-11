@@ -26,18 +26,13 @@ export class ServerSceneryGenerator {
   }> {
     const {
       cubeSize = 1,
-      roomHeight = 5,
-      hallwayHeight = 5,
-      wallColor = 0xcccccc,
       floorColor = 0x666666,
-      hallwayWallColor = 0x888888,
       hallwayFloorColor = 0x444444
     } = options;
 
     console.log(`Starting server floor generation for: ${dungeonDagNodeName}`);
 
     console.log(`🏰 ServerSceneryGenerator: Starting floor generation for ${dungeonDagNodeName} from ${serverAddress}`);
-
     try {
       // Step 1: Get floor layout from server
       console.log(`📡 ServerSceneryGenerator: Fetching floor layout...`);
@@ -88,19 +83,17 @@ export class ServerSceneryGenerator {
         const shape = this.convertServerRoomToShape(room, filteredLayout);
         const roomGroup = RoomRenderer.renderRoom(scene, shape, {
           cubeSize,
-          roomHeight,
-          wallColor,
           floorColor,
           position: new THREE.Vector3(room.position.x, 0, room.position.y)
         });
         
-        // Add stairs if present
-        if (room.hasUpwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined) {
-          this.addStaircase(roomGroup, room.stairLocationX, room.stairLocationY, roomHeight, 'up');
-        }
-        if (room.hasDownwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined) {
-          this.addStaircase(roomGroup, room.stairLocationX, room.stairLocationY, roomHeight, 'down');
-        }
+        // TODO: Add stairs back if needed (removed room height dependency for now)
+        // if (room.hasUpwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined) {
+        //   this.addStaircase(roomGroup, room.stairLocationX, room.stairLocationY, 'up');
+        // }
+        // if (room.hasDownwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined) {
+        //   this.addStaircase(roomGroup, room.stairLocationX, room.stairLocationY, 'down');
+        // }
         
         roomGroups.push(roomGroup);
       });
@@ -108,8 +101,6 @@ export class ServerSceneryGenerator {
       // Step 4: Render hallway network
       const hallwayGroup = HallwayRenderer.renderHallwayNetwork(scene, hallwayNetwork, {
         cubeSize,
-        hallwayHeight,
-        wallColor: hallwayWallColor,
         floorColor: hallwayFloorColor
       });
 

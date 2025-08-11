@@ -26,11 +26,7 @@ export async function initializeServerDungeon(scene: THREE.Scene, serverAddress:
     console.log(`Loading floor layout for: ${spawnFloor}`);
     const floorResult = await ServerSceneryGenerator.generateServerFloor(scene, serverAddress, spawnFloor, {
       cubeSize: 1,
-      roomHeight: 5,
-      hallwayHeight: 5,
-      wallColor: 0xcccccc,
       floorColor: 0x666666,
-      hallwayWallColor: 0x888888,
       hallwayFloorColor: 0x444444
     });
 

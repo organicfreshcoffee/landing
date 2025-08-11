@@ -1,16 +1,15 @@
 import * as THREE from 'three';
 import { HallwayNetwork, HallwaySegment, HallwayIntersection } from '../types/generator';
+import { CubeFloorRenderer } from './cubeFloorRenderer';
 
 export interface HallwayRenderOptions {
   cubeSize?: number;
-  hallwayHeight?: number;
-  wallColor?: number;
   floorColor?: number;
 }
 
 export class HallwayRenderer {
   /**
-   * Renders the complete hallway network
+   * Renders the complete hallway network using only cube floors (no walls)
    */
   static renderHallwayNetwork(
     scene: THREE.Scene,
@@ -19,35 +18,31 @@ export class HallwayRenderer {
   ): THREE.Group {
     const {
       cubeSize = 1,
-      hallwayHeight = 5,
-      wallColor = 0x888888,
       floorColor = 0x444444
     } = options;
 
     const hallwayGroup = new THREE.Group();
     hallwayGroup.name = 'HallwayNetwork';
 
-    // Render all hallway segments
+    // Render all hallway segments as cube floors
     network.segments.forEach(segment => {
-      const segmentGroup = this.renderHallwaySegment(
+      const segmentGroup = this.renderHallwaySegmentFloor(
         segment, 
         cubeSize, 
-        hallwayHeight, 
-        wallColor, 
         floorColor
       );
       hallwayGroup.add(segmentGroup);
     });
 
-    // Render intersections
+    // Render intersections as cube floors
     network.intersections.forEach(intersection => {
-      const intersectionGroup = this.renderIntersection(intersection, cubeSize, hallwayHeight, wallColor, floorColor);
+      const intersectionGroup = this.renderIntersectionFloor(intersection, cubeSize, floorColor);
       hallwayGroup.add(intersectionGroup);
     });
 
-    // Render dead ends
+    // Render dead ends as cube floors
     network.deadEnds.forEach((deadEnd, index) => {
-      const deadEndGroup = this.renderDeadEnd(deadEnd, index, cubeSize, hallwayHeight, wallColor, floorColor);
+      const deadEndGroup = this.renderDeadEndFloor(deadEnd, index, cubeSize, floorColor);
       hallwayGroup.add(deadEndGroup);
     });
 
@@ -56,23 +51,17 @@ export class HallwayRenderer {
   }
 
   /**
-   * Renders a single hallway segment
+   * Renders a single hallway segment using cube floors only
    */
-  private static renderHallwaySegment(
+  private static renderHallwaySegmentFloor(
     segment: HallwaySegment,
     cubeSize: number,
-    hallwayHeight: number,
-    wallColor: number,
     floorColor: number
   ): THREE.Group {
     const segmentGroup = new THREE.Group();
     segmentGroup.name = `HallwaySegment_${segment.id}`;
 
-    const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: wallColor });
-    const floorMaterial = new THREE.MeshLambertMaterial({ color: floorColor });
-
-    // Calculate hallway direction and perpendicular
+    // Calculate hallway direction and length
     const direction = new THREE.Vector2(
       segment.end.x - segment.start.x,
       segment.end.y - segment.start.y
@@ -80,200 +69,188 @@ export class HallwayRenderer {
     const length = direction.length();
     direction.normalize();
 
-    const perpendicular = new THREE.Vector2(-direction.y, direction.x);
+    // Calculate how many cubes we need along the length
+    const numCubesLength = Math.ceil(length / cubeSize);
+    
+    // Calculate how many cubes we need for width (default hallway width of 3 units = 3 cubes)
+    const hallwayWidthInCubes = Math.max(1, Math.floor(segment.width / cubeSize));
+    
+    // Generate cube coordinates for this hallway segment
+    const coordinates: Array<{ x: number; y: number }> = [];
+    
+    for (let i = 0; i < numCubesLength; i++) {
+      // Progress along the hallway from start to end
+      const t = i / (numCubesLength - 1 || 1); // Avoid division by zero
+      
+      // Calculate center position at this point along the hallway
+      const centerX = segment.start.x + direction.x * length * t;
+      const centerY = segment.start.y + direction.y * length * t;
+      
+      // Convert to cube grid coordinates
+      const cubeX = Math.round(centerX / cubeSize);
+      const cubeY = Math.round(centerY / cubeSize);
+      
+      // Add cubes for the width of the hallway
+      for (let w = 0; w < hallwayWidthInCubes; w++) {
+        // Calculate perpendicular offset for width
+        const perpendicular = new THREE.Vector2(-direction.y, direction.x);
+        const widthOffset = (w - Math.floor(hallwayWidthInCubes / 2));
+        
+        const finalX = cubeX + Math.round(perpendicular.x * widthOffset);
+        const finalY = cubeY + Math.round(perpendicular.y * widthOffset);
+        
+        coordinates.push({ x: finalX, y: finalY });
+      }
+    }
 
-    // Render floor
-    const floorLength = length + cubeSize; // Extend slightly for seamless connections
-    const floorWidth = segment.width + cubeSize; // Extend slightly for wall coverage
-    
-    const floorGeometry = new THREE.PlaneGeometry(floorLength, floorWidth);
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    
-    // Position and orient floor
-    const floorCenter = new THREE.Vector2(
-      (segment.start.x + segment.end.x) / 2,
-      (segment.start.y + segment.end.y) / 2
+    // Remove duplicates (in case multiple calculations result in same cube)
+    const uniqueCoordinates = coordinates.filter((coord, index, arr) => 
+      arr.findIndex(c => c.x === coord.x && c.y === coord.y) === index
+    );
+
+    // Render all the cube floors
+    const floorGroup = CubeFloorRenderer.renderCubeFloorCoordinates(
+      uniqueCoordinates,
+      {
+        cubeSize,
+        floorColor,
+        yOffset: 0
+      }
     );
     
-    console.log(`🛤️ Hallway ${segment.id}: direction=(${direction.x.toFixed(2)}, ${direction.y.toFixed(2)}), length=${length.toFixed(2)}`);
-    console.log(`🛤️ Start: (${segment.start.x}, ${segment.start.y}), End: (${segment.end.x}, ${segment.end.y})`);
-    
-    floor.position.set(floorCenter.x, -cubeSize * 0.01, floorCenter.y);
-    
-    // Rotate floor to be horizontal (XZ plane)
-    floor.rotation.x = -Math.PI / 2;
-    
-    // Calculate Y rotation based on hallway direction
-    // We need to map 2D direction to 3D rotation around Y axis
-    let rotationY = Math.atan2(direction.y, direction.x);
-    
-    // Special handling for different directions to ensure floors are right-side up
-    if (Math.abs(direction.x) > Math.abs(direction.y)) {
-      // Horizontal hallway (left/right dominant)
-      if (direction.x < 0) {
-        // Going left - add 180° to flip
-        rotationY += Math.PI;
-      }
-    } else {
-      // Vertical hallway (up/down dominant)  
-      if (direction.y < 0) {
-        // Going down (center hallway) - apply specific rotations
-        floor.rotation.z = Math.PI / 2;  // 90° in Z
-        rotationY += Math.PI / 2;        // Additional 90° in Y
-      }
-    }
-    
-    floor.rotation.y = rotationY;
-    
-    console.log(`🛤️ Floor rotation: x=${floor.rotation.x.toFixed(2)}, y=${floor.rotation.y.toFixed(2)} (${(rotationY * 180 / Math.PI).toFixed(1)}°)`);
-    
-    floor.name = 'HallwayFloor';
-    segmentGroup.add(floor);
+    floorGroup.name = 'HallwayFloor';
+    segmentGroup.add(floorGroup);
 
-    // Render walls along both sides
-    const numCubes = Math.ceil(length / cubeSize);
-    const wallOffset = segment.width / 2;
-
-    // Left wall
-    for (let i = 0; i < numCubes; i++) {
-      const t = (i + 0.5) / numCubes;
-      const wallPos = new THREE.Vector2(
-        segment.start.x + direction.x * length * t,
-        segment.start.y + direction.y * length * t
-      );
-      
-      const leftWallPos = new THREE.Vector2(
-        wallPos.x + perpendicular.x * wallOffset,
-        wallPos.y + perpendicular.y * wallOffset
-      );
-
-      for (let y = 0; y < hallwayHeight; y++) {
-        const cube = new THREE.Mesh(cubeGeometry, wallMaterial);
-        cube.position.set(
-          leftWallPos.x,
-          (y * cubeSize) + (cubeSize / 2),
-          leftWallPos.y
-        );
-        cube.name = `LeftWall_${segment.id}_${i}_${y}`;
-        segmentGroup.add(cube);
-      }
-    }
-
-    // Right wall
-    for (let i = 0; i < numCubes; i++) {
-      const t = (i + 0.5) / numCubes;
-      const wallPos = new THREE.Vector2(
-        segment.start.x + direction.x * length * t,
-        segment.start.y + direction.y * length * t
-      );
-      
-      const rightWallPos = new THREE.Vector2(
-        wallPos.x - perpendicular.x * wallOffset,
-        wallPos.y - perpendicular.y * wallOffset
-      );
-
-      for (let y = 0; y < hallwayHeight; y++) {
-        const cube = new THREE.Mesh(cubeGeometry, wallMaterial);
-        cube.position.set(
-          rightWallPos.x,
-          (y * cubeSize) + (cubeSize / 2),
-          rightWallPos.y
-        );
-        cube.name = `RightWall_${segment.id}_${i}_${y}`;
-        segmentGroup.add(cube);
-      }
-    }
+    console.log(`🛤️ Hallway ${segment.id}: Rendered ${uniqueCoordinates.length} floor cubes`);
 
     return segmentGroup;
   }
 
   /**
-   * Renders a hallway intersection
+   * Renders a hallway intersection using cube floors only
    */
-  private static renderIntersection(
+  private static renderIntersectionFloor(
     intersection: HallwayIntersection,
     cubeSize: number,
-    hallwayHeight: number,
-    wallColor: number,
     floorColor: number
   ): THREE.Group {
     const intersectionGroup = new THREE.Group();
     intersectionGroup.name = `Intersection_${intersection.id}`;
 
-    const floorMaterial = new THREE.MeshLambertMaterial({ color: floorColor });
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: wallColor });
-    const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-
-    // Render circular floor for intersection
-    const floorRadius = intersection.radius + cubeSize;
-    const floorGeometry = new THREE.CircleGeometry(floorRadius, 16);
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    // Convert intersection center to cube coordinates
+    const centerCubeX = Math.round(intersection.position.x / cubeSize);
+    const centerCubeY = Math.round(intersection.position.y / cubeSize);
     
-    floor.position.set(intersection.position.x, -cubeSize * 0.01, intersection.position.y);
-    // Rotate floor to be horizontal (XZ plane)
-    floor.rotation.x = -Math.PI / 2;
-    floor.name = 'IntersectionFloor';
-    intersectionGroup.add(floor);
+    // Calculate radius in cube units
+    const radiusInCubes = Math.max(2, Math.ceil(intersection.radius / cubeSize));
+    
+    // Generate cube coordinates in a circular pattern
+    const coordinates: Array<{ x: number; y: number }> = [];
+    
+    for (let x = -radiusInCubes; x <= radiusInCubes; x++) {
+      for (let y = -radiusInCubes; y <= radiusInCubes; y++) {
+        const distance = Math.sqrt(x * x + y * y);
+        if (distance <= radiusInCubes) {
+          coordinates.push({ 
+            x: centerCubeX + x, 
+            y: centerCubeY + y 
+          });
+        }
+      }
+    }
 
-    // For now, skip adding intersection walls - let the hallway segments handle wall continuity
-    // The intersection detection in renderHallwaySegment should prevent overlapping walls
-    // TODO: Add sophisticated corner wall logic based on connected segment directions
+    // Render all the cube floors
+    const floorGroup = CubeFloorRenderer.renderCubeFloorCoordinates(
+      coordinates,
+      {
+        cubeSize,
+        floorColor,
+        yOffset: 0
+      }
+    );
+    
+    floorGroup.name = 'IntersectionFloor';
+    intersectionGroup.add(floorGroup);
+
+    console.log(`🔄 Intersection ${intersection.id}: Rendered ${coordinates.length} floor cubes`);
 
     return intersectionGroup;
   }
 
   /**
-   * Renders a dead-end hallway
+   * Renders a dead-end using cube floors only
    */
-  private static renderDeadEnd(
+  private static renderDeadEndFloor(
     deadEndPos: THREE.Vector2,
     index: number,
     cubeSize: number,
-    hallwayHeight: number,
-    wallColor: number,
     floorColor: number
   ): THREE.Group {
     const deadEndGroup = new THREE.Group();
     deadEndGroup.name = `DeadEnd_${index}`;
 
-    const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: wallColor });
-    const floorMaterial = new THREE.MeshLambertMaterial({ color: floorColor });
-
-    // Create a small circular area for the dead end
-    const deadEndRadius = 2;
+    // Convert dead end position to cube coordinates
+    const centerCubeX = Math.round(deadEndPos.x / cubeSize);
+    const centerCubeY = Math.round(deadEndPos.y / cubeSize);
     
-    // Floor
-    const floorGeometry = new THREE.CircleGeometry(deadEndRadius, 8);
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.position.set(deadEndPos.x, -cubeSize * 0.01, deadEndPos.y);
-    // Rotate floor to be horizontal (XZ plane)
-    floor.rotation.x = -Math.PI / 2;
-    floor.name = 'DeadEndFloor';
-    deadEndGroup.add(floor);
-
-    // Create walls around the dead end
-    const wallRadius = deadEndRadius + cubeSize / 2;
-    const numWallCubes = 8;
+    // Create a small area of cube floors (3x3 grid)
+    const coordinates: Array<{ x: number; y: number }> = [];
     
-    for (let i = 0; i < numWallCubes; i++) {
-      const angle = (i / numWallCubes) * Math.PI * 2;
-      const wallX = deadEndPos.x + Math.cos(angle) * wallRadius;
-      const wallZ = deadEndPos.y + Math.sin(angle) * wallRadius;
-      
-      for (let y = 0; y < hallwayHeight; y++) {
-        const cube = new THREE.Mesh(cubeGeometry, wallMaterial);
-        cube.position.set(
-          wallX,
-          (y * cubeSize) + (cubeSize / 2),
-          wallZ
-        );
-        cube.name = `DeadEndWall_${index}_${i}_${y}`;
-        deadEndGroup.add(cube);
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
+        coordinates.push({ 
+          x: centerCubeX + x, 
+          y: centerCubeY + y 
+        });
       }
     }
 
+    // Render all the cube floors
+    const floorGroup = CubeFloorRenderer.renderCubeFloorCoordinates(
+      coordinates,
+      {
+        cubeSize,
+        floorColor,
+        yOffset: 0
+      }
+    );
+    
+    floorGroup.name = 'DeadEndFloor';
+    deadEndGroup.add(floorGroup);
+
+    console.log(`⚫ Dead End ${index}: Rendered ${coordinates.length} floor cubes`);
+
     return deadEndGroup;
+  }
+
+  /**
+   * Alternative method to render a simple hallway between two points
+   * Useful for connecting rooms directly
+   */
+  static renderSimpleHallway(
+    scene: THREE.Scene,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    width: number = 3,
+    options: HallwayRenderOptions = {}
+  ): THREE.Group {
+    const {
+      cubeSize = 1,
+      floorColor = 0x444444
+    } = options;
+
+    // Create a simple hallway segment
+    const segment: HallwaySegment = {
+      id: `simple_${startX}_${startY}_${endX}_${endY}`,
+      start: new THREE.Vector2(startX, startY),
+      end: new THREE.Vector2(endX, endY),
+      width,
+      connectionIds: []
+    };
+
+    return this.renderHallwaySegmentFloor(segment, cubeSize, floorColor);
   }
 
   /**
@@ -298,5 +275,8 @@ export class HallwayRenderer {
       });
     });
     console.log(`Removed ${hallwaysToRemove.length} hallway network(s) from scene`);
+    
+    // Clean up shared cube renderer resources
+    CubeFloorRenderer.dispose();
   }
 }
