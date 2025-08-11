@@ -82,22 +82,35 @@ export class ServerHallwayGenerator {
 
   /**
    * Create connections based on the server hierarchy
+   * SIMPLIFIED: Only create connections for root and immediate children
    */
   private static createHierarchyBasedConnections(
     layout: ServerFloorLayout,
     connections: Connection[],
     hallwayWidth: number
   ): void {
+    console.log(`🔗 Creating connections for ${layout.nodeMap.size} nodes`);
+    
     // Process each node and create connections to its children
     layout.nodeMap.forEach((node, nodeName) => {
+      console.log(`🔗 Node ${nodeName} has ${node.children.length} children: [${node.children.join(', ')}]`);
+      
       node.children.forEach((childName: string) => {
         const childNode = layout.nodeMap.get(childName);
-        if (!childNode) return;
+        if (!childNode) {
+          console.log(`⚠️ Child node ${childName} not found in nodeMap`);
+          return;
+        }
+
+        console.log(`🔗 Creating connection: ${nodeName} -> ${childName}`);
 
         // Create connection between parent and child
         const connection = this.createDirectConnection(node, childNode, hallwayWidth);
         if (connection) {
           connections.push(connection);
+          console.log(`✅ Connection created: ${connection.fromRoomId} -> ${connection.toRoomId}`);
+        } else {
+          console.log(`❌ Failed to create connection: ${nodeName} -> ${childName}`);
         }
       });
     });

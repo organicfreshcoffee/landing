@@ -25,6 +25,7 @@ export interface ServerHallway {
   name: string;
   length: number;
   parentDirection?: "left" | "right" | "center";
+  parentDoorOffset?: number;
   children: string[];
   // Calculated fields for rendering
   startPosition?: THREE.Vector2;
@@ -111,6 +112,7 @@ export class ServerFloorGenerator {
           name: node.name,
           length: node.hallwayLength || 8,
           parentDirection: node.parentDirection,
+          parentDoorOffset: node.parentDoorOffset,
           children: node.children
         };
         hallways.push(hallway);
@@ -136,6 +138,7 @@ export class ServerFloorGenerator {
 
   /**
    * Calculate positions for all nodes using hierarchy-based layout algorithm
+   * SIMPLIFIED: Only render root room and immediate children
    */
   private static calculateHierarchicalLayout(
     nodeMap: Map<string, ServerRoom | ServerHallway>, 
@@ -150,6 +153,35 @@ export class ServerFloorGenerator {
       this.calculateDoorPosition(rootNode);
     }
 
+    // SIMPLIFIED: Only position immediate children of root
+    console.log(`🎯 Root node: ${rootNodeName}, children: ${rootNode.children}`);
+    
+    rootNode.children.forEach((childName, index) => {
+      const childNode = nodeMap.get(childName);
+      if (!childNode) return;
+
+      console.log(`🎯 Positioning child: ${childName}, type: ${this.isRoom(childNode) ? 'room' : 'hallway'}`);
+
+      // Simple circular arrangement around root
+      const angle = (index / rootNode.children.length) * Math.PI * 2;
+      const radius = 40; // Fixed spacing
+      
+      const offsetX = Math.cos(angle) * radius;
+      const offsetY = Math.sin(angle) * radius;
+
+      if (this.isRoom(childNode)) {
+        childNode.position.set(offsetX, offsetY);
+        this.calculateDoorPosition(childNode);
+      } else {
+        // For hallways, set start and end positions
+        const hallway = childNode as ServerHallway;
+        hallway.startPosition = new THREE.Vector2(offsetX * 0.5, offsetY * 0.5);
+        hallway.endPosition = new THREE.Vector2(offsetX, offsetY);
+        this.calculateHallwaySegments(hallway);
+      }
+    });
+
+    /* COMMENTED OUT: Complex recursive hierarchy traversal
     // Track positioned nodes
     const positioned = new Set<string>([rootNodeName]);
     
@@ -198,6 +230,7 @@ export class ServerFloorGenerator {
         }
       });
     }
+    */
   }
 
   /**

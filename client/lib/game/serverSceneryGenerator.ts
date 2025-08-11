@@ -52,17 +52,41 @@ export class ServerSceneryGenerator {
       console.log(`📡 ServerSceneryGenerator: Fetching floor layout...`);
       const floorLayout = await ServerFloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
 
-      // Step 2: Generate hallway network based on server room connections
+      // SIMPLIFIED: Filter to only root and immediate children
+      const rootNode = floorLayout.nodeMap.get(floorLayout.rootNode);
+      const immediateChildren = rootNode ? rootNode.children : [];
+      
+      console.log(`🎯 Root: ${floorLayout.rootNode}, Children: ${immediateChildren}`);
+      
+      const roomsToRender = floorLayout.rooms.filter(room => 
+        room.id === floorLayout.rootNode || immediateChildren.includes(room.id)
+      );
+      
+      const hallwaysToRender = floorLayout.hallways.filter(hallway =>
+        immediateChildren.includes(hallway.id)
+      );
+
+      console.log(`🎯 Rendering ${roomsToRender.length} rooms and ${hallwaysToRender.length} hallways`);
+
+      // Step 2: Generate hallway network based on filtered nodes
+      const simplifiedLayout = {
+        ...floorLayout,
+        rooms: roomsToRender,
+        hallways: hallwaysToRender
+      };
+      
       const hallwayNetwork = ServerHallwayGenerator.generateHallwayNetwork(
-        floorLayout,
+        simplifiedLayout,
         3 // hallway width
       );
 
-      // Step 3: Render all rooms
+      // Step 3: Render filtered rooms only
       const roomGroups: THREE.Group[] = [];
-      floorLayout.rooms.forEach((room) => {
+      roomsToRender.forEach((room) => {
+        console.log(`🏠 Rendering room: ${room.id} at (${room.position.x}, ${room.position.y})`);
+        
         // Convert server room to renderable shape
-        const shape = this.convertServerRoomToShape(room);
+        const shape = this.convertServerRoomToShape(room, simplifiedLayout);
         const roomGroup = RoomRenderer.renderRoom(scene, shape, {
           cubeSize,
           roomHeight,
@@ -91,10 +115,11 @@ export class ServerSceneryGenerator {
       });
 
       console.log(`Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`Generated ${floorLayout.rooms.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
+      console.log(`SIMPLIFIED: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
+      console.log(`Root: ${floorLayout.rootNode}, Immediate children: ${immediateChildren}`);
 
       return {
-        floorLayout,
+        floorLayout: simplifiedLayout,
         hallwayNetwork,
         roomGroups,
         hallwayGroup
@@ -108,7 +133,7 @@ export class ServerSceneryGenerator {
   /**
    * Converts a server room to a shape format compatible with RoomRenderer
    */
-  private static convertServerRoomToShape(room: any) {
+  private static convertServerRoomToShape(room: any, floorLayout: ServerFloorLayout) {
     const halfWidth = room.width / 2;
     const halfHeight = room.height / 2;
 
@@ -128,49 +153,63 @@ export class ServerSceneryGenerator {
       { start: vertices[3], end: vertices[0], length: room.height }   // Left
     ];
 
-    // Generate doors based on server data
+    // Generate doors based on server data and hierarchy
     const doors = [];
+    console.log(`🚪 Generating doors for room ${room.id} (${room.width}x${room.height})`);
+    console.log(`🚪 Room children: [${room.children.join(', ')}]`);
+    console.log(`🚪 Room parentDirection: ${room.parentDirection}, parentDoorOffset: ${room.parentDoorOffset}`);
+    console.log(`🚪 Is root room: ${room.id === floorLayout.rootNode}`);
     
-    if (room.parentDoorOffset && room.doorSide) {
-      let edgeIndex = 0;
-      let position = 0.5;
+    // For each child hallway, create a door
+    room.children.forEach((childId: string) => {
+      const childHallway = floorLayout.nodeMap.get(childId);
+      console.log(`🚪 Processing child ${childId}:`, childHallway ? 'found' : 'NOT FOUND');
       
-      // Determine edge index based on door side
-      switch (room.doorSide) {
-        case "bottom":
-          edgeIndex = 0;
-          position = room.parentDoorOffset / room.width;
-          break;
-        case "right":
-          edgeIndex = 1;
-          position = room.parentDoorOffset / room.height;
-          break;
-        case "top":
-          edgeIndex = 2;
-          position = 1 - (room.parentDoorOffset / room.width);
-          break;
-        case "left":
-          edgeIndex = 3;
-          position = 1 - (room.parentDoorOffset / room.height);
-          break;
+      if (childHallway && 'length' in childHallway) { // It's a hallway
+        console.log(`🚪 Child hallway ${childId}: parentDirection=${childHallway.parentDirection}, parentDoorOffset=${childHallway.parentDoorOffset}`);
+        
+        const doorInfo = this.calculateDoorPosition(
+          room, 
+          childHallway.parentDirection || "center", 
+          childHallway.parentDoorOffset || room.width / 2
+        );
+        
+        doors.push({
+          edgeIndex: doorInfo.edgeIndex,
+          position: doorInfo.position,
+          width: 2,
+          connectionType: 'child',
+          connectedTo: childId
+        });
+        
+        console.log(`✅ Added child door: edge ${doorInfo.edgeIndex}, position ${doorInfo.position} for ${childId}`);
+      } else if (childHallway) {
+        console.log(`🚪 Child ${childId} is a room, not a hallway - skipping door`);
       }
+    });
+    
+    // For non-root rooms, also add a door for the parent connection
+    if (room.id !== floorLayout.rootNode && room.parentDirection !== undefined && room.parentDoorOffset !== undefined) {
+      console.log(`🚪 Adding parent door: parentDirection=${room.parentDirection}, parentDoorOffset=${room.parentDoorOffset}`);
       
-      // Ensure position is within valid range
-      position = Math.max(0.1, Math.min(0.9, position));
+      const parentDoorInfo = this.calculateDoorPosition(
+        room, 
+        room.parentDirection, 
+        room.parentDoorOffset
+      );
       
       doors.push({
-        edgeIndex,
-        position,
-        width: 2
+        edgeIndex: parentDoorInfo.edgeIndex,
+        position: parentDoorInfo.position,
+        width: 2,
+        connectionType: 'parent',
+        connectedTo: 'parent'
       });
-    } else {
-      // Fallback: place door on bottom edge at center
-      doors.push({
-        edgeIndex: 0,
-        position: 0.5,
-        width: 2
-      });
+      
+      console.log(`🚪 Added parent door: edge ${parentDoorInfo.edgeIndex}, position ${parentDoorInfo.position}`);
     }
+    
+    console.log(`🚪 Total doors for room ${room.id}: ${doors.length}`);
 
     return {
       vertices,
@@ -180,6 +219,49 @@ export class ServerSceneryGenerator {
       width: room.width,
       height: room.height
     };
+  }
+
+  /**
+   * Calculates door position based on parentDirection and parentDoorOffset
+   * For a rectangular room:
+   * - parentDirection determines which side of the room the door is on relative to the entry direction
+   * - parentDoorOffset is the distance along that side from the start of the edge
+   */
+  private static calculateDoorPosition(
+    room: any, 
+    parentDirection: "left" | "right" | "center", 
+    parentDoorOffset: number
+  ): { edgeIndex: number; position: number } {
+    // For the root room, we use arbitrary mapping since there's no "entry direction"
+    // For non-root rooms, directions are relative to how they were entered
+    
+    let edgeIndex = 0;
+    let position = 0.5;
+    
+    // Map parentDirection to room edges
+    // Assuming the room was "entered" from the bottom (arbitrary for root room)
+    switch (parentDirection) {
+      case "center":
+        // Center means the same side as entry - for root room, use bottom edge
+        edgeIndex = 0; // Bottom edge
+        position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.width));
+        break;
+        
+      case "left":
+        // Left side relative to entry direction - use left edge
+        edgeIndex = 3; // Left edge  
+        position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
+        break;
+        
+      case "right":
+        // Right side relative to entry direction - use right edge
+        edgeIndex = 1; // Right edge
+        position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
+        break;
+    }
+    
+    console.log(`🚪 Door calc: ${parentDirection} -> edge ${edgeIndex}, offset ${parentDoorOffset} -> position ${position}`);
+    return { edgeIndex, position };
   }
 
   /**
