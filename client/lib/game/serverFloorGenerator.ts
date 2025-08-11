@@ -138,7 +138,7 @@ export class ServerFloorGenerator {
 
   /**
    * Calculate positions for all nodes using hierarchy-based layout algorithm
-   * SIMPLIFIED: Only render root room and immediate children
+   * LIMITED TO 2 LEVELS: root + children + grandchildren only
    */
   private static calculateHierarchicalLayout(
     nodeMap: Map<string, ServerRoom | ServerHallway>, 
@@ -153,76 +153,67 @@ export class ServerFloorGenerator {
       this.calculateDoorPosition(rootNode);
     }
 
-    // SIMPLIFIED: Position immediate children based on their parentDirection and parentDoorOffset
-    console.log(`🎯 Root node: ${rootNodeName}, children: ${rootNode.children}`);
+    console.log(`🎯 2-Level hierarchy: Root node: ${rootNodeName}, children: ${rootNode.children.length}`);
     
-    rootNode.children.forEach((childName) => {
-      const childNode = nodeMap.get(childName);
-      if (!childNode) return;
-
-      console.log(`🎯 Positioning child: ${childName}, type: ${this.isRoom(childNode) ? 'room' : 'hallway'}`);
-
-      if (this.isHallway(childNode)) {
-        // For hallways, position them to start at the exact door location
-        this.positionHallwayFromParent(rootNode, childNode);
-      } else if (this.isRoom(childNode)) {
-        // For rooms that are children, position them at end of their parent hallway
-        // This would be used if we had room->hallway->room chains
-        childNode.position.set(0, 0); // Placeholder for now
-        this.calculateDoorPosition(childNode);
-      }
-    });
-
-    /* COMMENTED OUT: Complex recursive hierarchy traversal
     // Track positioned nodes
     const positioned = new Set<string>([rootNodeName]);
     
-    // Use breadth-first traversal to position all connected nodes
+    // Use breadth-first traversal limited to 2 levels deep
     const queue: Array<{
       nodeName: string; 
       parentNode: ServerRoom | ServerHallway;
       parentDirection: "left" | "right" | "center";
+      level: number; // Track depth level
     }> = [];
 
-    // Add root's children to queue
+    // Add root's children to queue (level 1)
     rootNode.children.forEach(childName => {
       const childNode = nodeMap.get(childName);
       if (childNode) {
         queue.push({
           nodeName: childName,
           parentNode: rootNode,
-          parentDirection: childNode.parentDirection || "center"
+          parentDirection: childNode.parentDirection || "center",
+          level: 1
         });
       }
     });
 
     while (queue.length > 0) {
-      const { nodeName, parentNode, parentDirection } = queue.shift()!;
+      const { nodeName, parentNode, parentDirection, level } = queue.shift()!;
       
       if (positioned.has(nodeName)) continue;
       
       const currentNode = nodeMap.get(nodeName);
       if (!currentNode) continue;
 
+      console.log(`🎯 Positioning ${nodeName} (level ${level}) relative to ${parentNode.id} with direction ${parentDirection}`);
+
       // Position this node relative to its parent
       this.positionNodeRelativeToParent(currentNode, parentNode, parentDirection);
       positioned.add(nodeName);
 
-      // Add this node's children to the queue
-      currentNode.children.forEach(childName => {
-        if (!positioned.has(childName)) {
-          const childNode = nodeMap.get(childName);
-          if (childNode) {
-            queue.push({
-              nodeName: childName,
-              parentNode: currentNode,
-              parentDirection: childNode.parentDirection || "center"
-            });
+      // Only add children if we're not at max depth (level 2 = grandchildren)
+      if (level < 2) {
+        currentNode.children.forEach(childName => {
+          if (!positioned.has(childName)) {
+            const childNode = nodeMap.get(childName);
+            if (childNode) {
+              queue.push({
+                nodeName: childName,
+                parentNode: currentNode,
+                parentDirection: childNode.parentDirection || "center",
+                level: level + 1
+              });
+            }
           }
-        }
-      });
+        });
+      } else {
+        console.log(`🎯 Skipping children of ${nodeName} - reached max depth (level ${level})`);
+      }
     }
-    */
+    
+    console.log(`🎯 Positioned ${positioned.size} nodes total (2 levels deep)`);
   }
 
   /**
@@ -233,14 +224,19 @@ export class ServerFloorGenerator {
     parentNode: ServerRoom | ServerHallway,
     direction: "left" | "right" | "center"
   ): void {
-    const SPACING = 25; // Base spacing between nodes
+    console.log(`🎯 Positioning ${node.id} relative to ${parentNode.id} (${this.isRoom(parentNode) ? 'room' : 'hallway'}) with direction ${direction}`);
     
-    if (this.isRoom(parentNode)) {
-      // Parent is a room - position child from room edge
-      this.positionFromRoom(node, parentNode, direction, SPACING);
+    if (this.isRoom(parentNode) && this.isHallway(node)) {
+      // Parent is room, child is hallway - use precise door positioning
+      this.positionHallwayFromParent(parentNode, node as ServerHallway);
+    } else if (this.isRoom(parentNode)) {
+      // Parent is room, child is room - use traditional positioning
+      const SPACING = 25;
+      this.positionFromRoom(node, parentNode as ServerRoom, direction, SPACING);
     } else {
-      // Parent is a hallway - position child from hallway end
-      this.positionFromHallway(node, parentNode, direction, SPACING);
+      // Parent is hallway - position child from hallway end
+      const SPACING = 25;
+      this.positionFromHallway(node, parentNode as ServerHallway, direction, SPACING);
     }
 
     // Calculate door position for rooms
@@ -322,10 +318,24 @@ export class ServerFloorGenerator {
     direction: "left" | "right" | "center",
     spacing: number
   ): void {
-    if (!parentHallway.endPosition || !parentHallway.direction) return;
-
+    if (!parentHallway.endPosition) {
+      console.log(`⚠️ Parent hallway ${parentHallway.id} has no end position, cannot position child ${node.id}`);
+      return;
+    }
+    
     const hallwayEnd = parentHallway.endPosition;
-    const hallwayDir = parentHallway.direction;
+    
+    // Get or calculate hallway direction
+    let hallwayDir = parentHallway.direction;
+    if (!hallwayDir && parentHallway.startPosition) {
+      // Calculate direction from start to end
+      hallwayDir = parentHallway.endPosition.clone().sub(parentHallway.startPosition).normalize();
+    }
+    
+    if (!hallwayDir) {
+      console.log(`⚠️ Cannot determine direction for hallway ${parentHallway.id}, using default direction`);
+      hallwayDir = new THREE.Vector2(0, -1); // Default down
+    }
     
     let newDirection = hallwayDir.clone();
     
@@ -345,11 +355,14 @@ export class ServerFloorGenerator {
         break;
     }
 
+    console.log(`🎯 Positioning ${node.id} from hallway ${parentHallway.id} with direction ${direction}`);
+
     if (this.isRoom(node)) {
       node.position.set(
         hallwayEnd.x + newDirection.x * spacing,
         hallwayEnd.y + newDirection.y * spacing
       );
+      console.log(`🎯 Room ${node.id} positioned at (${node.position.x}, ${node.position.y})`);
     } else {
       // For hallways connecting to hallways
       const hallway = node as ServerHallway;
@@ -359,6 +372,8 @@ export class ServerFloorGenerator {
         hallwayEnd.y + newDirection.y * hallway.length
       );
       hallway.direction = newDirection;
+      
+      console.log(`🎯 Hallway ${hallway.id} positioned from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y})`);
       
       this.calculateHallwaySegments(hallway);
     }

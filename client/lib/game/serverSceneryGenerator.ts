@@ -52,31 +52,46 @@ export class ServerSceneryGenerator {
       console.log(`📡 ServerSceneryGenerator: Fetching floor layout...`);
       const floorLayout = await ServerFloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
 
-      // SIMPLIFIED: Filter to only root and immediate children
+      // 2-LEVEL DEEP: Filter to root + children + grandchildren
       const rootNode = floorLayout.nodeMap.get(floorLayout.rootNode);
       const immediateChildren = rootNode ? rootNode.children : [];
       
-      console.log(`🎯 Root: ${floorLayout.rootNode}, Children: ${immediateChildren}`);
+      // Get grandchildren (children of immediate children)
+      const grandchildren: string[] = [];
+      immediateChildren.forEach(childId => {
+        const childNode = floorLayout.nodeMap.get(childId);
+        if (childNode) {
+          grandchildren.push(...childNode.children);
+        }
+      });
+      
+      // Combine all nodes to render (root + children + grandchildren)
+      const nodesToRender = [floorLayout.rootNode, ...immediateChildren, ...grandchildren];
+      
+      console.log(`🎯 2-Level Deep: Root: ${floorLayout.rootNode}`);
+      console.log(`🎯 Children: [${immediateChildren.join(', ')}]`);
+      console.log(`🎯 Grandchildren: [${grandchildren.join(', ')}]`);
+      console.log(`🎯 Total nodes to render: ${nodesToRender.length}`);
       
       const roomsToRender = floorLayout.rooms.filter(room => 
-        room.id === floorLayout.rootNode || immediateChildren.includes(room.id)
+        nodesToRender.includes(room.id)
       );
       
       const hallwaysToRender = floorLayout.hallways.filter(hallway =>
-        immediateChildren.includes(hallway.id)
+        nodesToRender.includes(hallway.id)
       );
 
-      console.log(`🎯 Rendering ${roomsToRender.length} rooms and ${hallwaysToRender.length} hallways`);
+      console.log(`🎯 Rendering ${roomsToRender.length} rooms and ${hallwaysToRender.length} hallways (2 levels deep)`);
 
       // Step 2: Generate hallway network based on filtered nodes
-      const simplifiedLayout = {
+      const filteredLayout = {
         ...floorLayout,
         rooms: roomsToRender,
         hallways: hallwaysToRender
       };
       
       console.log(`📊 Layout summary before hallway generation:`);
-      simplifiedLayout.hallways.forEach(h => {
+      filteredLayout.hallways.forEach(h => {
         console.log(`  Hallway ${h.id}: parentDirection=${h.parentDirection}, parentDoorOffset=${h.parentDoorOffset}, length=${h.length}`);
         console.log(`    Start: ${h.startPosition ? `(${h.startPosition.x}, ${h.startPosition.y})` : 'not set'}`);
         console.log(`    End: ${h.endPosition ? `(${h.endPosition.x}, ${h.endPosition.y})` : 'not set'}`);
@@ -84,17 +99,17 @@ export class ServerSceneryGenerator {
       });
       
       const hallwayNetwork = ServerHallwayGenerator.generateHallwayNetwork(
-        simplifiedLayout,
+        filteredLayout,
         3 // hallway width
       );
 
-      // Step 3: Render filtered rooms only
+      // Step 3: Render filtered rooms (2 levels deep)
       const roomGroups: THREE.Group[] = [];
       roomsToRender.forEach((room) => {
         console.log(`🏠 Rendering room: ${room.id} at (${room.position.x}, ${room.position.y})`);
         
         // Convert server room to renderable shape
-        const shape = this.convertServerRoomToShape(room, simplifiedLayout);
+        const shape = this.convertServerRoomToShape(room, filteredLayout);
         const roomGroup = RoomRenderer.renderRoom(scene, shape, {
           cubeSize,
           roomHeight,
@@ -123,11 +138,10 @@ export class ServerSceneryGenerator {
       });
 
       console.log(`Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`SIMPLIFIED: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
-      console.log(`Root: ${floorLayout.rootNode}, Immediate children: ${immediateChildren}`);
+      console.log(`2-Level Deep: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
 
       return {
-        floorLayout: simplifiedLayout,
+        floorLayout: filteredLayout,
         hallwayNetwork,
         roomGroups,
         hallwayGroup

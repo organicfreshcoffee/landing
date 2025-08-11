@@ -90,6 +90,10 @@ export class HallwayRenderer {
     );
     
     floor.position.set(floorCenter.x, -cubeSize * 0.01, floorCenter.y);
+    // Rotate floor to be horizontal (XZ plane)
+    floor.rotation.x = Math.PI / 2;
+    floor.rotation.z = Math.PI / 2;
+    // Rotate around Y axis to align with hallway direction
     floor.rotation.y = Math.atan2(direction.x, direction.y);
     floor.name = 'HallwayFloor';
     segmentGroup.add(floor);
@@ -172,6 +176,8 @@ export class HallwayRenderer {
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     
     floor.position.set(intersection.position.x, -cubeSize * 0.01, intersection.position.y);
+    // Rotate floor to be horizontal (XZ plane)
+    floor.rotation.x = -Math.PI / 2;
     floor.name = 'IntersectionFloor';
     intersectionGroup.add(floor);
 
@@ -206,6 +212,8 @@ export class HallwayRenderer {
     const floorGeometry = new THREE.CircleGeometry(deadEndRadius, 8);
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.position.set(deadEndPos.x, -cubeSize * 0.01, deadEndPos.y);
+    // Rotate floor to be horizontal (XZ plane)
+    floor.rotation.x = -Math.PI / 2;
     floor.name = 'DeadEndFloor';
     deadEndGroup.add(floor);
 
