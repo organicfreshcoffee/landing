@@ -110,9 +110,10 @@ export class HallwayRenderer {
       }
     } else {
       // Vertical hallway (up/down dominant)  
-      if (direction.y > 0) {
-        // Going up - add 180° to flip
-        rotationY += Math.PI;
+      if (direction.y < 0) {
+        // Going down (center hallway) - apply specific rotations
+        floor.rotation.z = Math.PI / 2;  // 90° in Z
+        rotationY += Math.PI / 2;        // Additional 90° in Y
       }
     }
     
