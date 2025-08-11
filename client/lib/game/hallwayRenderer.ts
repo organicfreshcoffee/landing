@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HallwayNetwork, HallwaySegment, HallwayIntersection } from './hallwayGenerator';
+import { HallwayNetwork, HallwaySegment, HallwayIntersection } from './serverHallwayGenerator';
 
 export interface HallwayRenderOptions {
   cubeSize?: number;

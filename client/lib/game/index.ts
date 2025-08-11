@@ -1,7 +1,10 @@
 export * from './types';
 export { ModelLoader } from './modelLoader';
 export { PlayerManager } from './playerManager';
-export { SceneryGenerator } from './sceneryGenerator';
+export { ServerSceneryGenerator } from './serverSceneryGenerator';
+export { ServerFloorGenerator } from './serverFloorGenerator';
+export { ServerHallwayGenerator } from './serverHallwayGenerator';
+export { DungeonApi } from './dungeonApi';
 export { WebSocketManager } from './webSocketManager';
 export { MovementController } from './movementController';
 export { SceneManager } from './sceneManager';

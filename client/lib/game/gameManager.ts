@@ -39,9 +39,6 @@ export class GameManager {
   }
 
   private async initializeGame(): Promise<void> {
-    // Load scenery
-    await this.sceneManager.loadScenery();
-
     // Create local player
     await this.createLocalPlayer();
 
@@ -131,7 +128,20 @@ export class GameManager {
   }
 
   async connectToServer(serverAddress: string): Promise<void> {
+    console.log(`🔗 GameManager: Connecting to server ${serverAddress}`);
+    
+    // Set server address for dungeon API calls
+    this.sceneManager.setServerAddress(serverAddress);
+    
+    // Load initial scenery from server
+    console.log(`🎮 GameManager: Loading scenery from server...`);
+    await this.sceneManager.loadScenery();
+    console.log(`✅ GameManager: Scenery loaded successfully`);
+    
+    // Connect to WebSocket
+    console.log(`🔌 GameManager: Connecting to WebSocket...`);
     await this.webSocketManager.connect(serverAddress, this.user);
+    console.log(`✅ GameManager: WebSocket connected`);
   }
 
   private handleGameMessage(message: GameMessage): void {

@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { SceneryGenerator } from './sceneryGenerator';
+import { ServerSceneryGenerator } from './serverSceneryGenerator';
 
 export class SceneManager {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   private animationId: number | null = null;
+  private currentFloorName: string | null = null;
+  private serverAddress: string | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene = this.createScene();
@@ -55,18 +57,107 @@ export class SceneManager {
     this.scene.add(directionalLight);
   }
 
-  async loadScenery(): Promise<void> {
-    // Generate a complete floor with multiple rooms and hallways
-    const floorResult = SceneryGenerator.generateCompleteFloor(this.scene, {
-      minRooms: 3,
-      maxRooms: 5,
-      floorWidth: 60,
-      floorHeight: 60,
-      cubeSize: 1,
-      roomHeight: 5
-    });
+  /**
+   * Set the server address for API calls
+   */
+  setServerAddress(serverAddress: string): void {
+    this.serverAddress = serverAddress;
+    console.log(`🔧 SceneManager: Server address set to ${serverAddress}`);
+  }
+
+  async loadScenery(floorName?: string): Promise<void> {
+    console.log(`🎮 SceneManager: Loading scenery. Server: ${this.serverAddress}, Floor: ${floorName || 'auto-detect'}`);
     
-    console.log(`Generated floor with ${floorResult.floorLayout.rooms.length} rooms`);
+    if (!this.serverAddress) {
+      console.error('❌ Server address not set. Call setServerAddress() first.');
+      this.loadFallbackScenery();
+      return;
+    }
+
+    try {
+      // Get spawn location if no floor specified
+      if (!floorName) {
+        floorName = await ServerSceneryGenerator.getSpawnLocation(this.serverAddress);
+      }
+
+      // Clear existing scenery
+      ServerSceneryGenerator.clearScene(this.scene);
+
+      // Generate floor from server data
+      const floorResult = await ServerSceneryGenerator.generateServerFloor(
+        this.scene, 
+        this.serverAddress, 
+        floorName, 
+        {
+          cubeSize: 1,
+          roomHeight: 5,
+          hallwayHeight: 5
+        }
+      );
+      
+      this.currentFloorName = floorName;
+      console.log(`Loaded floor: ${floorName} with ${floorResult.floorLayout.rooms.length} rooms`);
+    } catch (error) {
+      console.error('Error loading scenery from server:', error);
+      // Fallback to a simple test environment
+      this.loadFallbackScenery();
+    }
+  }
+
+  /**
+   * Load a simple fallback environment if server fails
+   */
+  private loadFallbackScenery(): void {
+    // Create a simple ground plane
+    const groundGeometry = new THREE.PlaneGeometry(100, 100);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    this.scene.add(ground);
+
+    // Add a simple test room
+    const wallGeometry = new THREE.BoxGeometry(1, 5, 20);
+    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    
+    const wall1 = new THREE.Mesh(wallGeometry, wallMaterial);
+    wall1.position.set(-10, 2.5, 0);
+    this.scene.add(wall1);
+    
+    const wall2 = new THREE.Mesh(wallGeometry, wallMaterial);
+    wall2.position.set(10, 2.5, 0);
+    this.scene.add(wall2);
+
+    console.log('Loaded fallback scenery');
+  }
+
+  /**
+   * Switch to a new floor
+   */
+  async switchFloor(newFloorName: string): Promise<void> {
+    if (!this.serverAddress) {
+      console.error('Server address not set. Cannot switch floors.');
+      return;
+    }
+
+    if (this.currentFloorName !== newFloorName) {
+      // Notify server about floor change
+      try {
+        await ServerSceneryGenerator.notifyPlayerMovedFloor(this.serverAddress, newFloorName);
+      } catch (error) {
+        console.warn('Failed to notify server of floor change:', error);
+      }
+      
+      // Load new floor
+      await this.loadScenery(newFloorName);
+    }
+  }
+
+  /**
+   * Get current floor name
+   */
+  getCurrentFloor(): string | null {
+    return this.currentFloorName;
   }
 
   private setupEventListeners(): void {

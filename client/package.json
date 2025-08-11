@@ -11,7 +11,10 @@
     "dev:3005": "next dev -p 3005",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:manual": "npx ts-node lib/game/test-spawn-endpoint.ts"
   },
   "dependencies": {
     "@google-cloud/secret-manager": "^5.0.1",
@@ -25,11 +28,18 @@
     "three-stdlib": "^2.36.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.0.5",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.0.4",
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
