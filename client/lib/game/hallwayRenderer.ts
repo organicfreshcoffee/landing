@@ -29,7 +29,13 @@ export class HallwayRenderer {
 
     // Render all hallway segments
     network.segments.forEach(segment => {
-      const segmentGroup = this.renderHallwaySegment(segment, cubeSize, hallwayHeight, wallColor, floorColor);
+      const segmentGroup = this.renderHallwaySegment(
+        segment, 
+        cubeSize, 
+        hallwayHeight, 
+        wallColor, 
+        floorColor
+      );
       hallwayGroup.add(segmentGroup);
     });
 
@@ -195,6 +201,8 @@ export class HallwayRenderer {
     intersectionGroup.name = `Intersection_${intersection.id}`;
 
     const floorMaterial = new THREE.MeshLambertMaterial({ color: floorColor });
+    const wallMaterial = new THREE.MeshLambertMaterial({ color: wallColor });
+    const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
 
     // Render circular floor for intersection
     const floorRadius = intersection.radius + cubeSize;
@@ -207,8 +215,9 @@ export class HallwayRenderer {
     floor.name = 'IntersectionFloor';
     intersectionGroup.add(floor);
 
-    // Note: Intersection walls are handled by avoiding wall placement in intersecting areas
-    // This could be enhanced to create proper rounded intersection walls
+    // For now, skip adding intersection walls - let the hallway segments handle wall continuity
+    // The intersection detection in renderHallwaySegment should prevent overlapping walls
+    // TODO: Add sophisticated corner wall logic based on connected segment directions
 
     return intersectionGroup;
   }

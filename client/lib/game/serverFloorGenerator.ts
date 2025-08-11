@@ -342,12 +342,12 @@ export class ServerFloorGenerator {
     // Apply turn based on parentDirection
     switch (direction) {
       case "left":
-        // Turn 90 degrees left
-        newDirection = new THREE.Vector2(-hallwayDir.y, hallwayDir.x);
+        // Turn 90 degrees left (counterclockwise)
+        newDirection = new THREE.Vector2(hallwayDir.y, -hallwayDir.x);
         break;
       case "right":
-        // Turn 90 degrees right
-        newDirection = new THREE.Vector2(hallwayDir.y, -hallwayDir.x);
+        // Turn 90 degrees right (clockwise)
+        newDirection = new THREE.Vector2(-hallwayDir.y, hallwayDir.x);
         break;
       case "center":
       default:
@@ -357,23 +357,47 @@ export class ServerFloorGenerator {
 
     console.log(`🎯 Positioning ${node.id} from hallway ${parentHallway.id} with direction ${direction}`);
 
+    // Calculate proper offset to avoid wall overlaps but ensure tight connection
+    const hallwayWidth = 3; // Default hallway width
+    
+    // For proper right-angle connections, position children right at the edge of the hallway
+    // Different offsets for rooms vs hallways to ensure proper alignment
+    let finalOffset: number;
+
     if (this.isRoom(node)) {
+      // For rooms, position so the room's wall aligns properly with hallway
+      const roomHalfWidth = node.width / 2;
+      const roomHalfHeight = node.height / 2;
+      
+      if (direction === "left" || direction === "right") {
+        // For left/right turns, position room so its closest edge is at hallway edge
+        finalOffset = hallwayWidth / 2 + roomHalfWidth - 0.5; // Reduce gap slightly
+      } else {
+        // For center (straight), position room properly
+        finalOffset = hallwayWidth / 2 + roomHalfHeight + 0.5;
+      }
+      
       node.position.set(
-        hallwayEnd.x + newDirection.x * spacing,
-        hallwayEnd.y + newDirection.y * spacing
+        hallwayEnd.x + newDirection.x * finalOffset,
+        hallwayEnd.y + newDirection.y * finalOffset
       );
-      console.log(`🎯 Room ${node.id} positioned at (${node.position.x}, ${node.position.y})`);
+      console.log(`🎯 Room ${node.id} positioned at (${node.position.x}, ${node.position.y}) with offset ${finalOffset}`);
     } else {
-      // For hallways connecting to hallways
+      // For hallways connecting to hallways, extend further out to create proper right angle
       const hallway = node as ServerHallway;
-      hallway.startPosition = hallwayEnd.clone();
+      finalOffset = hallwayWidth / 2 + 1.5; // Increased from 0.5 to 1.5 for more forward distance
+      
+      hallway.startPosition = new THREE.Vector2(
+        hallwayEnd.x + newDirection.x * finalOffset,
+        hallwayEnd.y + newDirection.y * finalOffset
+      );
       hallway.endPosition = new THREE.Vector2(
-        hallwayEnd.x + newDirection.x * hallway.length,
-        hallwayEnd.y + newDirection.y * hallway.length
+        hallway.startPosition.x + newDirection.x * hallway.length,
+        hallway.startPosition.y + newDirection.y * hallway.length
       );
       hallway.direction = newDirection;
       
-      console.log(`🎯 Hallway ${hallway.id} positioned from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y})`);
+      console.log(`🎯 Hallway ${hallway.id} positioned from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y}) with offset ${finalOffset}`);
       
       this.calculateHallwaySegments(hallway);
     }
@@ -389,20 +413,57 @@ export class ServerFloorGenerator {
     const halfWidth = width / 2;
     const halfHeight = height / 2;
 
-    // Determine which side of the room the door should be on
-    // This depends on where the connection to parent comes from
+    // Determine which side of the room the door should be on based on parentDirection
     let doorSide: "top" | "right" | "bottom" | "left" = "bottom";
     let doorPosition = new THREE.Vector2();
 
-    // For now, place door on bottom side and use parentDoorOffset
-    const offset = Math.min(parentDoorOffset, Math.min(width, height) - 1);
-    doorPosition = new THREE.Vector2(
-      room.position.x - halfWidth + offset,
-      room.position.y - halfHeight
-    );
+    // Map parentDirection to the side where the door should be (facing toward parent)
+    switch (parentDirection) {
+      case "center":
+        // Child is below parent (parent comes from above), so door is on top
+        doorSide = "top";
+        const topOffset = Math.min(parentDoorOffset, width - 1);
+        doorPosition = new THREE.Vector2(
+          room.position.x - halfWidth + topOffset,
+          room.position.y + halfHeight
+        );
+        break;
+        
+      case "left":
+        // Child is to the LEFT of parent, so door faces RIGHT (toward parent)
+        doorSide = "right";
+        const rightOffset = Math.min(parentDoorOffset, height - 1);
+        doorPosition = new THREE.Vector2(
+          room.position.x + halfWidth,
+          room.position.y - halfHeight + rightOffset
+        );
+        break;
+        
+      case "right":
+        // Child is to the RIGHT of parent, so door faces LEFT (toward parent)
+        doorSide = "left";
+        const leftOffset = Math.min(parentDoorOffset, height - 1);
+        doorPosition = new THREE.Vector2(
+          room.position.x - halfWidth,
+          room.position.y - halfHeight + leftOffset
+        );
+        break;
+        
+      default:
+        // Default to bottom door
+        doorSide = "bottom";
+        const bottomOffset = Math.min(parentDoorOffset, width - 1);
+        doorPosition = new THREE.Vector2(
+          room.position.x - halfWidth + bottomOffset,
+          room.position.y - halfHeight
+        );
+        break;
+    }
 
     room.doorPosition = doorPosition;
     room.doorSide = doorSide;
+    
+    console.log(`🚪 Room ${room.id} door positioned on ${doorSide} side at (${doorPosition.x}, ${doorPosition.y})`);
   }
 
   /**

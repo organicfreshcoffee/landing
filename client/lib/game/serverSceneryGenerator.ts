@@ -193,13 +193,14 @@ export class ServerSceneryGenerator {
         const doorInfo = this.calculateDoorPosition(
           room, 
           childHallway.parentDirection || "center", 
-          childHallway.parentDoorOffset || room.width / 2
+          childHallway.parentDoorOffset || room.width / 2,
+          room.id === floorLayout.rootNode // Pass isRootRoom flag
         );
         
         doors.push({
           edgeIndex: doorInfo.edgeIndex,
           position: doorInfo.position,
-          width: 2,
+          width: 3, // Increased from 2 to 3 for wider door
           connectionType: 'child',
           connectedTo: childId
         });
@@ -217,13 +218,14 @@ export class ServerSceneryGenerator {
       const parentDoorInfo = this.calculateDoorPosition(
         room, 
         room.parentDirection, 
-        room.parentDoorOffset
+        room.parentDoorOffset,
+        false // Parent doors are never on root room
       );
       
       doors.push({
         edgeIndex: parentDoorInfo.edgeIndex,
         position: parentDoorInfo.position,
-        width: 2,
+        width: 3, // Increased from 2 to 3 for wider door
         connectionType: 'parent',
         connectedTo: 'parent'
       });
@@ -252,37 +254,57 @@ export class ServerSceneryGenerator {
   private static calculateDoorPosition(
     room: any, 
     parentDirection: "left" | "right" | "center", 
-    parentDoorOffset: number
+    parentDoorOffset: number,
+    isRootRoom: boolean = false
   ): { edgeIndex: number; position: number } {
-    // For the root room, we use arbitrary mapping since there's no "entry direction"
-    // For non-root rooms, directions are relative to how they were entered
-    
     let edgeIndex = 0;
     let position = 0.5;
     
-    // Map parentDirection to room edges
-    // Assuming the room was "entered" from the bottom (arbitrary for root room)
-    switch (parentDirection) {
-      case "center":
-        // Center means the same side as entry - for root room, use bottom edge
-        edgeIndex = 0; // Bottom edge
-        position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.width));
-        break;
-        
-      case "left":
-        // Left side relative to entry direction - use left edge
-        edgeIndex = 3; // Left edge  
-        position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
-        break;
-        
-      case "right":
-        // Right side relative to entry direction - use right edge
-        edgeIndex = 1; // Right edge
-        position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
-        break;
+    if (isRootRoom) {
+      // For root room, use the original logic - doors are placed where children connect
+      switch (parentDirection) {
+        case "center":
+          // Center means bottom edge for root room
+          edgeIndex = 0; // Bottom edge
+          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.width));
+          break;
+          
+        case "left":
+          // Left side - use left edge
+          edgeIndex = 3; // Left edge  
+          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
+          break;
+          
+        case "right":
+          // Right side - use right edge
+          edgeIndex = 1; // Right edge
+          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
+          break;
+      }
+    } else {
+      // For child rooms, doors face back toward parent
+      switch (parentDirection) {
+        case "center":
+          // Child is below parent (center/down), door faces up toward parent
+          edgeIndex = 2; // Top edge
+          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.width));
+          break;
+          
+        case "left":
+          // Child is to the LEFT of parent, door faces RIGHT toward parent
+          edgeIndex = 1; // Right edge  
+          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
+          break;
+          
+        case "right":
+          // Child is to the RIGHT of parent, door faces LEFT toward parent
+          edgeIndex = 3; // Left edge
+          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
+          break;
+      }
     }
     
-    console.log(`🚪 Door calc: ${parentDirection} -> edge ${edgeIndex}, offset ${parentDoorOffset} -> position ${position}`);
+    console.log(`🚪 Door calc (${isRootRoom ? 'ROOT' : 'CHILD'}): ${parentDirection} -> edge ${edgeIndex}, offset ${parentDoorOffset} -> position ${position}`);
     return { edgeIndex, position };
   }
 
