@@ -40,8 +40,8 @@ export interface HallwayNetwork {
 
 export class ServerHallwayGenerator {
   /**
-   * Generates hallways connecting rooms based on server floor layout
-   * @param layout - The server floor layout with rooms and hallways
+   * Generates hallway network from server floor layout
+   * @param layout - The server floor layout with calculated positions
    * @param hallwayWidth - Width of hallways (default: 3)
    */
   static generateHallwayNetwork(
@@ -53,17 +53,24 @@ export class ServerHallwayGenerator {
     const intersections: HallwayIntersection[] = [];
     const deadEnds: THREE.Vector2[] = [];
     
-    // Generate doors for each room
-    const roomDoors = this.generateRoomDoors(layout.rooms);
-    
-    // Create connections based on room hierarchy from server
-    this.createServerBasedConnections(layout, roomDoors, connections);
-    
-    // Generate hallway segments from connections
-    for (const connection of connections) {
-      const pathSegments = this.generatePathSegments(connection, hallwayWidth);
-      segments.push(...pathSegments);
-    }
+    // Convert server hallways to segments
+    layout.hallways.forEach((hallway, index) => {
+      if (hallway.segments) {
+        hallway.segments.forEach((segment, segIndex) => {
+          const hallwaySegment: HallwaySegment = {
+            id: `${hallway.id}_segment_${segIndex}`,
+            start: segment.start,
+            end: segment.end,
+            width: hallwayWidth,
+            connectionIds: [hallway.id]
+          };
+          segments.push(hallwaySegment);
+        });
+      }
+    });
+
+    // Create connections based on parent-child relationships
+    this.createHierarchyBasedConnections(layout, connections, hallwayWidth);
     
     // Find intersections where segments cross
     this.findIntersections(segments, intersections, hallwayWidth);
@@ -72,239 +79,92 @@ export class ServerHallwayGenerator {
     
     return { connections, segments, intersections, deadEnds };
   }
-  
+
   /**
-   * Generate doors for rooms based on their rectangular shape
+   * Create connections based on the server hierarchy
    */
-  private static generateRoomDoors(rooms: ServerRoom[]): Map<string, ServerDoor[]> {
-    const roomDoors = new Map<string, ServerDoor[]>();
-    
-    rooms.forEach(room => {
-      const doors: ServerDoor[] = [];
-      const numDoors = 2 + Math.floor(Math.random() * 2); // 2-3 doors per room
-      
-      // Generate doors on room perimeter
-      for (let i = 0; i < numDoors; i++) {
-        const side = Math.floor(Math.random() * 4); // 0=bottom, 1=right, 2=top, 3=left
-        const doorWidth = 2;
-        
-        let doorPosition: THREE.Vector2;
-        const halfWidth = room.width / 2;
-        const halfHeight = room.height / 2;
-        
-        switch (side) {
-          case 0: // Bottom
-            doorPosition = new THREE.Vector2(
-              room.position.x + (Math.random() - 0.5) * room.width * 0.6,
-              room.position.y - halfHeight
-            );
-            break;
-          case 1: // Right
-            doorPosition = new THREE.Vector2(
-              room.position.x + halfWidth,
-              room.position.y + (Math.random() - 0.5) * room.height * 0.6
-            );
-            break;
-          case 2: // Top
-            doorPosition = new THREE.Vector2(
-              room.position.x + (Math.random() - 0.5) * room.width * 0.6,
-              room.position.y + halfHeight
-            );
-            break;
-          case 3: // Left
-            doorPosition = new THREE.Vector2(
-              room.position.x - halfWidth,
-              room.position.y + (Math.random() - 0.5) * room.height * 0.6
-            );
-            break;
-          default:
-            doorPosition = new THREE.Vector2(room.position.x, room.position.y - halfHeight);
-        }
-        
-        doors.push({
-          position: doorPosition,
-          width: doorWidth,
-          roomId: room.id
-        });
-      }
-      
-      roomDoors.set(room.id, doors);
-    });
-    
-    return roomDoors;
-  }
-  
-  /**
-   * Create connections based on server's room hierarchy (parent-child relationships)
-   */
-  private static createServerBasedConnections(
+  private static createHierarchyBasedConnections(
     layout: ServerFloorLayout,
-    roomDoors: Map<string, ServerDoor[]>,
-    connections: Connection[]
+    connections: Connection[],
+    hallwayWidth: number
   ): void {
-    const roomMap = new Map<string, ServerRoom>();
-    layout.rooms.forEach(room => roomMap.set(room.id, room));
-    
-    // Create connections based on parent-child relationships
-    for (const room of layout.rooms) {
-      for (const childId of room.children) {
-        const childRoom = roomMap.get(childId);
-        if (childRoom) {
-          const connection = this.createConnection(room, childRoom, roomDoors);
-          if (connection) {
-            connections.push(connection);
-          }
-        }
-      }
-    }
-    
-    // Ensure all rooms are connected by creating a minimum spanning tree if needed
-    this.ensureAllRoomsConnected(layout.rooms, roomDoors, connections);
-  }
-  
-  /**
-   * Creates a connection between two rooms using their closest doors
-   */
-  private static createConnection(
-    room1: ServerRoom,
-    room2: ServerRoom,
-    roomDoors: Map<string, ServerDoor[]>
-  ): Connection | null {
-    const doors1 = roomDoors.get(room1.id);
-    const doors2 = roomDoors.get(room2.id);
-    
-    if (!doors1 || !doors2) return null;
-    
-    // Find the closest pair of doors
-    let bestConnection: Connection | null = null;
-    let shortestDistance = Infinity;
-    
-    for (const door1 of doors1) {
-      for (const door2 of doors2) {
-        const distance = door1.position.distanceTo(door2.position);
-        
-        if (distance < shortestDistance) {
-          shortestDistance = distance;
-          bestConnection = {
-            fromRoomId: room1.id,
-            toRoomId: room2.id,
-            fromDoor: door1,
-            toDoor: door2
-          };
-        }
-      }
-    }
-    
-    return bestConnection;
-  }
-  
-  /**
-   * Ensure all rooms are connected using minimum spanning tree
-   */
-  private static ensureAllRoomsConnected(
-    rooms: ServerRoom[],
-    roomDoors: Map<string, ServerDoor[]>,
-    existingConnections: Connection[]
-  ): void {
-    // Create a graph of existing connections
-    const connected = new Set<string>();
-    const adjacencyList = new Map<string, Set<string>>();
-    
-    rooms.forEach(room => adjacencyList.set(room.id, new Set()));
-    
-    existingConnections.forEach(conn => {
-      adjacencyList.get(conn.fromRoomId)?.add(conn.toRoomId);
-      adjacencyList.get(conn.toRoomId)?.add(conn.fromRoomId);
-    });
-    
-    // Find connected components using DFS
-    const visited = new Set<string>();
-    const components: string[][] = [];
-    
-    rooms.forEach(room => {
-      if (!visited.has(room.id)) {
-        const component: string[] = [];
-        this.dfs(room.id, adjacencyList, visited, component);
-        components.push(component);
-      }
-    });
-    
-    // Connect components if there are multiple
-    if (components.length > 1) {
-      for (let i = 1; i < components.length; i++) {
-        // Find closest rooms between components
-        let bestConnection: Connection | null = null;
-        let shortestDistance = Infinity;
-        
-        for (const roomId1 of components[0]) {
-          for (const roomId2 of components[i]) {
-            const room1 = rooms.find(r => r.id === roomId1);
-            const room2 = rooms.find(r => r.id === roomId2);
-            
-            if (room1 && room2) {
-              const distance = room1.position.distanceTo(room2.position);
-              if (distance < shortestDistance) {
-                const connection = this.createConnection(room1, room2, roomDoors);
-                if (connection) {
-                  shortestDistance = distance;
-                  bestConnection = connection;
-                }
-              }
-            }
-          }
-        }
-        
-        if (bestConnection) {
-          existingConnections.push(bestConnection);
-          // Merge component i into component 0
-          components[0].push(...components[i]);
-        }
-      }
-    }
-  }
-  
-  /**
-   * Depth-first search for finding connected components
-   */
-  private static dfs(
-    nodeId: string,
-    adjacencyList: Map<string, Set<string>>,
-    visited: Set<string>,
-    component: string[]
-  ): void {
-    visited.add(nodeId);
-    component.push(nodeId);
-    
-    const neighbors = adjacencyList.get(nodeId);
-    if (neighbors) {
-      neighbors.forEach(neighbor => {
-        if (!visited.has(neighbor)) {
-          this.dfs(neighbor, adjacencyList, visited, component);
+    // Process each node and create connections to its children
+    layout.nodeMap.forEach((node, nodeName) => {
+      node.children.forEach((childName: string) => {
+        const childNode = layout.nodeMap.get(childName);
+        if (!childNode) return;
+
+        // Create connection between parent and child
+        const connection = this.createDirectConnection(node, childNode, hallwayWidth);
+        if (connection) {
+          connections.push(connection);
         }
       });
+    });
+  }
+
+  /**
+   * Create a direct connection between two nodes
+   */
+  private static createDirectConnection(
+    fromNode: ServerRoom | ServerHallway,
+    toNode: ServerRoom | ServerHallway,
+    hallwayWidth: number
+  ): Connection | null {
+    // Get connection points
+    const fromDoor = this.getNodeConnectionPoint(fromNode);
+    const toDoor = this.getNodeConnectionPoint(toNode);
+
+    if (!fromDoor || !toDoor) return null;
+
+    return {
+      fromRoomId: fromNode.id,
+      toRoomId: toNode.id,
+      fromDoor,
+      toDoor,
+      hallwayLength: this.isHallway(toNode) ? toNode.length : undefined
+    };
+  }
+
+  /**
+   * Get the connection point for a node (room or hallway)
+   */
+  private static getNodeConnectionPoint(node: ServerRoom | ServerHallway): ServerDoor | null {
+    if (this.isRoom(node)) {
+      const room = node as ServerRoom;
+      const position = room.doorPosition || room.position;
+      return {
+        position,
+        width: 2,
+        roomId: room.id
+      };
+    } else {
+      const hallway = node as ServerHallway;
+      const position = hallway.startPosition || hallway.endPosition;
+      if (!position) return null;
+      
+      return {
+        position,
+        width: 2,
+        roomId: hallway.id
+      };
     }
   }
-  
+
   /**
-   * Generates path segments for a connection
+   * Type guard to check if a node is a room
    */
-  private static generatePathSegments(connection: Connection, width: number): HallwaySegment[] {
-    const segments: HallwaySegment[] = [];
-    
-    // Create a simple straight line segment (can be enhanced with L-shaped paths)
-    const segmentId = `${connection.fromRoomId}_to_${connection.toRoomId}`;
-    
-    segments.push({
-      id: segmentId,
-      start: connection.fromDoor.position,
-      end: connection.toDoor.position,
-      width,
-      connectionIds: [connection.fromRoomId, connection.toRoomId]
-    });
-    
-    return segments;
+  private static isRoom(node: ServerRoom | ServerHallway): node is ServerRoom {
+    return 'width' in node && 'height' in node;
   }
-  
+
+  /**
+   * Type guard to check if a node is a hallway
+   */
+  private static isHallway(node: ServerRoom | ServerHallway): node is ServerHallway {
+    return 'length' in node;
+  }
+
   /**
    * Finds intersections between hallway segments
    */

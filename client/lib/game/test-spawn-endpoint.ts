@@ -22,7 +22,7 @@ async function testSpawnEndpointCalling() {
     
   } catch (error) {
     console.log('❌ Spawn endpoint call failed (expected in test environment)');
-    console.log('   Error:', error.message);
+    console.log('   Error:', error instanceof Error ? error.message : String(error));
     console.log('   This is normal - the test server doesn\'t exist');
   }
 
@@ -36,7 +36,7 @@ async function testSpawnEndpointCalling() {
     
   } catch (error) {
     console.log('❌ Floor layout endpoint call failed (expected in test environment)');
-    console.log('   Error:', error.message);
+    console.log('   Error:', error instanceof Error ? error.message : String(error));
     console.log('   This is normal - the test server doesn\'t exist');
   }
 

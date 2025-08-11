@@ -128,14 +128,49 @@ export class ServerSceneryGenerator {
       { start: vertices[3], end: vertices[0], length: room.height }   // Left
     ];
 
-    // Generate simple doors (can be enhanced with server door data)
-    const doors = [
-      {
-        edgeIndex: 0, // Bottom edge
-        position: 0.5, // Center of edge
-        width: 2
+    // Generate doors based on server data
+    const doors = [];
+    
+    if (room.parentDoorOffset && room.doorSide) {
+      let edgeIndex = 0;
+      let position = 0.5;
+      
+      // Determine edge index based on door side
+      switch (room.doorSide) {
+        case "bottom":
+          edgeIndex = 0;
+          position = room.parentDoorOffset / room.width;
+          break;
+        case "right":
+          edgeIndex = 1;
+          position = room.parentDoorOffset / room.height;
+          break;
+        case "top":
+          edgeIndex = 2;
+          position = 1 - (room.parentDoorOffset / room.width);
+          break;
+        case "left":
+          edgeIndex = 3;
+          position = 1 - (room.parentDoorOffset / room.height);
+          break;
       }
-    ];
+      
+      // Ensure position is within valid range
+      position = Math.max(0.1, Math.min(0.9, position));
+      
+      doors.push({
+        edgeIndex,
+        position,
+        width: 2
+      });
+    } else {
+      // Fallback: place door on bottom edge at center
+      doors.push({
+        edgeIndex: 0,
+        position: 0.5,
+        width: 2
+      });
+    }
 
     return {
       vertices,

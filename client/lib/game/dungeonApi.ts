@@ -3,6 +3,7 @@ import { ensureProtocol, isValidUrl } from '../urlUtils';
 
 // Server response types based on API documentation
 export interface DungeonNode {
+  _id: string;
   name: string;
   dungeonDagNodeName: string;
   children: string[];
@@ -14,6 +15,8 @@ export interface DungeonNode {
   stairLocationX?: number;
   stairLocationY?: number;
   hallwayLength?: number;
+  parentDirection?: "left" | "right" | "center";
+  parentDoorOffset?: number;
 }
 
 export interface FloorLayoutResponse {

@@ -1,4 +1,5 @@
 export * from './types';
+export * from './roomTypes';
 export { ModelLoader } from './modelLoader';
 export { PlayerManager } from './playerManager';
 export { ServerSceneryGenerator } from './serverSceneryGenerator';

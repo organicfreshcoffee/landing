@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RoomShape, Door, RoomShapeGenerator } from './roomShapeGenerator';
+import { RoomShape, Door } from './roomTypes';
 
 export interface RoomRenderOptions {
   cubeSize?: number;
@@ -129,9 +129,10 @@ export class RoomRenderer {
     let currentCube = 0;
     
     for (const door of sortedDoors) {
-      const doorWorldPos = RoomShapeGenerator.getDoorWorldPosition(
-        { edges: [edge] } as RoomShape, 
-        { ...door, edgeIndex: 0 }
+      // Calculate door world position
+      const doorWorldPos = new THREE.Vector2(
+        edge.start.x + (edge.end.x - edge.start.x) * door.position,
+        edge.start.y + (edge.end.y - edge.start.y) * door.position
       );
       
       // Calculate door start and end in cube indices

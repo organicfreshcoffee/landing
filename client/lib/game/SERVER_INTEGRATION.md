@@ -4,7 +4,14 @@ This update replaces the client-side procedural dungeon generation with a server
 
 ## Overview
 
-Previously, the game used local generation classes (`FloorGenerator`, `RoomShapeGenerator`, `HallwayGenerator`) to create dungeon layouts on the client. Now, the system fetches pre-generated dungeon data from the server and renders it locally.
+Previously, the game used local generation classes (`FloorGenerator`, `RoomShapeGenerator`, `HallwayGenerator`) to create dungeon layouts on the client. Now, the system fetches complete dungeon data from the server and uses the hierarchy information to position rooms and hallways automatically.
+
+**Key Changes:**
+- Removed `RoomShapeGenerator` - Room shapes are now determined by server data
+- Simplified `ServerHallwayGenerator` - Uses server hierarchy instead of complex pathfinding
+- Enhanced `ServerFloorGenerator` - Implements hierarchy-based layout algorithm
+- Rooms positioned using parent-child relationships and direction indicators
+- Hallways created as straight lines with 90-degree turns based on `parentDirection`
 
 ## Key Changes
 
@@ -29,8 +36,7 @@ All dungeon endpoints require Firebase authentication with Bearer tokens.
 
 ### Endpoints Used
 - `GET /api/dungeon/spawn` - Get initial spawn location
-- `GET /api/dungeon/floor/:dungeonDagNodeName` - Get floor layout
-- `GET /api/dungeon/room-stairs/:floorDagNodeName` - Get stair connections
+- `GET /api/dungeon/floor/:dungeonDagNodeName` - Get complete floor layout with all room and hallway data
 - `POST /api/dungeon/player-moved-floor` - Notify server of floor changes
 
 ## Server Address Configuration
@@ -68,20 +74,49 @@ This ensures that all API calls (WebSocket and REST) go to the same selected gam
     "dungeonDagNodeName": "A",
     "nodes": [
       {
+        "_id": "689a3091d8610f7c13a172db",
         "name": "A_A",
         "dungeonDagNodeName": "A", 
-        "children": ["A_AA", "A_AB"],
+        "children": ["A_AA", "A_AB", "A_AC"],
         "isRoom": true,
         "hasUpwardStair": true,
-        "roomWidth": 15,
-        "roomHeight": 12,
-        "stairLocationX": 7.5,
-        "stairLocationY": 6.0
+        "hasDownwardStair": true,
+        "roomWidth": 14,
+        "roomHeight": 8,
+        "stairLocationX": 7,
+        "stairLocationY": 5
+      },
+      {
+        "_id": "689a3091d8610f7c13a172dc",
+        "name": "A_AA",
+        "dungeonDagNodeName": "A",
+        "children": ["A_AAA", "A_AAB"],
+        "isRoom": false,
+        "hallwayLength": 11,
+        "parentDirection": "center"
+      },
+      {
+        "_id": "689a3091d8610f7c13a172df",
+        "name": "A_AAA",
+        "dungeonDagNodeName": "A",
+        "children": ["A_AAAA", "A_AAAB"],
+        "isRoom": true,
+        "hasUpwardStair": false,
+        "hasDownwardStair": false,
+        "roomWidth": 12,
+        "roomHeight": 14,
+        "parentDoorOffset": 3,
+        "parentDirection": "right"
       }
     ]
   }
 }
 ```
+
+**New Fields:**
+- `parentDirection`: "left", "right", or "center" - Determines connection direction
+- `parentDoorOffset`: Number - Door position offset for rooms
+- `hallwayLength`: Number - Length of hallway segments
 
 ## Usage Examples
 
@@ -150,11 +185,12 @@ The system includes fallback mechanisms:
 
 ## Benefits
 
-1. **Consistency** - All players see identical dungeon layouts
-2. **Persistence** - Dungeons are saved on the server
-3. **Infinite Generation** - Server generates new floors as needed
-4. **Multiplayer Support** - Shared dungeon state across players
-5. **Performance** - Reduced client-side computation
+1. **Consistency** - All players see identical dungeon layouts generated from server hierarchy
+2. **Persistence** - Dungeons are saved on the server with complete structure
+3. **Infinite Generation** - Server generates new floors with proper connections as needed
+4. **Multiplayer Support** - Shared dungeon state and navigation across players
+5. **Performance** - Reduced client-side computation, only positioning and rendering
+6. **Deterministic Layout** - Predictable room and hallway placement based on hierarchy
 
 ## Migration Guide
 
