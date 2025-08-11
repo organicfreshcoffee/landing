@@ -231,11 +231,11 @@ export class ServerFloorGenerator {
       this.positionHallwayFromParent(parentNode, node as ServerHallway);
     } else if (this.isRoom(parentNode)) {
       // Parent is room, child is room - use traditional positioning
-      const SPACING = 25;
+      const SPACING = 20; // Reduced from 25 to 20 for tighter spacing
       this.positionFromRoom(node, parentNode as ServerRoom, direction, SPACING);
     } else {
       // Parent is hallway - position child from hallway end
-      const SPACING = 25;
+      const SPACING = 20; // Reduced from 25 to 20 for tighter spacing
       this.positionFromHallway(node, parentNode as ServerHallway, direction, SPACING);
     }
 
@@ -356,25 +356,26 @@ export class ServerFloorGenerator {
     }
 
     console.log(`🎯 Positioning ${node.id} from hallway ${parentHallway.id} with direction ${direction}`);
+    console.log(`🎯 Parent hallway direction: (${hallwayDir.x}, ${hallwayDir.y}), new direction: (${newDirection.x}, ${newDirection.y})`);
+    console.log(`🎯 Hallway end position: (${hallwayEnd.x}, ${hallwayEnd.y})`);
 
     // Calculate proper offset to avoid wall overlaps but ensure tight connection
     const hallwayWidth = 3; // Default hallway width
     
-    // For proper right-angle connections, position children right at the edge of the hallway
-    // Different offsets for rooms vs hallways to ensure proper alignment
+    // More precise positioning based on turn direction and node type
     let finalOffset: number;
 
     if (this.isRoom(node)) {
-      // For rooms, position so the room's wall aligns properly with hallway
+      // For rooms, position them with appropriate spacing based on turn direction
       const roomHalfWidth = node.width / 2;
       const roomHalfHeight = node.height / 2;
       
       if (direction === "left" || direction === "right") {
-        // For left/right turns, position room so its closest edge is at hallway edge
-        finalOffset = hallwayWidth / 2 + roomHalfWidth - 0.5; // Reduce gap slightly
+        // For 90-degree turns, position room with proper clearance
+        finalOffset = hallwayWidth / 2 + Math.min(roomHalfWidth, roomHalfHeight) + 5.0;
       } else {
-        // For center (straight), position room properly
-        finalOffset = hallwayWidth / 2 + roomHalfHeight + 0.5;
+        // For straight connections, use standard spacing
+        finalOffset = hallwayWidth / 2 + roomHalfHeight + 5.0;
       }
       
       node.position.set(
@@ -383,9 +384,16 @@ export class ServerFloorGenerator {
       );
       console.log(`🎯 Room ${node.id} positioned at (${node.position.x}, ${node.position.y}) with offset ${finalOffset}`);
     } else {
-      // For hallways connecting to hallways, extend further out to create proper right angle
+      // For hallways connecting to hallways, create proper T-junction spacing
       const hallway = node as ServerHallway;
-      finalOffset = hallwayWidth / 2 + 1.5; // Increased from 0.5 to 1.5 for more forward distance
+      
+      if (direction === "left" || direction === "right") {
+        // For 90-degree hallway turns, position start point much closer for tighter T-junction
+        finalOffset = hallwayWidth / 2;
+      } else {
+        // For straight connections, minimal overlap
+        finalOffset = hallwayWidth / 2;
+      }
       
       hallway.startPosition = new THREE.Vector2(
         hallwayEnd.x + newDirection.x * finalOffset,
