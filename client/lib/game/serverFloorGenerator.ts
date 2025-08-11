@@ -362,50 +362,77 @@ export class ServerFloorGenerator {
     // Calculate proper offset to avoid wall overlaps but ensure tight connection
     const hallwayWidth = 3; // Default hallway width
     
-    // More precise positioning based on turn direction and node type
-    let finalOffset: number;
-
+    // Separate controls for forward/back and left/right positioning
+    const ROOM_FORWARD_BACK_OFFSET = 5.0;  // Adjust this to move rooms forward/back from hallway end
+    const ROOM_LEFT_RIGHT_CLEARANCE = 1.0; // Additional left/right adjustment (positive = further from hallway center)
+    const HALLWAY_FORWARD_BACK_OFFSET = 0.0; // Adjust this to move hallways forward/back from parent hallway end
+    const HALLWAY_LEFT_RIGHT_OFFSET = 1.0;   // Additional left/right positioning for hallways
+    
     if (this.isRoom(node)) {
-      // For rooms, position them with appropriate spacing based on turn direction
+      // For rooms, position them with separate forward/back and left/right control
       const roomHalfWidth = node.width / 2;
       const roomHalfHeight = node.height / 2;
       
+      let baseOffset: number;
       if (direction === "left" || direction === "right") {
-        // For 90-degree turns, position room with proper clearance
-        finalOffset = hallwayWidth / 2 + Math.min(roomHalfWidth, roomHalfHeight) + 5.0;
+        // For 90-degree turns, use smaller room dimension + clearance
+        baseOffset = hallwayWidth / 2 + Math.min(roomHalfWidth, roomHalfHeight);
       } else {
-        // For straight connections, use standard spacing
-        finalOffset = hallwayWidth / 2 + roomHalfHeight + 5.0;
+        // For straight connections, use room height
+        baseOffset = hallwayWidth / 2 + roomHalfHeight;
       }
       
-      node.position.set(
-        hallwayEnd.x + newDirection.x * finalOffset,
-        hallwayEnd.y + newDirection.y * finalOffset
-      );
-      console.log(`🎯 Room ${node.id} positioned at (${node.position.x}, ${node.position.y}) with offset ${finalOffset}`);
+      // Calculate final position with separate forward/back and left/right offsets
+      const forwardBackOffset = baseOffset + ROOM_FORWARD_BACK_OFFSET;
+      
+      // Apply forward/back positioning
+      let finalX = hallwayEnd.x + newDirection.x * forwardBackOffset;
+      let finalY = hallwayEnd.y + newDirection.y * forwardBackOffset;
+      
+      // Apply left/right adjustment (perpendicular to the new direction)
+      if (ROOM_LEFT_RIGHT_CLEARANCE !== 0) {
+        const perpDirection = new THREE.Vector2(-newDirection.y, newDirection.x); // 90-degree rotation
+        finalX += perpDirection.x * ROOM_LEFT_RIGHT_CLEARANCE;
+        finalY += perpDirection.y * ROOM_LEFT_RIGHT_CLEARANCE;
+      }
+      
+      node.position.set(finalX, finalY);
+      console.log(`🎯 Room ${node.id} positioned at (${node.position.x}, ${node.position.y}) with forward/back=${forwardBackOffset}, left/right=${ROOM_LEFT_RIGHT_CLEARANCE}`);
     } else {
       // For hallways connecting to hallways, create proper T-junction spacing
       const hallway = node as ServerHallway;
       
+      let baseHallwayOffset: number;
       if (direction === "left" || direction === "right") {
-        // For 90-degree hallway turns, position start point much closer for tighter T-junction
-        finalOffset = hallwayWidth / 2;
+        // For 90-degree hallway turns, position start point for tighter T-junction
+        baseHallwayOffset = hallwayWidth / 2;
       } else {
         // For straight connections, minimal overlap
-        finalOffset = hallwayWidth / 2;
+        baseHallwayOffset = hallwayWidth / 2;
       }
       
-      hallway.startPosition = new THREE.Vector2(
-        hallwayEnd.x + newDirection.x * finalOffset,
-        hallwayEnd.y + newDirection.y * finalOffset
-      );
+      // Calculate final position with separate forward/back and left/right offsets
+      const forwardBackOffset = baseHallwayOffset + HALLWAY_FORWARD_BACK_OFFSET;
+      
+      // Apply forward/back positioning
+      let startX = hallwayEnd.x + newDirection.x * forwardBackOffset;
+      let startY = hallwayEnd.y + newDirection.y * forwardBackOffset;
+      
+      // Apply left/right adjustment (perpendicular to the new direction)
+      if (HALLWAY_LEFT_RIGHT_OFFSET !== 0) {
+        const perpDirection = new THREE.Vector2(-newDirection.y, newDirection.x); // 90-degree rotation
+        startX += perpDirection.x * HALLWAY_LEFT_RIGHT_OFFSET;
+        startY += perpDirection.y * HALLWAY_LEFT_RIGHT_OFFSET;
+      }
+      
+      hallway.startPosition = new THREE.Vector2(startX, startY);
       hallway.endPosition = new THREE.Vector2(
         hallway.startPosition.x + newDirection.x * hallway.length,
         hallway.startPosition.y + newDirection.y * hallway.length
       );
       hallway.direction = newDirection;
       
-      console.log(`🎯 Hallway ${hallway.id} positioned from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y}) with offset ${finalOffset}`);
+      console.log(`🎯 Hallway ${hallway.id} positioned from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y}) with forward/back=${forwardBackOffset}, left/right=${HALLWAY_LEFT_RIGHT_OFFSET}`);
       
       this.calculateHallwaySegments(hallway);
     }
