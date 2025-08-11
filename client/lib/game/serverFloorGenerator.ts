@@ -475,33 +475,42 @@ export class ServerFloorGenerator {
 
     let doorLocalPos = new THREE.Vector2();
 
+    console.log(`🚪📍 Calculating door position for room ${room.id} (${room.width}x${room.height})`);
+    console.log(`🚪📍 Direction: ${parentDirection}, Offset: ${parentDoorOffset}`);
+    console.log(`🚪📍 Room half-dimensions: width=${halfWidth}, height=${halfHeight}`);
+
     // Calculate door position relative to room center based on direction
     switch (parentDirection) {
       case "center":
-        // Bottom edge
+        // Bottom edge: offset from left side
         doorLocalPos.set(
           -halfWidth + parentDoorOffset,
           -halfHeight
         );
+        console.log(`🚪📍 Center door: X = ${-halfWidth} + ${parentDoorOffset} = ${doorLocalPos.x}, Y = ${doorLocalPos.y}`);
         break;
       case "left":
-        // Left edge
+        // Left edge: offset from top going down
         doorLocalPos.set(
           -halfWidth,
-          -halfHeight + parentDoorOffset
+          halfHeight - parentDoorOffset
         );
+        console.log(`🚪📍 Left door: X = ${doorLocalPos.x}, Y = ${halfHeight} - ${parentDoorOffset} = ${doorLocalPos.y}`);
         break;
       case "right":
-        // Right edge
+        // Right edge: offset from top going down  
         doorLocalPos.set(
           halfWidth,
-          -halfHeight + parentDoorOffset
+          halfHeight - parentDoorOffset
         );
+        console.log(`🚪📍 Right door: X = ${doorLocalPos.x}, Y = ${halfHeight} - ${parentDoorOffset} = ${doorLocalPos.y}`);
         break;
     }
 
     // Convert to world position
-    return roomPos.clone().add(doorLocalPos);
+    const worldPos = roomPos.clone().add(doorLocalPos);
+    console.log(`🚪📍 Door world position: (${worldPos.x}, ${worldPos.y})`);
+    return worldPos;
   }
 
   /**
