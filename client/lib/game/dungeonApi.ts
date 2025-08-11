@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ensureProtocol, isValidUrl } from '../urlUtils';
 
 // Server response types based on API documentation
 export interface DungeonNode {
@@ -53,12 +54,21 @@ export interface PlayerMovedFloorResponse {
 /**
  * Build dungeon API endpoints for a specific server
  */
-const buildDungeonEndpoints = (serverAddress: string) => ({
-  playerMovedFloor: () => `${serverAddress}/api/dungeon/player-moved-floor`,
-  getFloorLayout: (dungeonDagNodeName: string) => `${serverAddress}/api/dungeon/floor/${dungeonDagNodeName}`,
-  getRoomStairs: (floorDagNodeName: string) => `${serverAddress}/api/dungeon/room-stairs/${floorDagNodeName}`,
-  getSpawnLocation: () => `${serverAddress}/api/dungeon/spawn`,
-});
+const buildDungeonEndpoints = (serverAddress: string) => {
+  const baseUrl = ensureProtocol(serverAddress);
+  console.log(`🔗 DungeonApi: Building endpoints for server: ${baseUrl}`);
+  
+  if (!isValidUrl(baseUrl)) {
+    throw new Error(`Invalid server address: ${serverAddress} -> ${baseUrl}`);
+  }
+  
+  return {
+    playerMovedFloor: () => `${baseUrl}/api/dungeon/player-moved-floor`,
+    getFloorLayout: (dungeonDagNodeName: string) => `${baseUrl}/api/dungeon/floor/${dungeonDagNodeName}`,
+    getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
+    getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
+  };
+};
 
 /**
  * Gets the user's Firebase auth token for API requests

@@ -65,14 +65,16 @@ describe('Spawn Endpoint API Test', () => {
     // This test documents the expected call flow for spawn endpoint
     const expectedCallFlow = [
       'game.tsx starts game',
-      'GameManager.connectToServer() is called with server address',
+      'game.tsx calls ensureProtocol() to add http/https protocol to server address',
+      'GameManager.connectToServer() is called with properly formatted server URL',
       'GameManager calls SceneManager.setServerAddress()',
       'GameManager calls SceneManager.loadScenery()',
       'SceneManager.loadScenery() calls ServerSceneryGenerator.getSpawnLocation()',
       'ServerSceneryGenerator.getSpawnLocation() calls DungeonApi.getSpawnLocation()',
-      'DungeonApi.getSpawnLocation() makes HTTP GET request to /api/dungeon/spawn',
+      'DungeonApi validates server URL and ensures proper protocol',
+      'DungeonApi.getSpawnLocation() makes HTTP GET request to {protocol}://{server}/api/dungeon/spawn',
       'Response is used to call DungeonApi.getFloorLayout()',
-      'DungeonApi.getFloorLayout() makes HTTP GET request to /api/dungeon/floor/{floorId}'
+      'DungeonApi.getFloorLayout() makes HTTP GET request to {protocol}://{server}/api/dungeon/floor/{floorId}'
     ];
     
     // This test serves as documentation and verification that the structure exists
@@ -81,6 +83,7 @@ describe('Spawn Endpoint API Test', () => {
     // The actual call happens at:
     // File: sceneManager.ts, Line: ~80 in loadScenery() method
     // Code: await ServerSceneryGenerator.generateServerFloor(scene, this.serverAddress);
+    // NOTE: Server addresses are now automatically formatted with proper protocols (http/https)
     expect(true).toBe(true); // This test always passes but documents the expected behavior
   });
 });

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { GameManager, GameState } from '../lib/game';
+import { ensureProtocol } from '../lib/urlUtils';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -28,7 +29,8 @@ export default function Game() {
   useEffect(() => {
     if (!server || !user || !canvasRef.current) return;
 
-    const serverAddress = decodeURIComponent(server as string);
+    const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+    console.log('🔗 Game: Connecting to server with protocol:', serverAddress);
     
     // Initialize game manager
     const initGame = async () => {
@@ -70,7 +72,8 @@ export default function Game() {
   const handleManualReconnect = () => {
     if (!server || !gameManagerRef.current) return;
     
-    const serverAddress = decodeURIComponent(server as string);
+    const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+    console.log('🔄 Game: Manual reconnect to server:', serverAddress);
     gameManagerRef.current.manualReconnect(serverAddress);
   };
 
@@ -98,7 +101,7 @@ export default function Game() {
             Back to Dashboard
           </button>
           <div className={styles.serverInfo}>
-            Server: {decodeURIComponent(server as string)}
+            Server: {ensureProtocol(decodeURIComponent(server as string))}
           </div>
         </div>
         
