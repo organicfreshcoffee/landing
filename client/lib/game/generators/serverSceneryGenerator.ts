@@ -26,8 +26,8 @@ export class ServerSceneryGenerator {
   }> {
     const {
       cubeSize = 1,
-      floorColor = 0x666666,
-      hallwayFloorColor = 0x444444
+      floorColor = 0x0066ff, // Blue for rooms
+      hallwayFloorColor = 0xff0000 // Red for hallways
     } = options;
 
     console.log(`Starting server floor generation for: ${dungeonDagNodeName}`);
@@ -74,35 +74,22 @@ export class ServerSceneryGenerator {
         3 // hallway width
       );
 
-      // Step 3: Render all rooms (full tree)
+      // Step 3: Create renderer instances
+      const roomRenderer = new RoomRenderer(scene);
+      const hallwayRenderer = new HallwayRenderer(scene);
+
+      // Step 4: Render all rooms (full tree)
       const roomGroups: THREE.Group[] = [];
       roomsToRender.forEach((room) => {
         console.log(`🏠 Rendering room: ${room.id} at (${room.position.x}, ${room.position.y})`);
         
-        // Convert server room to renderable shape
-        const shape = this.convertServerRoomToShape(room, filteredLayout);
-        const roomGroup = RoomRenderer.renderRoom(scene, shape, {
-          cubeSize,
-          floorColor,
-          position: new THREE.Vector3(room.position.x, 0, room.position.y)
-        });
-        
-        // TODO: Add stairs back if needed (removed room height dependency for now)
-        // if (room.hasUpwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined) {
-        //   this.addStaircase(roomGroup, room.stairLocationX, room.stairLocationY, 'up');
-        // }
-        // if (room.hasDownwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined) {
-        //   this.addStaircase(roomGroup, room.stairLocationX, room.stairLocationY, 'down');
-        // }
-        
+        // Use the new instance-based room renderer
+        const roomGroup = roomRenderer.renderRoom(room, floorColor);
         roomGroups.push(roomGroup);
       });
 
-      // Step 4: Render hallway network
-      const hallwayGroup = HallwayRenderer.renderHallwayNetwork(scene, hallwayNetwork, {
-        cubeSize,
-        floorColor: hallwayFloorColor
-      });
+      // Step 5: Render hallway network
+      const hallwayGroup = hallwayRenderer.renderHallwayNetwork(hallwayNetwork, hallwayFloorColor);
 
       console.log(`Server floor generation finished for: ${dungeonDagNodeName}`);
       console.log(`Full Tree: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);

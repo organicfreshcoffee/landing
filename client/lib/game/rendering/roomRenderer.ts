@@ -1,147 +1,127 @@
 import * as THREE from 'three';
-import { RoomShape, Door } from '../types';
+import { ServerRoom } from '../types/generator';
 import { CubeFloorRenderer } from './cubeFloorRenderer';
 
-export interface RoomRenderOptions {
-  cubeSize?: number;
-  floorColor?: number;
-  position?: THREE.Vector3;
-}
-
+/**
+ * Room Renderer - renders room floors using cube-based tiles with overlap detection
+ */
 export class RoomRenderer {
-  /**
-   * Renders a room using only cube floors (no walls)
-   */
-  static renderRoom(
-    scene: THREE.Scene,
-    roomShape: RoomShape,
-    options: RoomRenderOptions = {}
-  ): THREE.Group {
-    const {
-      cubeSize = 1,
-      floorColor = 0x666666,
-      position = new THREE.Vector3(0, 0, 0)
-    } = options;
+  private scene: THREE.Scene;
+  private roomGroups: Map<string, THREE.Group> = new Map();
 
-    // Create room group
-    const roomGroup = new THREE.Group();
-    roomGroup.name = 'Room';
-    roomGroup.position.copy(position);
-
-    // Render only cube floors (no walls)
-    const floorGroup = this.renderCubeFloor(roomShape, cubeSize, floorColor);
-    roomGroup.add(floorGroup);
-
-    scene.add(roomGroup);
-    return roomGroup;
+  constructor(scene: THREE.Scene) {
+    this.scene = scene;
   }
 
   /**
-   * Renders cube floor tiles for the room area
+   * Register room cubes for rendering (doesn't immediately render)
    */
-  private static renderCubeFloor(
-    roomShape: RoomShape,
-    cubeSize: number,
-    floorColor: number
-  ): THREE.Group {
-    // For rectangular rooms, we'll render a grid of cube floors
-    // Convert room dimensions to cube grid coordinates
-    const cubesWidth = Math.floor(roomShape.width / cubeSize);
-    const cubesHeight = Math.floor(roomShape.height / cubeSize);
+  public registerRoom(room: ServerRoom): void {
+    const { x, y } = room.position;
+    const { width, height } = room;
     
-    // Calculate starting position to center the room
-    const startX = -Math.floor(cubesWidth / 2);
-    const startY = -Math.floor(cubesHeight / 2);
-    const endX = startX + cubesWidth - 1;
-    const endY = startY + cubesHeight - 1;
-
-    // Use the cube floor renderer utility
-    const floorGroup = CubeFloorRenderer.renderCubeFloorArea(
-      startX, 
-      startY, 
-      endX, 
-      endY,
-      {
-        cubeSize,
-        floorColor,
-        yOffset: 0
-      }
+    // Get all coordinates for this room
+    const coordinates = CubeFloorRenderer.getAreaCoordinates(
+      Math.round(x),
+      Math.round(y),
+      Math.round(x + width - 1),
+      Math.round(y + height - 1)
     );
     
-    floorGroup.name = 'RoomFloor';
-    return floorGroup;
+    // Register with blue color
+    CubeFloorRenderer.registerCubes(coordinates, 0x0066ff, 'room');
+    
+    console.log(`🟦 Registered room ${room.id} at (${x}, ${y}) with ${coordinates.length} cubes`);
   }
 
   /**
-   * Alternative method to render room floor from world coordinates
-   * Useful when you have specific world positions for the room
+   * Render room floor tiles at the room's defined position (legacy method)
    */
-  static renderRoomAtWorldPosition(
-    scene: THREE.Scene,
-    worldX: number,
-    worldZ: number,
-    width: number,
-    height: number,
-    options: RoomRenderOptions = {}
-  ): THREE.Group {
-    const {
-      cubeSize = 1,
-      floorColor = 0x666666
-    } = options;
+  public renderRoom(room: ServerRoom, color: number = 0x0066ff): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `Room_${room.id}`;
 
-    // Create room group at world position
-    const roomGroup = new THREE.Group();
-    roomGroup.name = 'Room';
-    roomGroup.position.set(worldX, 0, worldZ);
-
-    // Convert world dimensions to cube grid
-    const cubesWidth = Math.floor(width / cubeSize);
-    const cubesHeight = Math.floor(height / cubeSize);
+    // Use the room's defined position for rendering
+    const { x, y } = room.position;
+    const { width, height } = room;
     
-    // Render floor cubes starting from (0,0) relative to room position
-    const floorGroup = CubeFloorRenderer.renderCubeFloorArea(
-      0, 
-      0, 
-      cubesWidth - 1, 
-      cubesHeight - 1,
-      {
-        cubeSize,
-        floorColor,
-        yOffset: 0
-      }
+    // Get all coordinates for this room
+    const coordinates = CubeFloorRenderer.getAreaCoordinates(
+      Math.round(x),
+      Math.round(y),
+      Math.round(x + width - 1),
+      Math.round(y + height - 1)
     );
     
-    floorGroup.name = 'RoomFloor';
-    roomGroup.add(floorGroup);
-
-    scene.add(roomGroup);
-    return roomGroup;
+    // Register and render immediately
+    CubeFloorRenderer.registerCubes(coordinates, color, 'room');
+    const floorGroup = CubeFloorRenderer.renderAllCubes(this.scene);
+    
+    group.add(floorGroup);
+    
+    // Store for cleanup
+    this.roomGroups.set(room.id, group);
+    this.scene.add(group);
+    
+    console.log(`🟦 Rendered room ${room.id} at (${x}, ${y}) with dimensions ${width}x${height}`);
+    
+    return group;
   }
 
   /**
-   * Removes all rooms from the scene
+   * Render room at specific world coordinates (for testing/debugging)
    */
-  static clearRooms(scene: THREE.Scene): void {
-    const roomsToRemove = scene.children.filter(child => child.name === 'Room');
-    roomsToRemove.forEach(room => {
-      scene.remove(room);
-      // Dispose of geometries and materials to free memory
-      room.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) {
-            if (Array.isArray(child.material)) {
-              child.material.forEach(material => material.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        }
-      });
-    });
-    console.log(`Removed ${roomsToRemove.length} room(s) from scene`);
+  public renderRoomAtWorldPosition(
+    x: number,
+    y: number, 
+    width: number = 3,
+    height: number = 3,
+    color: number = 0x0066ff
+  ): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `Room_at_${x}_${y}`;
+
+    const coordinates = CubeFloorRenderer.getAreaCoordinates(
+      x,
+      y,
+      x + width - 1,
+      y + height - 1
+    );
     
-    // Clean up shared cube renderer resources
+    CubeFloorRenderer.registerCubes(coordinates, color, 'room');
+    const floorGroup = CubeFloorRenderer.renderAllCubes(this.scene);
+    
+    group.add(floorGroup);
+    this.scene.add(group);
+    
+    return group;
+  }
+
+  /**
+   * Remove a specific room
+   */
+  public removeRoom(roomId: string): void {
+    const group = this.roomGroups.get(roomId);
+    if (group) {
+      this.scene.remove(group);
+      this.roomGroups.delete(roomId);
+    }
+  }
+
+  /**
+   * Clear all rendered rooms
+   */
+  public clearAllRooms(): void {
+    this.roomGroups.forEach(group => this.scene.remove(group));
+    this.roomGroups.clear();
+    CubeFloorRenderer.clearRegistry();
+  }
+
+  /**
+   * Cleanup resources
+   */
+  public dispose(): void {
+    this.clearAllRooms();
     CubeFloorRenderer.dispose();
   }
 }
