@@ -102,9 +102,10 @@ export class WallGenerator {
         coord.y * opts.cubeSize
       );
 
-      // Mark as wall for identification
+      // Mark as wall for identification and collision
       wallMesh.userData.isWall = true;
       wallMesh.userData.wallCoord = coord;
+      wallMesh.userData.isCollidable = true;
       
       wallGroup.add(wallMesh);
     });
@@ -142,9 +143,10 @@ export class WallGenerator {
         coord.y * opts.cubeSize
       );
 
-      // Mark as ceiling for identification
+      // Mark as ceiling for identification and collision
       ceilingMesh.userData.isCeiling = true;
       ceilingMesh.userData.ceilingCoord = coord;
+      ceilingMesh.userData.isCollidable = true;
       
       ceilingGroup.add(ceilingMesh);
     });

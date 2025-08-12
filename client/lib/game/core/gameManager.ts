@@ -112,11 +112,13 @@ export class GameManager {
     });
     
     // Apply ground offset to position local player correctly
+    const initialY = localPlayerData.groundOffset?.y || 0;
     localPlayerScene.position.set(
       localPlayerData.groundOffset?.x || 0,
-      localPlayerData.groundOffset?.y || 0,
+      initialY,
       localPlayerData.groundOffset?.z || 0
     );
+    
     // Set initial rotation (only Y rotation for character)
     localPlayerScene.rotation.y = Math.PI; // Face away from camera initially
     localPlayerScene.rotation.x = 0; // Keep character upright
@@ -140,6 +142,15 @@ export class GameManager {
     // Load initial scenery from server
     console.log(`🎮 GameManager: Loading scenery from server...`);
     await this.sceneManager.loadScenery();
+    
+    // Update collision data after loading scenery
+    this.movementController.updateCollisionData(this.sceneManager.scene);
+    
+    // Position player on ground level
+    this.positionPlayerOnGround();
+    
+    console.log(`🎯 GameManager: Collision data initialized`);
+    
     console.log(`✅ GameManager: Scenery loaded successfully`);
     
     // Connect to WebSocket
@@ -280,6 +291,36 @@ export class GameManager {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }
+
+  private positionPlayerOnGround(): void {
+    if (!this.localPlayerRef.current) return;
+    
+    const currentPosition = this.localPlayerRef.current.position;
+    const collisionSystem = this.movementController.getCollisionSystem();
+    const floorHeight = collisionSystem.getFloorHeight(currentPosition);
+    
+    // Position player on the floor
+    this.localPlayerRef.current.position.y = floorHeight;
+    console.log(`👤 Player positioned on ground at height: ${floorHeight}`);
+  }
+
+  async loadFloor(floorName?: string): Promise<void> {
+    try {
+      await this.sceneManager.loadScenery(floorName);
+      // Update collision data after loading new scenery
+      this.movementController.updateCollisionData(this.sceneManager.scene);
+      // Position player on ground
+      this.positionPlayerOnGround();
+      console.log('🎯 Collision data updated after floor load');
+    } catch (error) {
+      console.error('Error loading floor:', error);
+      throw error;
+    }
+  }
+
+  updateServerAddress(address: string): void {
+    this.sceneManager.setServerAddress(address);
   }
 
   manualReconnect(serverAddress: string): void {

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { PlayerAnimationData } from '../types';
+import { CollisionSystem } from './collisionSystem';
+import { GameHUD } from '../ui/gameHUD';
 
 export class MovementController {
   private keysPressed = new Set<string>();
@@ -9,6 +11,21 @@ export class MovementController {
   private lastUpdateTime = 0;
   private lastSentMovementState = false;
   private clock = new THREE.Clock();
+  
+  // Physics and admin mode properties
+  private isAdminMode = false;
+  private velocity = new THREE.Vector3(0, 0, 0);
+  private isGrounded = false;
+  private isJumping = false;
+  
+  // Physics constants
+  private readonly GRAVITY = -35; // Units per second squared
+  private readonly JUMP_FORCE = 15; // Initial upward velocity
+  private readonly TERMINAL_VELOCITY = -50; // Maximum fall speed
+  private readonly ADMIN_SPEED_MULTIPLIER = 2; // Admin mode speed multiplier
+  
+  private collisionSystem: CollisionSystem;
+  private gameHUD: GameHUD;
 
   constructor(
     private localPlayerRef: { current: THREE.Object3D | null },
@@ -21,11 +38,20 @@ export class MovementController {
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
+    this.collisionSystem = CollisionSystem.getInstance();
+    this.gameHUD = GameHUD.getInstance();
   }
 
   private setupKeyboardListeners(): void {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!this.isConnected()) return;
+
+      // Handle admin mode toggle
+      if (event.code === 'Tab') {
+        event.preventDefault();
+        this.toggleAdminMode();
+        return;
+      }
 
       if (event.code === 'Space') {
         event.preventDefault();
@@ -81,57 +107,84 @@ export class MovementController {
   updateMovement(userId: string): void {
     if (!this.localPlayerRef.current || !this.cameraRef.current || !this.isConnected()) return;
     
-    const moveSpeed = 0.5;
+    const delta = this.clock.getDelta();
+    const moveSpeed = this.isAdminMode ? 0.5 * this.ADMIN_SPEED_MULTIPLIER : 0.5;
     const localPlayer = this.localPlayerRef.current;
     const camera = this.cameraRef.current;
     let moved = false;
     
     // Store old position
-    const oldPosition = { ...localPlayer.position };
+    const oldPosition = localPlayer.position.clone();
     const oldRotation = { ...this.localPlayerRotation };
     
     // Calculate movement direction based on player rotation
     const forward = new THREE.Vector3(0, 0, -1);
     const right = new THREE.Vector3(1, 0, 0);
+    const up = new THREE.Vector3(0, 1, 0);
     forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.localPlayerRotation.y);
     right.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.localPlayerRotation.y);
 
     // Track movement direction for animation
     let newMovementDirection: 'forward' | 'backward' | 'none' = this.movementDirection;
     
+    // Calculate intended movement
+    const movement = new THREE.Vector3(0, 0, 0);
+    
     if (this.keysPressed.has('KeyW')) {
-      localPlayer.position.add(forward.clone().multiplyScalar(moveSpeed));
+      movement.add(forward.clone().multiplyScalar(moveSpeed));
       moved = true;
       newMovementDirection = 'forward';
     }
     if (this.keysPressed.has('KeyS')) {
-      localPlayer.position.add(forward.clone().multiplyScalar(-moveSpeed));
+      movement.add(forward.clone().multiplyScalar(-moveSpeed));
       moved = true;
       newMovementDirection = 'backward';
     }
     if (this.keysPressed.has('KeyA')) {
-      localPlayer.position.add(right.clone().multiplyScalar(-moveSpeed));
+      movement.add(right.clone().multiplyScalar(-moveSpeed));
       moved = true;
       if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
     if (this.keysPressed.has('KeyD')) {
-      localPlayer.position.add(right.clone().multiplyScalar(moveSpeed));
+      movement.add(right.clone().multiplyScalar(moveSpeed));
       moved = true;
       if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
-    if (this.keysPressed.has('Space')) {
-      localPlayer.position.y += moveSpeed;
-      moved = true;
-    }
-    if (this.keysPressed.has('ShiftLeft')) {
-      localPlayer.position.y -= moveSpeed;
-      moved = true;
+
+    // Handle vertical movement based on admin mode
+    if (this.isAdminMode) {
+      // Admin mode: direct vertical control
+      if (this.keysPressed.has('Space')) {
+        movement.add(up.clone().multiplyScalar(moveSpeed));
+        moved = true;
+      }
+      if (this.keysPressed.has('ShiftLeft')) {
+        movement.add(up.clone().multiplyScalar(-moveSpeed));
+        moved = true;
+      }
+    } else {
+      // Normal mode: jumping and gravity
+      this.handleJumping();
+      this.applyGravity(delta);
     }
 
-    if (!moved) {
+    if (!moved && this.isAdminMode) {
       newMovementDirection = 'none';
     }
     this.movementDirection = newMovementDirection;
+
+    // Apply movement with collision detection
+    this.applyMovementWithCollision(localPlayer, movement, oldPosition);
+
+    // Update HUD if in admin mode
+    if (this.isAdminMode && this.localPlayerRef.current) {
+      this.gameHUD.updatePlayerInfo(
+        this.localPlayerRef.current.position, 
+        this.velocity, 
+        this.isGrounded, 
+        this.isJumping
+      );
+    }
 
     // Update camera
     this.updateCamera(camera, localPlayer.position);
@@ -141,6 +194,115 @@ export class MovementController {
 
     // Send updates to server
     this.sendMovementUpdateIfNeeded(userId, moved, oldRotation);
+  }
+
+  private toggleAdminMode(): void {
+    this.isAdminMode = !this.isAdminMode;
+    
+    if (this.isAdminMode) {
+      // Reset physics when entering admin mode
+      this.velocity.set(0, 0, 0);
+      this.isGrounded = false;
+      this.isJumping = false;
+      this.gameHUD.updateAdminMode(true);
+      this.gameHUD.showMessage('🔧 Admin Mode Enabled', 2000);
+      console.log('🔧 Admin mode enabled - No collision, no gravity, use Space/Shift for vertical movement');
+    } else {
+      // When exiting admin mode, snap to ground level if above ground
+      if (this.localPlayerRef.current) {
+        const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
+        if (this.localPlayerRef.current.position.y > floorHeight) {
+          this.localPlayerRef.current.position.y = floorHeight;
+        }
+        this.velocity.set(0, 0, 0);
+      }
+      this.gameHUD.updateAdminMode(false);
+      this.gameHUD.showMessage('👤 Normal Mode Enabled', 2000);
+      console.log('👤 Admin mode disabled - Collision and gravity enabled');
+    }
+  }
+
+  private handleJumping(): void {
+    if (this.keysPressed.has('Space') && this.isGrounded && !this.isJumping) {
+      this.velocity.y = this.JUMP_FORCE;
+      this.isJumping = true;
+      this.isGrounded = false;
+      console.log('🚀 Jump initiated');
+    }
+  }
+
+  private applyGravity(delta: number): void {
+    if (!this.localPlayerRef.current) return;
+
+    // Apply gravity
+    this.velocity.y += this.GRAVITY * delta;
+    
+    // Clamp to terminal velocity
+    if (this.velocity.y < this.TERMINAL_VELOCITY) {
+      this.velocity.y = this.TERMINAL_VELOCITY;
+    }
+
+    // Apply vertical velocity
+    const newY = this.localPlayerRef.current.position.y + this.velocity.y * delta;
+    const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
+    
+    // Check if we hit the ground
+    if (newY <= floorHeight) {
+      this.localPlayerRef.current.position.y = floorHeight;
+      this.velocity.y = 0;
+      this.isGrounded = true;
+      this.isJumping = false;
+    } else {
+      this.localPlayerRef.current.position.y = newY;
+      this.isGrounded = false;
+    }
+  }
+
+  private applyMovementWithCollision(
+    localPlayer: THREE.Object3D, 
+    movement: THREE.Vector3, 
+    oldPosition: THREE.Vector3
+  ): void {
+    if (movement.lengthSq() === 0) return;
+
+    if (this.isAdminMode) {
+      // Admin mode: no collision detection
+      localPlayer.position.add(movement);
+    } else {
+      // Normal mode: apply collision detection
+      const newPosition = oldPosition.clone().add(movement);
+      const collisionResult = this.collisionSystem.checkCollision(newPosition);
+      
+      if (collisionResult.collided) {
+        // Use corrected position
+        localPlayer.position.copy(collisionResult.correctedPosition);
+        
+        // Provide feedback for different collision types
+        if (collisionResult.collisionDirection === 'y') {
+          // Ceiling collision - stop upward movement
+          if (this.velocity.y > 0) {
+            this.velocity.y = 0;
+          }
+        }
+      } else {
+        // No collision, apply normal movement
+        localPlayer.position.copy(newPosition);
+      }
+    }
+  }
+
+  /**
+   * Update collision system data from scene
+   */
+  updateCollisionData(scene: THREE.Scene): void {
+    this.collisionSystem.updateCollisionData(scene);
+  }
+
+  /**
+   * Get the collision system instance
+   */
+  getCollisionSystem(): CollisionSystem {
+    return this.collisionSystem;
   }
 
   private updateCamera(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3): void {
@@ -254,6 +416,10 @@ export class MovementController {
     this.keysPressed.clear();
     this.isMoving = false;
     this.movementDirection = 'none';
+    this.velocity.set(0, 0, 0);
+    this.isAdminMode = false;
+    
+    this.gameHUD.hideHUD();
     
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -266,7 +432,11 @@ export class MovementController {
       isMoving: this.isMoving,
       movementDirection: this.movementDirection,
       keysPressed: Array.from(this.keysPressed),
-      localPlayerRotation: this.localPlayerRotation
+      localPlayerRotation: this.localPlayerRotation,
+      isAdminMode: this.isAdminMode,
+      velocity: this.velocity.toArray(),
+      isGrounded: this.isGrounded,
+      isJumping: this.isJumping
     };
   }
 }

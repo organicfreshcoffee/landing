@@ -2,3 +2,4 @@
 export { GameManager } from './gameManager';
 export { PlayerManager } from './playerManager';
 export { MovementController } from './movementController';
+export { CollisionSystem } from './collisionSystem';
