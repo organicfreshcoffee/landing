@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { ServerFloorGenerator } from './serverFloorGenerator';
+import { ServerFloorGenerator } from './floorGenerator';
 import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
-import { ServerHallwayGenerator } from './serverHallwayGenerator';
+import { ServerHallwayGenerator } from './hallwayGenerator';
 import { RoomRenderer } from '../rendering/roomRenderer';
 import { HallwayRenderer } from '../rendering/hallwayRenderer';
 

@@ -1,4 +1,4 @@
 // Re-export all generator modules
-export { ServerFloorGenerator } from './serverFloorGenerator';
-export { ServerHallwayGenerator } from './serverHallwayGenerator';
-export { ServerSceneryGenerator } from './serverSceneryGenerator';
+export { ServerFloorGenerator } from './floorGenerator';
+export { ServerHallwayGenerator } from './hallwayGenerator';
+export { ServerSceneryGenerator } from './sceneryGenerator';
