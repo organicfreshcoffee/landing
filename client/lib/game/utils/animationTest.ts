@@ -71,7 +71,7 @@ export class AnimationTest {
           this.testAction.setLoop(THREE.LoopRepeat, Infinity);
           this.testAction.clampWhenFinished = true;
           this.testAction.weight = 1.0;
-          this.testAction.timeScale = 100.0; // Speed up by factor of 100
+          this.testAction.timeScale = 300.0; // Speed up by factor of 300
           this.testAction.play();
           
           console.log('✅ Test runner animation started');
