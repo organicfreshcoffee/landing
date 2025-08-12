@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { Player, PlayerUpdate, ModelData, PlayerAnimationData } from './types';
-import { ModelLoader } from './modelLoader';
+import { Player, PlayerUpdate, ModelData, PlayerAnimationData } from '../types';
+import { ModelLoader } from '../utils';
 
 export class PlayerManager {
   static generatePlayerColor(playerId: string): string {
@@ -44,6 +44,10 @@ export class PlayerManager {
     // Set world position and rotation - DON'T apply ground offset for other players
     // Other players' positions come from server and are already correctly positioned
     this.positionPlayer(playerModel, player, undefined);
+    
+    // Mark as player object to prevent it from being cleared by scenery loading
+    playerModel.userData.isPlayer = true;
+    playerModel.userData.playerId = player.id;
     
     return animationResult;
   }
@@ -110,7 +114,9 @@ export class PlayerManager {
           
           // Set initial animation direction if player is moving
           if (player.isMoving) {
-            action.timeScale = player.movementDirection === 'backward' ? -1 : 1;
+            action.timeScale = player.movementDirection === 'backward' ? -300 : 300; // Speed up by factor of 300
+          } else {
+            action.timeScale = 300; // Default speed when not moving but ready
           }
         }
       });
@@ -239,11 +245,11 @@ export class PlayerManager {
         walkAction.paused = false;
         walkAction.enabled = true;
         
-        // Set animation direction based on movement
+        // Set animation direction based on movement with 300x speed
         if (playerData.movementDirection === 'backward') {
-          walkAction.timeScale = -1;
+          walkAction.timeScale = -300; // Speed up by factor of 300
         } else {
-          walkAction.timeScale = 1;
+          walkAction.timeScale = 300; // Speed up by factor of 300
         }
       } else {
         // Pause instead of stop to maintain smooth transitions

@@ -1,16 +1,15 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three-stdlib';
 import { SkeletonUtils } from 'three-stdlib';
-import { ModelData } from './types';
+import { ModelData } from '../types';
+import { CubeConfig } from '../config/cubeConfig';
 
 export class ModelLoader {
   private static loader: GLTFLoader | null = null;
 
   private static getLoader(): GLTFLoader {
-    if (!this.loader) {
-      this.loader = new GLTFLoader();
-    }
-    return this.loader;
+    // Always create a fresh loader to avoid caching issues
+    return new GLTFLoader();
   }
 
   static async loadPlayerModel(): Promise<ModelData> {
@@ -32,6 +31,8 @@ export class ModelLoader {
 
       // Use SkeletonUtils.clone to properly handle SkinnedMesh and skeleton data
       const freshScene = SkeletonUtils.clone(gltf.scene) as THREE.Group;
+      
+      console.log('🔄 Cloned fresh scene with SkeletonUtils, UUID:', freshScene.uuid);
       
       // Debug: Log animation details
       if (gltf.animations && gltf.animations.length > 0) {
@@ -63,13 +64,13 @@ export class ModelLoader {
       const groundOffset = {
         x: -center.x,
         z: -center.z,
-        y: -box.min.y
+        y: -box.min.y + CubeConfig.getCubeSize() // Position player above the floor cubes
       };
       
       // Reset position to origin for template - individual instances will apply offsets
       freshScene.position.set(0, 0, 0);
       
-      console.log('Template model reset to origin, ground offset calculated:', groundOffset);
+      console.log('Template model reset to origin, ground offset calculated (positioned above floor cubes):', groundOffset);
       
       // Debug: Check for bones/skeleton structure
       let foundSkeleton = false;
@@ -129,7 +130,15 @@ export class ModelLoader {
       const group = new THREE.Group();
       group.add(mesh);
       
-      return { scene: group, animations: [], groundOffset: { x: 0, y: 0, z: 0 } };
+      return { 
+        scene: group, 
+        animations: [], 
+        groundOffset: { 
+          x: 0, 
+          y: CubeConfig.getCubeSize(), // Position fallback player above floor cubes too
+          z: 0 
+        } 
+      };
     }
   }
 

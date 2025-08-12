@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from './types';
-import { ModelLoader } from './modelLoader';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from '../types';
+import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
-import { WebSocketManager } from './webSocketManager';
+import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
-import { SceneManager } from './sceneManager';
+import { SceneManager } from '../rendering';
 
 export class GameManager {
   private sceneManager: SceneManager;
@@ -39,9 +39,6 @@ export class GameManager {
   }
 
   private async initializeGame(): Promise<void> {
-    // Load scenery
-    await this.sceneManager.loadScenery();
-
     // Create local player
     await this.createLocalPlayer();
 
@@ -63,8 +60,15 @@ export class GameManager {
   }
 
   private async createLocalPlayer(): Promise<void> {
+    console.log('🏃 Creating local player...');
     const localPlayerData = await ModelLoader.loadPlayerModel();
     const localPlayerScene = localPlayerData.scene;
+    
+    console.log('📊 Local player data:', {
+      hasAnimations: localPlayerData.animations.length > 0,
+      animationCount: localPlayerData.animations.length,
+      sceneUUID: localPlayerScene.uuid
+    });
     
     // Set up animations for local player
     if (localPlayerData.animations.length > 0) {
@@ -81,6 +85,8 @@ export class GameManager {
           action.weight = 1.0;
           // Prepare the action but don't play it yet
           action.reset();
+          
+          console.log('✅ Local player StickMan_Run action configured');
         }
       });
       
@@ -91,6 +97,13 @@ export class GameManager {
         walkAction.play();
         walkAction.paused = true;
         walkAction.enabled = true;
+        
+        console.log('🎭 Local player animation initialized:', {
+          isRunning: walkAction.isRunning(),
+          paused: walkAction.paused,
+          enabled: walkAction.enabled,
+          timeScale: walkAction.timeScale
+        });
       } else {
         console.error('❌ StickMan_Run action was not created properly!');
       }
@@ -115,23 +128,54 @@ export class GameManager {
     });
     
     // Apply ground offset to position local player correctly
+    const initialY = localPlayerData.groundOffset?.y || 0;
     localPlayerScene.position.set(
       localPlayerData.groundOffset?.x || 0,
-      localPlayerData.groundOffset?.y || 0,
+      initialY,
       localPlayerData.groundOffset?.z || 0
     );
+    
     // Set initial rotation (only Y rotation for character)
     localPlayerScene.rotation.y = Math.PI; // Face away from camera initially
     localPlayerScene.rotation.x = 0; // Keep character upright
     localPlayerScene.rotation.z = 0; // Keep character upright
     localPlayerScene.castShadow = true;
     
+    // Mark as player object to prevent it from being cleared by scenery loading
+    localPlayerScene.userData.isPlayer = true;
+    localPlayerScene.userData.playerId = this.user?.uid || 'local';
+    
     this.sceneManager.addToScene(localPlayerScene);
     this.localPlayerRef.current = localPlayerScene;
   }
 
   async connectToServer(serverAddress: string): Promise<void> {
+    console.log(`🔗 GameManager: Connecting to server ${serverAddress}`);
+    
+    // Set server address for dungeon API calls
+    this.sceneManager.setServerAddress(serverAddress);
+    
+    // Load initial scenery from server
+    console.log(`🎮 GameManager: Loading scenery from server...`);
+    await this.sceneManager.loadScenery();
+    
+    // Update collision data after loading scenery
+    this.movementController.updateCollisionData(this.sceneManager.scene);
+    
+    // Position player on ground level
+    this.positionPlayerOnGround();
+    
+    // Create test runner for animation debugging
+    await AnimationTest.createTestRunner(this.sceneManager.scene);
+    
+    console.log(`🎯 GameManager: Collision data initialized`);
+    
+    console.log(`✅ GameManager: Scenery loaded successfully`);
+    
+    // Connect to WebSocket
+    console.log(`🔌 GameManager: Connecting to WebSocket...`);
     await this.webSocketManager.connect(serverAddress, this.user);
+    console.log(`✅ GameManager: WebSocket connected`);
   }
 
   private handleGameMessage(message: GameMessage): void {
@@ -268,6 +312,42 @@ export class GameManager {
     };
   }
 
+  private positionPlayerOnGround(): void {
+    if (!this.localPlayerRef.current) return;
+    
+    const currentPosition = this.localPlayerRef.current.position;
+    const collisionSystem = this.movementController.getCollisionSystem();
+    const floorHeight = collisionSystem.getFloorHeight(currentPosition);
+    
+    console.log('🏠 Positioning player on ground:', {
+      currentY: currentPosition.y.toFixed(2),
+      floorHeight: floorHeight.toFixed(2),
+      currentPos: `(${currentPosition.x.toFixed(1)}, ${currentPosition.y.toFixed(1)}, ${currentPosition.z.toFixed(1)})`
+    });
+    
+    // Position player on the floor
+    this.localPlayerRef.current.position.y = floorHeight;
+    console.log(`👤 Player positioned on ground at height: ${floorHeight}`);
+  }
+
+  async loadFloor(floorName?: string): Promise<void> {
+    try {
+      await this.sceneManager.loadScenery(floorName);
+      // Update collision data after loading new scenery
+      this.movementController.updateCollisionData(this.sceneManager.scene);
+      // Position player on ground
+      this.positionPlayerOnGround();
+      console.log('🎯 Collision data updated after floor load');
+    } catch (error) {
+      console.error('Error loading floor:', error);
+      throw error;
+    }
+  }
+
+  updateServerAddress(address: string): void {
+    this.sceneManager.setServerAddress(address);
+  }
+
   manualReconnect(serverAddress: string): void {
     this.webSocketManager.manualReconnect(serverAddress, this.user);
   }
@@ -294,8 +374,18 @@ export class GameManager {
       movement: this.movementController.debugInfo,
       players: Array.from(this.players.keys()),
       localPlayer: this.localPlayerRef.current?.position,
-      animations: Array.from(this.playersAnimations.keys())
+      animations: Array.from(this.playersAnimations.keys()),
+      testRunner: AnimationTest.getDebugInfo()
     };
+  }
+
+  // Debug methods for animation testing
+  toggleTestRunner(): void {
+    AnimationTest.toggleTestRunner(this.sceneManager.scene);
+  }
+
+  removeTestRunner(): void {
+    AnimationTest.removeTestRunner(this.sceneManager.scene);
   }
 
   cleanup(): void {

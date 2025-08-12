@@ -1,8 +1,9 @@
+// Re-export all modules from their organized folders
 export * from './types';
-export { ModelLoader } from './modelLoader';
-export { PlayerManager } from './playerManager';
-export { SceneryGenerator } from './sceneryGenerator';
-export { WebSocketManager } from './webSocketManager';
-export { MovementController } from './movementController';
-export { SceneManager } from './sceneManager';
-export { GameManager } from './gameManager';
+export * from './core';
+export * from './network';
+export * from './rendering';
+export * from './generators';
+export * from './utils';
+export * from './config';
+export * from './ui';
