@@ -25,7 +25,7 @@ export class DungeonFloorRenderer {
     roomColor: 0x0080ff, // Blue for rooms
     hallwayColor: 0xff0000, // Red for hallways
     yOffset: 0,
-    hallwayWidth: 2,
+    hallwayWidth: 1,
     showDoors: true,
     showStairs: false,
     showDebug: false

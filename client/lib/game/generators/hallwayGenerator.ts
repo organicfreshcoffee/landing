@@ -13,7 +13,7 @@ export interface HallwayGenerationOptions {
  */
 export class HallwayGenerator {
   private static readonly DEFAULT_OPTIONS: Required<HallwayGenerationOptions> = {
-    width: 2,
+    width: 1,
     cornerRadius: 1,
     minimizeOverlaps: true
   };
@@ -98,7 +98,8 @@ export class HallwayGenerator {
     // Number of steps along the segment
     const steps = Math.max(1, Math.ceil(length));
     
-    for (let i = 0; i <= steps; i++) {
+    // Generate cubes along the segment (excluding end point to avoid overlaps with rooms)
+    for (let i = 0; i < steps; i++) {
       const t = steps > 0 ? i / steps : 0;
       const centerX = start.x + dirX * length * t;
       const centerY = start.y + dirY * length * t;

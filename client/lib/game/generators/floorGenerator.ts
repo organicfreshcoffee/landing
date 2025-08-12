@@ -295,7 +295,7 @@ export class FloorGenerator {
    * Calculate the position for a child node relative to its parent
    */
   private static calculateChildPosition(
-    childNode: DungeonDagNode,
+    childNode: DungeonNode,
     parentRoom: { position: THREE.Vector2; width: number; height: number },
     parentEntrance: 'north' | 'south' | 'east' | 'west'
   ): { childPosition: THREE.Vector2; childEntrance: 'north' | 'south' | 'east' | 'west' } {
@@ -310,7 +310,7 @@ export class FloorGenerator {
     // Calculate absolute direction from relative direction
     const absoluteDirection = this.getAbsoluteDirection(parentEntrance, direction);
     
-    // Add a minimal gap to prevent most overlaps but maintain connectivity
+    // No gap needed for seamless connections
     const gap = 0;
     
     switch (absoluteDirection) {

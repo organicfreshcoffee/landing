@@ -59,7 +59,7 @@ export class ServerSceneryGenerator {
         roomColor: floorColor,
         hallwayColor: hallwayFloorColor,
         yOffset: 0,
-        hallwayWidth: 2,
+        hallwayWidth: 1,
         showDoors: true,
         showStairs: false,
         showDebug: false
