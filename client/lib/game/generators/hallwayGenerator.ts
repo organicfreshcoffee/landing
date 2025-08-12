@@ -1,258 +1,264 @@
 import * as THREE from 'three';
-import { ServerRoom, ServerFloorLayout, ServerHallway } from '../types/generator';
+import { CubePosition } from '../rendering/cubeFloorRenderer';
+import { ServerHallway, FloorHallwaySegment } from '../types/generator';
 
-// Simplified door interface for server-based rooms
-export interface ServerDoor {
-  position: THREE.Vector2; // World position of the door
-  width: number;
-  roomId: string;
+export interface HallwayGenerationOptions {
+  width?: number;
+  cornerRadius?: number;
+  minimizeOverlaps?: boolean;
 }
 
-export interface Connection {
-  fromRoomId: string;
-  toRoomId: string;
-  fromDoor: ServerDoor;
-  toDoor: ServerDoor;
-  hallwayLength?: number; // From server data if available
-}
+/**
+ * Generates hallway floor coordinates for rendering
+ */
+export class HallwayGenerator {
+  private static readonly DEFAULT_OPTIONS: Required<HallwayGenerationOptions> = {
+    width: 2,
+    cornerRadius: 1,
+    minimizeOverlaps: true
+  };
 
-export interface HallwaySegment {
-  id: string;
-  start: THREE.Vector2;
-  end: THREE.Vector2;
-  width: number;
-  connectionIds: string[];
-}
-
-export interface HallwayIntersection {
-  id: string;
-  position: THREE.Vector2;
-  radius: number;
-  connectedSegments: string[];
-}
-
-export interface HallwayNetwork {
-  connections: Connection[];
-  segments: HallwaySegment[];
-  intersections: HallwayIntersection[];
-  deadEnds: THREE.Vector2[];
-}
-
-export class ServerHallwayGenerator {
   /**
-   * Generates hallway network from server floor layout
-   * @param layout - The server floor layout with calculated positions
-   * @param hallwayWidth - Width of hallways (default: 3)
+   * Generate floor coordinates for a single hallway
    */
-  static generateHallwayNetwork(
-    layout: ServerFloorLayout,
-    hallwayWidth: number = 3
-  ): HallwayNetwork {
-    const connections: Connection[] = [];
-    const segments: HallwaySegment[] = [];
-    const intersections: HallwayIntersection[] = [];
-    const deadEnds: THREE.Vector2[] = [];
+  static generateHallwayFloor(
+    hallway: ServerHallway,
+    options: HallwayGenerationOptions = {}
+  ): CubePosition[] {
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
-    // Convert server hallways to segments using their calculated positions
-    layout.hallways.forEach((hallway) => {
-      console.log(`🛤️ Processing hallway ${hallway.id} for segment generation`);
+    if (!hallway.segments || hallway.segments.length === 0) {
+      console.warn(`No segments found for hallway ${hallway.name}`);
+      return [];
+    }
+
+    let coordinates: CubePosition[] = [];
+    
+    // Generate coordinates for each segment
+    hallway.segments.forEach(segment => {
+      const segmentCoords = this.generateSegmentCoordinates(segment, opts.width);
+      coordinates = coordinates.concat(segmentCoords);
+    });
+
+    // Remove duplicates to avoid overlaps
+    if (opts.minimizeOverlaps) {
+      coordinates = this.removeDuplicateCoordinates(coordinates);
+    }
+
+    console.log(`🛤️ Generated ${coordinates.length} floor cubes for hallway ${hallway.name}`);
+    return coordinates;
+  }
+
+  /**
+   * Generate floor coordinates for multiple hallways
+   */
+  static generateMultipleHallwayFloors(
+    hallways: ServerHallway[],
+    options: HallwayGenerationOptions = {}
+  ): Map<string, CubePosition[]> {
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
+    const hallwayFloors = new Map<string, CubePosition[]>();
+    
+    hallways.forEach(hallway => {
+      const coordinates = this.generateHallwayFloor(hallway, opts);
+      hallwayFloors.set(hallway.name, coordinates);
+    });
+
+    return hallwayFloors;
+  }
+
+  /**
+   * Generate coordinates for a single hallway segment
+   */
+  private static generateSegmentCoordinates(
+    segment: FloorHallwaySegment,
+    width: number
+  ): CubePosition[] {
+    const coordinates: CubePosition[] = [];
+    const { start, end } = segment;
+    
+    // Calculate direction and length
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    
+    if (length === 0) {
+      // Single point hallway
+      return this.generateWidthCoordinates(start.x, start.y, width, segment.direction);
+    }
+    
+    // Normalize direction
+    const dirX = dx / length;
+    const dirY = dy / length;
+    
+    // Calculate perpendicular for width
+    const perpX = -dirY;
+    const perpY = dirX;
+    
+    // Number of steps along the segment
+    const steps = Math.max(1, Math.ceil(length));
+    
+    for (let i = 0; i <= steps; i++) {
+      const t = steps > 0 ? i / steps : 0;
+      const centerX = start.x + dirX * length * t;
+      const centerY = start.y + dirY * length * t;
       
-      if (hallway.segments && hallway.segments.length > 0) {
-        hallway.segments.forEach((segment, segIndex) => {
-          const hallwaySegment: HallwaySegment = {
-            id: `${hallway.id}_segment_${segIndex}`,
-            start: segment.start.clone(),
-            end: segment.end.clone(),
-            width: hallwayWidth,
-            connectionIds: [hallway.id]
-          };
-          segments.push(hallwaySegment);
-          console.log(`✅ Created segment: ${hallwaySegment.id} from (${segment.start.x}, ${segment.start.y}) to (${segment.end.x}, ${segment.end.y})`);
-        });
-      } else {
-        console.log(`⚠️ Hallway ${hallway.id} has no segments calculated`);
+      // Add cubes for width
+      const widthCoords = this.generateWidthCoordinates(
+        centerX, 
+        centerY, 
+        width, 
+        new THREE.Vector2(perpX, perpY)
+      );
+      
+      coordinates.push(...widthCoords);
+    }
+    
+    return coordinates;
+  }
+
+  /**
+   * Generate coordinates for hallway width at a specific point
+   */
+  private static generateWidthCoordinates(
+    centerX: number,
+    centerY: number,
+    width: number,
+    perpDirection: THREE.Vector2
+  ): CubePosition[] {
+    const coordinates: CubePosition[] = [];
+    
+    for (let w = 0; w < width; w++) {
+      const widthOffset = w - Math.floor(width / 2);
+      const finalX = Math.round(centerX + perpDirection.x * widthOffset);
+      const finalY = Math.round(centerY + perpDirection.y * widthOffset);
+      
+      coordinates.push({ x: finalX, y: finalY });
+    }
+    
+    return coordinates;
+  }
+
+  /**
+   * Remove duplicate coordinates
+   */
+  private static removeDuplicateCoordinates(coordinates: CubePosition[]): CubePosition[] {
+    const uniqueCoords = new Map<string, CubePosition>();
+    
+    coordinates.forEach(coord => {
+      const key = `${coord.x},${coord.y}`;
+      uniqueCoords.set(key, coord);
+    });
+    
+    return Array.from(uniqueCoords.values());
+  }
+
+  /**
+   * Generate intersection coordinates where hallways meet
+   */
+  static generateIntersectionFloor(
+    position: THREE.Vector2,
+    width: number,
+    radius: number = 1
+  ): CubePosition[] {
+    const coordinates: CubePosition[] = [];
+    const centerX = Math.round(position.x);
+    const centerY = Math.round(position.y);
+    
+    // Create a circular intersection area
+    for (let x = centerX - radius; x <= centerX + radius; x++) {
+      for (let y = centerY - radius; y <= centerY + radius; y++) {
+        const distance = Math.sqrt(
+          Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
+        );
         
-        // Fallback: if no segments calculated, try to create from start/end positions
-        if (hallway.startPosition && hallway.endPosition) {
-          const hallwaySegment: HallwaySegment = {
-            id: `${hallway.id}_fallback_segment`,
-            start: hallway.startPosition.clone(),
-            end: hallway.endPosition.clone(),
-            width: hallwayWidth,
-            connectionIds: [hallway.id]
-          };
-          segments.push(hallwaySegment);
-          console.log(`✅ Created fallback segment: ${hallwaySegment.id} from (${hallway.startPosition.x}, ${hallway.startPosition.y}) to (${hallway.endPosition.x}, ${hallway.endPosition.y})`);
-        } else {
-          console.log(`❌ Hallway ${hallway.id} has no position data at all`);
+        if (distance <= radius) {
+          coordinates.push({ x, y });
         }
       }
-    });
-
-    // Create connections based on parent-child relationships
-    this.createHierarchyBasedConnections(layout, connections, hallwayWidth);
+    }
     
-    // Find intersections where segments cross
-    this.findIntersections(segments, intersections, hallwayWidth);
-    
-    console.log(`Generated server-based hallway network: ${connections.length} connections, ${segments.length} segments, ${intersections.length} intersections`);
-    
-    return { connections, segments, intersections, deadEnds };
+    return coordinates;
   }
 
   /**
-   * Create connections based on the server hierarchy
-   * SIMPLIFIED: Only create connections for root and immediate children
+   * Calculate hallway connection points for rooms
    */
-  private static createHierarchyBasedConnections(
-    layout: ServerFloorLayout,
-    connections: Connection[],
-    hallwayWidth: number
-  ): void {
-    console.log(`🔗 Creating connections for ${layout.nodeMap.size} nodes`);
+  static calculateRoomConnectionPoint(
+    roomPosition: THREE.Vector2,
+    roomWidth: number,
+    roomHeight: number,
+    doorSide: 'top' | 'right' | 'bottom' | 'left',
+    doorOffset: number = 0
+  ): THREE.Vector2 {
+    const { x, y } = roomPosition;
     
-    // Process each node and create connections to its children
-    layout.nodeMap.forEach((node, nodeName) => {
-      console.log(`🔗 Node ${nodeName} has ${node.children.length} children: [${node.children.join(', ')}]`);
-      
-      node.children.forEach((childName: string) => {
-        const childNode = layout.nodeMap.get(childName);
-        if (!childNode) {
-          console.log(`⚠️ Child node ${childName} not found in nodeMap`);
-          return;
-        }
-
-        console.log(`🔗 Creating connection: ${nodeName} -> ${childName}`);
-
-        // Create connection between parent and child
-        const connection = this.createDirectConnection(node, childNode, hallwayWidth);
-        if (connection) {
-          connections.push(connection);
-          console.log(`✅ Connection created: ${connection.fromRoomId} -> ${connection.toRoomId}`);
-        } else {
-          console.log(`❌ Failed to create connection: ${nodeName} -> ${childName}`);
-        }
-      });
-    });
-  }
-
-  /**
-   * Create a direct connection between two nodes
-   */
-  private static createDirectConnection(
-    fromNode: ServerRoom | ServerHallway,
-    toNode: ServerRoom | ServerHallway,
-    hallwayWidth: number
-  ): Connection | null {
-    // Get connection points
-    const fromDoor = this.getNodeConnectionPoint(fromNode);
-    const toDoor = this.getNodeConnectionPoint(toNode);
-
-    if (!fromDoor || !toDoor) return null;
-
-    return {
-      fromRoomId: fromNode.id,
-      toRoomId: toNode.id,
-      fromDoor,
-      toDoor,
-      hallwayLength: this.isHallway(toNode) ? toNode.length : undefined
-    };
-  }
-
-  /**
-   * Get the connection point for a node (room or hallway)
-   */
-  private static getNodeConnectionPoint(node: ServerRoom | ServerHallway): ServerDoor | null {
-    if (this.isRoom(node)) {
-      const room = node as ServerRoom;
-      // For rooms, use the room center as the connection point
-      // The actual door positions are handled by the room renderer
-      return {
-        position: room.position.clone(),
-        width: 2,
-        roomId: room.id
-      };
-    } else {
-      const hallway = node as ServerHallway;
-      // For hallways, use the start position as the connection point
-      if (hallway.startPosition) {
-        return {
-          position: hallway.startPosition.clone(),
-          width: 2,
-          roomId: hallway.id
-        };
-      }
-      
-      console.log(`⚠️ Hallway ${hallway.id} has no start position`);
-      return null;
+    switch (doorSide) {
+      case 'top':
+        return new THREE.Vector2(x + doorOffset, y + roomHeight);
+      case 'bottom':
+        return new THREE.Vector2(x + doorOffset, y - 1);
+      case 'right':
+        return new THREE.Vector2(x + roomWidth, y + doorOffset);
+      case 'left':
+        return new THREE.Vector2(x - 1, y + doorOffset);
+      default:
+        return new THREE.Vector2(x, y);
     }
   }
 
   /**
-   * Type guard to check if a node is a room
+   * Generate smooth path coordinates between two points
    */
-  private static isRoom(node: ServerRoom | ServerHallway): node is ServerRoom {
-    return 'width' in node && 'height' in node;
-  }
-
-  /**
-   * Type guard to check if a node is a hallway
-   */
-  private static isHallway(node: ServerRoom | ServerHallway): node is ServerHallway {
-    return 'length' in node;
-  }
-
-  /**
-   * Finds intersections between hallway segments
-   */
-  private static findIntersections(
-    segments: HallwaySegment[],
-    intersections: HallwayIntersection[],
-    defaultRadius: number
-  ): void {
-    for (let i = 0; i < segments.length; i++) {
-      for (let j = i + 1; j < segments.length; j++) {
-        const seg1 = segments[i];
-        const seg2 = segments[j];
+  static generateSmoothPath(
+    start: THREE.Vector2,
+    end: THREE.Vector2,
+    width: number = 2
+  ): CubePosition[] {
+    const coordinates: CubePosition[] = [];
+    
+    // Use Bresenham-like algorithm for smooth path
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+    const sx = start.x < end.x ? 1 : -1;
+    const sy = start.y < end.y ? 1 : -1;
+    let err = dx - dy;
+    
+    let currentX = start.x;
+    let currentY = start.y;
+    
+    while (true) {
+      // Add width around current point
+      for (let w = 0; w < width; w++) {
+        const offset = w - Math.floor(width / 2);
         
-        const intersection = this.lineIntersection(
-          seg1.start, seg1.end,
-          seg2.start, seg2.end
-        );
-        
-        if (intersection) {
-          const intersectionId = `intersection_${i}_${j}`;
-          intersections.push({
-            id: intersectionId,
-            position: intersection,
-            radius: Math.max(seg1.width, seg2.width) / 2,
-            connectedSegments: [seg1.id, seg2.id]
+        // Add perpendicular offset based on dominant direction
+        if (dx > dy) {
+          coordinates.push({ 
+            x: Math.round(currentX), 
+            y: Math.round(currentY + offset) 
+          });
+        } else {
+          coordinates.push({ 
+            x: Math.round(currentX + offset), 
+            y: Math.round(currentY) 
           });
         }
       }
-    }
-  }
-  
-  /**
-   * Calculates intersection point of two lines
-   */
-  private static lineIntersection(
-    p1: THREE.Vector2, p2: THREE.Vector2,
-    p3: THREE.Vector2, p4: THREE.Vector2
-  ): THREE.Vector2 | null {
-    const denom = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
-    if (Math.abs(denom) < 0.0001) return null; // Parallel lines
-    
-    const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / denom;
-    const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / denom;
-    
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-      return new THREE.Vector2(
-        p1.x + t * (p2.x - p1.x),
-        p1.y + t * (p2.y - p1.y)
-      );
+      
+      if (currentX === end.x && currentY === end.y) break;
+      
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        currentX += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        currentY += sy;
+      }
     }
     
-    return null;
+    return this.removeDuplicateCoordinates(coordinates);
   }
 }

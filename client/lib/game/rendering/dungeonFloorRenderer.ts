@@ -3,6 +3,7 @@ import { FloorGenerator, DungeonDagData } from '../generators/floorGenerator';
 import { HallwayRenderer } from './hallwayRenderer';
 import { RoomRenderer } from './roomRenderer';
 import { CubeFloorRenderer } from './cubeFloorRenderer';
+import { ServerFloorLayout } from '../types/generator';
 
 export interface DungeonRenderOptions {
   cubeSize?: number;
@@ -12,6 +13,7 @@ export interface DungeonRenderOptions {
   hallwayWidth?: number;
   showDoors?: boolean;
   showStairs?: boolean;
+  showDebug?: boolean;
 }
 
 /**
@@ -25,7 +27,8 @@ export class DungeonFloorRenderer {
     yOffset: 0,
     hallwayWidth: 2,
     showDoors: true,
-    showStairs: false
+    showStairs: false,
+    showDebug: false
   };
 
   /**
@@ -41,356 +44,261 @@ export class DungeonFloorRenderer {
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
+    layout: ServerFloorLayout;
   } {
-    const finalOptions = { ...this.DEFAULT_OPTIONS, ...options };
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
-    console.log(`🏰 Rendering dungeon floor: ${dungeonData.dungeonDagNodeName}`);
-    console.log(`📊 Input: ${dungeonData.nodes.length} nodes`);
-
-    // Clear any existing floor data
+    console.log(`🏰 Starting dungeon floor rendering for ${dungeonData.dungeonDagNodeName}`);
+    
+    // Clear previous cube registrations
     CubeFloorRenderer.clearRegistry();
-
-    try {
-      // Generate the floor layout from DAG data
-      const generator = new FloorGenerator();
-      const floorLayout = generator.generateFloorLayout(dungeonData);
-      
-      console.log(`🏗️ Generated layout: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
-      console.log(`📐 Bounds: ${floorLayout.bounds.width} x ${floorLayout.bounds.height}`);
-
-      // Render rooms first
-      const roomGroup = RoomRenderer.renderRooms(scene, floorLayout.rooms, {
-        cubeSize: finalOptions.cubeSize,
-        color: finalOptions.roomColor,
-        yOffset: finalOptions.yOffset,
-        showDoors: finalOptions.showDoors,
-        showStairs: finalOptions.showStairs
-      });
-
-      // Render hallways second (they may overlap with rooms)
-      const hallwayGroup = HallwayRenderer.renderHallways(scene, floorLayout.hallways, {
-        cubeSize: finalOptions.cubeSize,
-        color: finalOptions.hallwayColor,
-        yOffset: finalOptions.yOffset,
-        width: finalOptions.hallwayWidth
-      });
-
-      // Get the final rendered group from cube renderer
-      const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
-        cubeSize: finalOptions.cubeSize,
-        yOffset: finalOptions.yOffset
-      });
-
-      // Calculate statistics
-      const roomStats = RoomRenderer.getRoomStats(floorLayout.rooms);
-      const hallwayStats = HallwayRenderer.getHallwayStats(floorLayout.hallways);
-      
-      // Count overlaps by checking the cube registry
-      const overlapCount = this.countOverlaps();
-
-      const result = {
-        floorGroup,
-        roomCount: floorLayout.rooms.length,
-        hallwayCount: floorLayout.hallways.length,
-        overlapCount,
-        totalArea: roomStats.totalArea + hallwayStats.totalArea
-      };
-
-      console.log(`✅ Dungeon floor rendered successfully!`);
-      console.log(`📊 Stats: ${result.roomCount} rooms, ${result.hallwayCount} hallways, ${result.overlapCount} overlaps`);
-      console.log(`📏 Total area: ${result.totalArea} cubes`);
-
-      return result;
-
-    } catch (error) {
-      console.error('❌ Failed to render dungeon floor:', error);
-      throw error;
+    
+    // Process DAG data into positioned layout
+    const layout = FloorGenerator.processServerResponse(dungeonData);
+    
+    // Render rooms first
+    const roomCoordinates = RoomRenderer.renderMultipleRooms(scene, layout.rooms, {
+      cubeSize: opts.cubeSize,
+      roomColor: opts.roomColor,
+      yOffset: opts.yOffset,
+      showDoors: opts.showDoors,
+      showStairs: opts.showStairs
+    });
+    
+    // Render hallways
+    const hallwayCoordinates = HallwayRenderer.renderMultipleHallways(scene, layout.hallways, {
+      cubeSize: opts.cubeSize,
+      hallwayColor: opts.hallwayColor,
+      yOffset: opts.yOffset,
+      width: opts.hallwayWidth,
+      minimizeOverlaps: true
+    });
+    
+    // Render hallway connections
+    HallwayRenderer.renderHallwayConnections(scene, layout.hallways, {
+      cubeSize: opts.cubeSize,
+      hallwayColor: opts.hallwayColor,
+      yOffset: opts.yOffset,
+      width: opts.hallwayWidth
+    });
+    
+    // Render all cubes to scene
+    const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
+      cubeSize: opts.cubeSize,
+      yOffset: opts.yOffset
+    });
+    
+    // Calculate statistics
+    const roomCount = layout.rooms.length;
+    const hallwayCount = layout.hallways.length;
+    const totalRoomCoords = Array.from(roomCoordinates.values()).flat().length;
+    const totalHallwayCoords = Array.from(hallwayCoordinates.values()).flat().length;
+    const totalArea = totalRoomCoords + totalHallwayCoords;
+    
+    // Count overlaps (purple cubes)
+    let overlapCount = 0;
+    floorGroup.children.forEach(child => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+        if (child.material.color.getHex() === 0x800080) { // Purple overlaps
+          overlapCount++;
+        }
+      }
+    });
+    
+    // Add debug visualizations if requested
+    if (opts.showDebug) {
+      this.addDebugVisualization(scene, layout, opts);
     }
+    
+    console.log(`✅ Dungeon floor rendering complete:`);
+    console.log(`   📊 ${roomCount} rooms, ${hallwayCount} hallways`);
+    console.log(`   🎯 ${totalArea} total floor cubes`);
+    console.log(`   🟣 ${overlapCount} overlapping cubes`);
+    console.log(`   📐 Bounds: ${layout.bounds.width}x${layout.bounds.height}`);
+    
+    return {
+      floorGroup,
+      roomCount,
+      hallwayCount,
+      overlapCount,
+      totalArea,
+      layout
+    };
   }
 
   /**
-   * Render dungeon from the provided sample data
+   * Render dungeon floor from server response
    */
-  static renderSampleDungeon(scene: THREE.Scene, options: DungeonRenderOptions = {}): {
+  static async renderDungeonFloorFromServer(
+    scene: THREE.Scene,
+    serverAddress: string,
+    dungeonDagNodeName: string,
+    options: DungeonRenderOptions = {}
+  ): Promise<{
     floorGroup: THREE.Group;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
+    layout: ServerFloorLayout;
+  }> {
+    try {
+      console.log(`🌐 Fetching dungeon layout from server: ${dungeonDagNodeName}`);
+      
+      const layout = await FloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
+      
+      // Convert to DAG data format for rendering
+      const dagData: DungeonDagData = {
+        dungeonDagNodeName: layout.dungeonDagNodeName,
+        nodes: [] // Layout is already processed
+      };
+      
+      return this.renderDungeonFloorFromLayout(scene, layout, options);
+      
+    } catch (error) {
+      console.error('Failed to render dungeon floor from server:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Render dungeon floor from pre-processed layout
+   */
+  static renderDungeonFloorFromLayout(
+    scene: THREE.Scene,
+    layout: ServerFloorLayout,
+    options: DungeonRenderOptions = {}
+  ): {
+    floorGroup: THREE.Group;
+    roomCount: number;
+    hallwayCount: number;
+    overlapCount: number;
+    totalArea: number;
+    layout: ServerFloorLayout;
   } {
-    const sampleData: DungeonDagData = {
-      dungeonDagNodeName: "A",
-      nodes: [
-        {
-          "_id": "689a5c3269c66969a4da16fe",
-          "name": "A_A",
-          "dungeonDagNodeName": "A",
-          "children": ["A_AA", "A_AB"],
-          "isRoom": true,
-          "hasUpwardStair": true,
-          "hasDownwardStair": false,
-          "roomWidth": 16,
-          "roomHeight": 14
-        },
-        {
-          "_id": "689a5c3269c66969a4da16ff",
-          "name": "A_AA",
-          "dungeonDagNodeName": "A",
-          "children": ["A_AAA"],
-          "isRoom": false,
-          "hallwayLength": 28,
-          "parentDirection": "center",
-          "parentDoorOffset": 1
-        },
-        {
-          "_id": "689a5c3269c66969a4da1700",
-          "name": "A_AB",
-          "dungeonDagNodeName": "A",
-          "children": [],
-          "isRoom": false,
-          "hallwayLength": 21,
-          "parentDirection": "right",
-          "parentDoorOffset": 8
-        },
-        {
-          "_id": "689a5c3269c66969a4da1701",
-          "name": "A_AAA",
-          "dungeonDagNodeName": "A",
-          "children": ["A_AAAA", "A_AAAB"],
-          "isRoom": true,
-          "hasUpwardStair": false,
-          "hasDownwardStair": true,
-          "roomWidth": 8,
-          "roomHeight": 20,
-          "parentDoorOffset": 3,
-          "parentDirection": "center",
-          "stairLocationX": 0,
-          "stairLocationY": 8
-        },
-        {
-          "_id": "689a5c3269c66969a4da1702",
-          "name": "A_AAAA",
-          "dungeonDagNodeName": "A",
-          "children": ["A_AAAAA"],
-          "isRoom": false,
-          "hallwayLength": 29,
-          "parentDirection": "left",
-          "parentDoorOffset": 6
-        },
-        {
-          "_id": "689a5c3269c66969a4da1703",
-          "name": "A_AAAB",
-          "dungeonDagNodeName": "A",
-          "children": [],
-          "isRoom": false,
-          "hallwayLength": 29,
-          "parentDirection": "right",
-          "parentDoorOffset": 4
-        }
-        // Note: Truncated for example - full data would include all nodes
-      ]
-    };
-
-    return this.renderDungeonFloor(scene, sampleData, options);
-  }
-
-  /**
-   * Count overlaps by analyzing the cube registry
-   */
-  private static countOverlaps(): number {
-    // This is a simplified count - the CubeFloorRenderer already marks overlaps
-    // In a real implementation, you might want to access the registry directly
-    let overlapCount = 0;
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
-    // Since we can't directly access the private registry, we'll estimate
-    // based on the console output from CubeFloorRenderer
-    // In practice, you might want to expose a method to get overlap data
+    console.log(`🏗️ Rendering dungeon floor from layout: ${layout.dungeonDagNodeName}`);
     
-    return overlapCount;
-  }
-
-  /**
-   * Get detailed statistics about the rendered dungeon
-   */
-  static getDungeonStats(dungeonData: DungeonDagData): {
-    totalNodes: number;
-    roomNodes: number;
-    hallwayNodes: number;
-    maxDepth: number;
-    branchingFactor: number;
-  } {
-    const totalNodes = dungeonData.nodes.length;
-    const roomNodes = dungeonData.nodes.filter(node => node.isRoom).length;
-    const hallwayNodes = dungeonData.nodes.filter(node => !node.isRoom).length;
-    
-    // Calculate max depth by finding the longest chain
-    const maxDepth = this.calculateMaxDepth(dungeonData.nodes);
-    
-    // Calculate average branching factor
-    const nodesWithChildren = dungeonData.nodes.filter(node => node.children.length > 0);
-    const totalBranches = nodesWithChildren.reduce((sum, node) => sum + node.children.length, 0);
-    const branchingFactor = nodesWithChildren.length > 0 ? totalBranches / nodesWithChildren.length : 0;
-
-    return {
-      totalNodes,
-      roomNodes,
-      hallwayNodes,
-      maxDepth,
-      branchingFactor
-    };
-  }
-
-  /**
-   * Calculate the maximum depth of the DAG
-   */
-  private static calculateMaxDepth(nodes: any[]): number {
-    const nodeMap = new Map(nodes.map(node => [node.name, node]));
-    const visited = new Set<string>();
-    
-    const getDepth = (nodeName: string): number => {
-      if (visited.has(nodeName)) return 0; // Avoid cycles
-      
-      const node = nodeMap.get(nodeName);
-      if (!node || node.children.length === 0) return 1;
-      
-      visited.add(nodeName);
-      const childDepths = node.children.map((childName: string) => getDepth(childName));
-      visited.delete(nodeName);
-      
-      return 1 + Math.max(...childDepths);
-    };
-
-    // Find root nodes (nodes that aren't children of other nodes)
-    const allChildren = new Set(nodes.flatMap(node => node.children));
-    const rootNodes = nodes.filter(node => !allChildren.has(node.name));
-    
-    if (rootNodes.length === 0) return 0;
-    
-    return Math.max(...rootNodes.map(root => getDepth(root.name)));
-  }
-
-  /**
-   * Validate the dungeon DAG structure
-   */
-  static validateDungeonDAG(dungeonData: DungeonDagData): {
-    isValid: boolean;
-    errors: string[];
-    warnings: string[];
-  } {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    
-    // Check for missing required fields
-    dungeonData.nodes.forEach(node => {
-      if (!node.name) {
-        errors.push(`Node missing name: ${node._id}`);
-      }
-      
-      if (node.isRoom) {
-        if (!node.roomWidth || !node.roomHeight) {
-          errors.push(`Room ${node.name} missing dimensions`);
-        }
-        if (node.roomWidth && node.roomWidth < 1) {
-          errors.push(`Room ${node.name} has invalid width: ${node.roomWidth}`);
-        }
-        if (node.roomHeight && node.roomHeight < 1) {
-          errors.push(`Room ${node.name} has invalid height: ${node.roomHeight}`);
-        }
-      } else {
-        if (!node.hallwayLength) {
-          errors.push(`Hallway ${node.name} missing length`);
-        }
-        if (node.hallwayLength && node.hallwayLength < 1) {
-          errors.push(`Hallway ${node.name} has invalid length: ${node.hallwayLength}`);
-        }
-      }
-    });
-
-    // Check for orphaned nodes
-    const nodeNames = new Set(dungeonData.nodes.map(node => node.name));
-    const allChildren = new Set(dungeonData.nodes.flatMap(node => node.children));
-    
-    allChildren.forEach(childName => {
-      if (!nodeNames.has(childName)) {
-        errors.push(`Referenced child node not found: ${childName}`);
-      }
-    });
-
-    // Check for cycles
-    const hasCycle = this.detectCycles(dungeonData.nodes);
-    if (hasCycle) {
-      errors.push('Cycle detected in DAG structure');
-    }
-
-    // Warnings for unusual structures
-    const rootNodes = dungeonData.nodes.filter(node => !allChildren.has(node.name));
-    if (rootNodes.length === 0) {
-      warnings.push('No root nodes found - all nodes are children of other nodes');
-    }
-    if (rootNodes.length > 1) {
-      warnings.push(`Multiple root nodes found: ${rootNodes.map(n => n.name).join(', ')}`);
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-      warnings
-    };
-  }
-
-  /**
-   * Detect cycles in the DAG
-   */
-  private static detectCycles(nodes: any[]): boolean {
-    const nodeMap = new Map(nodes.map(node => [node.name, node]));
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
-
-    const hasCycleFromNode = (nodeName: string): boolean => {
-      if (recursionStack.has(nodeName)) return true;
-      if (visited.has(nodeName)) return false;
-
-      visited.add(nodeName);
-      recursionStack.add(nodeName);
-
-      const node = nodeMap.get(nodeName);
-      if (node) {
-        for (const childName of node.children) {
-          if (hasCycleFromNode(childName)) {
-            return true;
-          }
-        }
-      }
-
-      recursionStack.delete(nodeName);
-      return false;
-    };
-
-    for (const node of nodes) {
-      if (hasCycleFromNode(node.name)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Clear all dungeon floor rendering
-   */
-  static clearDungeonFloor(scene: THREE.Scene): void {
+    // Clear previous cube registrations
     CubeFloorRenderer.clearRegistry();
-    RoomRenderer.clearAllRooms(scene);
-    HallwayRenderer.clearAllHallways(scene);
-    console.log('🏰 Cleared all dungeon floor rendering');
+    
+    // Render rooms
+    const roomCoordinates = RoomRenderer.renderMultipleRooms(scene, layout.rooms, {
+      cubeSize: opts.cubeSize,
+      roomColor: opts.roomColor,
+      yOffset: opts.yOffset,
+      showDoors: opts.showDoors,
+      showStairs: opts.showStairs
+    });
+    
+    // Render hallways
+    const hallwayCoordinates = HallwayRenderer.renderMultipleHallways(scene, layout.hallways, {
+      cubeSize: opts.cubeSize,
+      hallwayColor: opts.hallwayColor,
+      yOffset: opts.yOffset,
+      width: opts.hallwayWidth,
+      minimizeOverlaps: true
+    });
+    
+    // Render all cubes
+    const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
+      cubeSize: opts.cubeSize,
+      yOffset: opts.yOffset
+    });
+    
+    // Calculate statistics
+    const roomCount = layout.rooms.length;
+    const hallwayCount = layout.hallways.length;
+    const totalRoomCoords = Array.from(roomCoordinates.values()).flat().length;
+    const totalHallwayCoords = Array.from(hallwayCoordinates.values()).flat().length;
+    const totalArea = totalRoomCoords + totalHallwayCoords;
+    
+    let overlapCount = 0;
+    floorGroup.children.forEach(child => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+        if (child.material.color.getHex() === 0x800080) {
+          overlapCount++;
+        }
+      }
+    });
+    
+    if (opts.showDebug) {
+      this.addDebugVisualization(scene, layout, opts);
+    }
+    
+    return {
+      floorGroup,
+      roomCount,
+      hallwayCount,
+      overlapCount,
+      totalArea,
+      layout
+    };
   }
 
   /**
-   * Dispose of all resources
+   * Add debug visualization to the scene
+   */
+  private static addDebugVisualization(
+    scene: THREE.Scene,
+    layout: ServerFloorLayout,
+    options: DungeonRenderOptions
+  ): void {
+    console.log(`🐛 Adding debug visualization`);
+    
+    // Room debug boxes
+    layout.rooms.forEach(room => {
+      RoomRenderer.createRoomDebugVisualization(scene, room, {
+        cubeSize: options.cubeSize,
+        yOffset: options.yOffset
+      });
+    });
+    
+    // Hallway debug lines
+    layout.hallways.forEach(hallway => {
+      HallwayRenderer.createHallwayDebugVisualization(scene, hallway, {
+        cubeSize: options.cubeSize,
+        yOffset: options.yOffset
+      });
+    });
+  }
+
+  /**
+   * Get comprehensive dungeon statistics
+   */
+  static getDungeonStats(layout: ServerFloorLayout): {
+    rooms: ReturnType<typeof RoomRenderer.getRoomStats>;
+    hallways: ReturnType<typeof HallwayRenderer.getHallwayStats>;
+    totalNodes: number;
+    bounds: { width: number; height: number };
+    efficiency: {
+      roomToHallwayRatio: number;
+      averageRoomArea: number;
+      averageHallwayLength: number;
+    };
+  } {
+    const roomStats = RoomRenderer.getRoomStats(layout.rooms);
+    const hallwayStats = HallwayRenderer.getHallwayStats(layout.hallways);
+    
+    return {
+      rooms: roomStats,
+      hallways: hallwayStats,
+      totalNodes: layout.rooms.length + layout.hallways.length,
+      bounds: layout.bounds,
+      efficiency: {
+        roomToHallwayRatio: layout.hallways.length > 0 ? layout.rooms.length / layout.hallways.length : 0,
+        averageRoomArea: roomStats.averageArea,
+        averageHallwayLength: hallwayStats.averageLength
+      }
+    };
+  }
+
+  /**
+   * Clean up all dungeon rendering resources
    */
   static dispose(): void {
     CubeFloorRenderer.dispose();
-    RoomRenderer.dispose();
-    HallwayRenderer.dispose();
+    console.log(`🧹 Dungeon floor renderer resources cleaned up`);
   }
 }

@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { ServerFloorGenerator } from './floorGenerator';
+import { FloorGenerator, DungeonDagData } from './floorGenerator';
 import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
-import { ServerHallwayGenerator } from './hallwayGenerator';
-import { RoomRenderer } from '../rendering/roomRenderer';
-import { HallwayRenderer } from '../rendering/hallwayRenderer';
+import { DungeonFloorRenderer } from '../rendering/dungeonFloorRenderer';
+import { CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 
 export class ServerSceneryGenerator {
   /**
@@ -20,85 +19,64 @@ export class ServerSceneryGenerator {
     options: ServerSceneryOptions = {}
   ): Promise<{
     floorLayout: ServerFloorLayout;
-    hallwayNetwork: any;
-    roomGroups: THREE.Group[];
-    hallwayGroup: THREE.Group;
+    floorGroup: THREE.Group;
+    roomCount: number;
+    hallwayCount: number;
+    overlapCount: number;
+    totalArea: number;
   }> {
     const {
       cubeSize = 1,
-      floorColor = 0x0066ff, // Blue for rooms
+      floorColor = 0x0080ff, // Blue for rooms
       hallwayFloorColor = 0xff0000 // Red for hallways
     } = options;
 
-    console.log(`Starting server floor generation for: ${dungeonDagNodeName}`);
-
     console.log(`🏰 ServerSceneryGenerator: Starting floor generation for ${dungeonDagNodeName} from ${serverAddress}`);
+    
     try {
       // Step 1: Get floor layout from server
       console.log(`📡 ServerSceneryGenerator: Fetching floor layout...`);
-      const floorLayout = await ServerFloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
+      const floorLayout = await FloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
 
-      // Get all nodes for full tree rendering
-      const allNodeIds = Array.from(floorLayout.nodeMap.keys());
-      
-      console.log(`🎯 Full Tree: Root: ${floorLayout.rootNode}`);
-      console.log(`🎯 Total nodes to render: ${allNodeIds.length}`);
-      
-      const roomsToRender = floorLayout.rooms.filter(room => 
-        allNodeIds.includes(room.id)
-      );
-      
-      const hallwaysToRender = floorLayout.hallways.filter(hallway =>
-        allNodeIds.includes(hallway.id)
-      );
+      console.log(`🎯 Received layout: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
+      console.log(`📐 Bounds: ${floorLayout.bounds.width}x${floorLayout.bounds.height}`);
 
-      console.log(`🎯 Rendering ${roomsToRender.length} rooms and ${hallwaysToRender.length} hallways (full tree)`);
-
-      // Step 2: Generate hallway network based on all nodes
-      const filteredLayout = {
-        ...floorLayout,
-        rooms: roomsToRender,
-        hallways: hallwaysToRender
-      };
+      // Clear any existing cube registrations but preserve players and lighting
+      CubeFloorRenderer.clearRegistry();
       
-      console.log(`📊 Layout summary before hallway generation:`);
-      filteredLayout.hallways.forEach(h => {
-        console.log(`  Hallway ${h.id}: parentDirection=${h.parentDirection}, parentDoorOffset=${h.parentDoorOffset}, length=${h.length}`);
-        console.log(`    Start: ${h.startPosition ? `(${h.startPosition.x}, ${h.startPosition.y})` : 'not set'}`);
-        console.log(`    End: ${h.endPosition ? `(${h.endPosition.x}, ${h.endPosition.y})` : 'not set'}`);
-        console.log(`    Segments: ${h.segments ? h.segments.length : 0}`);
-      });
+      // Use safer clearing method to avoid accidentally removing players
+      this.clearSceneryOnly(scene);
       
-      const hallwayNetwork = ServerHallwayGenerator.generateHallwayNetwork(
-        filteredLayout,
-        3 // hallway width
-      );
+      // Optional: Add debug logging to see what's in the scene
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔍 Before floor generation:`);
+        this.debugSceneObjects(scene);
+      }
 
-      // Step 3: Create renderer instances
-      const roomRenderer = new RoomRenderer(scene);
-      const hallwayRenderer = new HallwayRenderer(scene);
-
-      // Step 4: Render all rooms (full tree)
-      const roomGroups: THREE.Group[] = [];
-      roomsToRender.forEach((room) => {
-        console.log(`🏠 Rendering room: ${room.id} at (${room.position.x}, ${room.position.y})`);
-        
-        // Use the new instance-based room renderer
-        const roomGroup = roomRenderer.renderRoom(room, floorColor);
-        roomGroups.push(roomGroup);
+      // Step 2: Render the complete dungeon floor using the new system
+      const result = DungeonFloorRenderer.renderDungeonFloorFromLayout(scene, floorLayout, {
+        cubeSize,
+        roomColor: floorColor,
+        hallwayColor: hallwayFloorColor,
+        yOffset: 0,
+        hallwayWidth: 2,
+        showDoors: true,
+        showStairs: false,
+        showDebug: false
       });
 
-      // Step 5: Render hallway network
-      const hallwayGroup = hallwayRenderer.renderHallwayNetwork(hallwayNetwork, hallwayFloorColor);
-
-      console.log(`Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`Full Tree: Generated ${roomsToRender.length} rooms and ${hallwayNetwork.segments.length} hallway segments`);
+      console.log(`✅ Server floor generation finished for: ${dungeonDagNodeName}`);
+      console.log(`📊 Generated: ${result.roomCount} rooms, ${result.hallwayCount} hallways`);
+      console.log(`🎯 Total area: ${result.totalArea} cubes`);
+      console.log(`🟣 Overlaps: ${result.overlapCount} cubes`);
 
       return {
-        floorLayout: filteredLayout,
-        hallwayNetwork,
-        roomGroups,
-        hallwayGroup
+        floorLayout: result.layout,
+        floorGroup: result.floorGroup,
+        roomCount: result.roomCount,
+        hallwayCount: result.hallwayCount,
+        overlapCount: result.overlapCount,
+        totalArea: result.totalArea
       };
     } catch (error) {
       console.error('Error generating server floor:', error);
@@ -107,259 +85,22 @@ export class ServerSceneryGenerator {
   }
 
   /**
-   * Converts a server room to a shape format compatible with RoomRenderer
+   * Get the spawn location for new players
    */
-  private static convertServerRoomToShape(room: any, floorLayout: ServerFloorLayout) {
-    const halfWidth = room.width / 2;
-    const halfHeight = room.height / 2;
-
-    // Create rectangular vertices (centered at origin)
-    const vertices = [
-      new THREE.Vector2(-halfWidth, -halfHeight), // Bottom-left
-      new THREE.Vector2(halfWidth, -halfHeight),  // Bottom-right
-      new THREE.Vector2(halfWidth, halfHeight),   // Top-right
-      new THREE.Vector2(-halfWidth, halfHeight)   // Top-left
-    ];
-
-    // Create edges
-    const edges = [
-      { start: vertices[0], end: vertices[1], length: room.width },   // Bottom
-      { start: vertices[1], end: vertices[2], length: room.height },  // Right
-      { start: vertices[2], end: vertices[3], length: room.width },   // Top
-      { start: vertices[3], end: vertices[0], length: room.height }   // Left
-    ];
-
-    // Generate doors based on server data and hierarchy
-    const doors = [];
-    console.log(`🚪 Generating doors for room ${room.id} (${room.width}x${room.height})`);
-    console.log(`🚪 Room children: [${room.children.join(', ')}]`);
-    console.log(`🚪 Room parentDirection: ${room.parentDirection}, parentDoorOffset: ${room.parentDoorOffset}`);
-    console.log(`🚪 Is root room: ${room.id === floorLayout.rootNode}`);
-    
-    // For each child hallway, create a door
-    room.children.forEach((childId: string) => {
-      const childHallway = floorLayout.nodeMap.get(childId);
-      console.log(`🚪 Processing child ${childId}:`, childHallway ? 'found' : 'NOT FOUND');
-      
-      if (childHallway && 'length' in childHallway) { // It's a hallway
-        console.log(`🚪 Child hallway ${childId}: parentDirection=${childHallway.parentDirection}, parentDoorOffset=${childHallway.parentDoorOffset}`);
-        
-        // For child doors, calculate relative to the room's entrance direction
-        const doorInfo = this.calculateChildDoorPosition(
-          room, 
-          childHallway.parentDirection || "center", 
-          childHallway.parentDoorOffset || room.width / 2
-        );
-        
-        doors.push({
-          edgeIndex: doorInfo.edgeIndex,
-          position: doorInfo.position,
-          width: 3, // Increased from 2 to 3 for wider door
-          connectionType: 'child',
-          connectedTo: childId
-        });
-        
-        console.log(`✅ Added child door: edge ${doorInfo.edgeIndex}, position ${doorInfo.position} for ${childId}`);
-      } else if (childHallway) {
-        console.log(`🚪 Child ${childId} is a room, not a hallway - skipping door`);
-      }
-    });
-    
-    // For non-root rooms, also add a door for the parent connection
-    if (room.id !== floorLayout.rootNode && room.parentDirection !== undefined && room.parentDoorOffset !== undefined) {
-      console.log(`🚪 Adding parent door: parentDirection=${room.parentDirection}, parentDoorOffset=${room.parentDoorOffset}`);
-      
-      const parentDoorInfo = this.calculateDoorPosition(
-        room, 
-        room.parentDirection, 
-        room.parentDoorOffset,
-        false // Parent doors are never on root room
-      );
-      
-      doors.push({
-        edgeIndex: parentDoorInfo.edgeIndex,
-        position: parentDoorInfo.position,
-        width: 3, // Increased from 2 to 3 for wider door
-        connectionType: 'parent',
-        connectedTo: 'parent'
-      });
-      
-      console.log(`🚪 Added parent door: edge ${parentDoorInfo.edgeIndex}, position ${parentDoorInfo.position}`);
-    }
-    
-    console.log(`🚪 Total doors for room ${room.id}: ${doors.length}`);
-
-    return {
-      vertices,
-      edges,
-      doors,
-      shapeType: 'rectangle' as const,
-      width: room.width,
-      height: room.height
-    };
+  static async getSpawnLocation(serverAddress: string): Promise<string> {
+    console.log(`🎯 ServerSceneryGenerator: Getting spawn location from ${serverAddress}`);
+    // For now, return a default spawn location since we don't have the server API
+    // This should be updated when the actual server API is available
+    return "A"; // Default to root node
   }
 
   /**
-   * Calculates child door position relative to the room's entrance direction
-   * Takes into account how the room is oriented relative to its parent
+   * Notify server that player moved to a new floor
    */
-  private static calculateChildDoorPosition(
-    room: any, 
-    childDirection: "left" | "right" | "center", 
-    childDoorOffset: number
-  ): { edgeIndex: number; position: number } {
-    let edgeIndex = 0;
-    let position = 0.5;
-    
-    // Get the room's own parent direction to understand entrance orientation
-    const roomParentDirection = room.parentDirection;
-    
-    // Map child direction relative to entrance direction
-    if (roomParentDirection === "right") {
-      // Room is to the RIGHT of its parent, so entrance is from the LEFT
-      // From entrance perspective facing into room: left=back, right=front, center=back
-      switch (childDirection) {
-        case "center":
-          edgeIndex = 2; // Top edge (back from entrance)
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
-          break;
-        case "left": 
-          edgeIndex = 2; // Top edge (back from entrance)
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
-          break;
-        case "right":
-          edgeIndex = 2; // Top edge (back from entrance) 
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
-          break;
-      }
-    } else if (roomParentDirection === "left") {
-      // Room is to the LEFT of its parent, so entrance is from the RIGHT
-      // From entrance perspective: left=front, right=back, center=left side
-      switch (childDirection) {
-        case "center":
-          edgeIndex = 3; // Left edge (left side from entrance)
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.height));
-          break;
-        case "left":
-          edgeIndex = 0; // Bottom edge (front from entrance)
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
-          break;
-        case "right":
-          edgeIndex = 2; // Top edge (back from entrance)
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
-          break;
-      }
-    } else { // roomParentDirection === "center"
-      // Room is BELOW its parent, so entrance is from the TOP
-      // From entrance perspective: left=left, right=right, center=back
-      switch (childDirection) {
-        case "center":
-          edgeIndex = 0; // Bottom edge (back from entrance)
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.width));
-          break;
-        case "left":
-          edgeIndex = 3; // Left edge
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.height));
-          break;
-        case "right":
-          edgeIndex = 1; // Right edge
-          position = Math.max(0.1, Math.min(0.9, childDoorOffset / room.height));
-          break;
-      }
-    }
-    
-    console.log(`🚪 Child door calc (room entrance from ${roomParentDirection}): ${childDirection} -> edge ${edgeIndex}, offset ${childDoorOffset} -> position ${position}`);
-    return { edgeIndex, position };
-  }
-
-  /**
-   * Calculates door position based on parentDirection and parentDoorOffset
-   * For a rectangular room:
-   * - parentDirection determines which side of the room the door is on relative to the entry direction
-   * - parentDoorOffset is the distance along that side from the start of the edge
-   */
-  private static calculateDoorPosition(
-    room: any, 
-    parentDirection: "left" | "right" | "center", 
-    parentDoorOffset: number,
-    isRootRoom: boolean = false
-  ): { edgeIndex: number; position: number } {
-    let edgeIndex = 0;
-    let position = 0.5;
-    
-    if (isRootRoom) {
-      // For root room, use the original logic - doors are placed where children connect
-      switch (parentDirection) {
-        case "center":
-          // Center means bottom edge for root room
-          edgeIndex = 0; // Bottom edge
-          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.width));
-          break;
-          
-        case "left":
-          // Left side - use left edge
-          edgeIndex = 3; // Left edge  
-          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
-          break;
-          
-        case "right":
-          // Right side - use right edge
-          edgeIndex = 1; // Right edge
-          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
-          break;
-      }
-    } else {
-      // For child rooms, doors face back toward parent
-      switch (parentDirection) {
-        case "center":
-          // Child is below parent (center/down), door faces up toward parent
-          edgeIndex = 2; // Top edge
-          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.width));
-          break;
-          
-        case "left":
-          // Child is to the LEFT of parent, door faces RIGHT toward parent
-          edgeIndex = 1; // Right edge  
-          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
-          break;
-          
-        case "right":
-          // Child is to the RIGHT of parent, door faces LEFT toward parent
-          edgeIndex = 3; // Left edge
-          position = Math.max(0.1, Math.min(0.9, parentDoorOffset / room.height));
-          break;
-      }
-    }
-    
-    console.log(`🚪 Door calc (${isRootRoom ? 'ROOT' : 'CHILD'}): ${parentDirection} -> edge ${edgeIndex}, offset ${parentDoorOffset} -> position ${position}`);
-    return { edgeIndex, position };
-  }
-
-  /**
-   * Adds a staircase to a room
-   */
-  private static addStaircase(
-    roomGroup: THREE.Group,
-    x: number,
-    y: number,
-    roomHeight: number,
-    direction: 'up' | 'down'
-  ): void {
-    // Create a simple staircase representation
-    const stairGeometry = new THREE.BoxGeometry(2, roomHeight * 0.8, 2);
-    const stairMaterial = new THREE.MeshLambertMaterial({ 
-      color: direction === 'up' ? 0x00ff00 : 0xff0000 // Green for up, red for down
-    });
-    const staircase = new THREE.Mesh(stairGeometry, stairMaterial);
-    
-    staircase.position.set(x, roomHeight * 0.4, y);
-    staircase.castShadow = true;
-    staircase.receiveShadow = true;
-    
-    roomGroup.add(staircase);
-    
-    // Add a label for debugging
-    console.log(`Added ${direction} staircase at (${x}, ${y})`);
+  static async notifyPlayerMovedFloor(serverAddress: string, newFloorName: string): Promise<void> {
+    console.log(`� ServerSceneryGenerator: Notifying server of floor change to ${newFloorName}`);
+    // For now, just log - this should be updated when the actual server API is available
+    // await FloorGenerator.notifyPlayerMovedFloor(serverAddress, newFloorName);
   }
 
   /**
@@ -367,52 +108,217 @@ export class ServerSceneryGenerator {
    */
   static clearScene(scene: THREE.Scene): void {
     const objectsToRemove: THREE.Object3D[] = [];
+    const objectsToPreserve: string[] = [];
     
     scene.traverse((child) => {
-      // Preserve essential objects: scene, cameras, lights, and player models
-      if (child !== scene && 
-          child.type !== 'Camera' && 
-          child.type !== 'Light' &&
-          child.type !== 'AmbientLight' &&
-          child.type !== 'DirectionalLight' &&
-          child.type !== 'PointLight' &&
-          child.type !== 'HemisphereLight' &&
-          !child.userData.isPlayer) { // Preserve objects marked as players
+      // More comprehensive preservation logic
+      const shouldPreserve = (
+        child === scene || // The scene itself
+        child.type === 'Camera' || 
+        child.type === 'Light' ||
+        child.type === 'AmbientLight' ||
+        child.type === 'DirectionalLight' ||
+        child.type === 'PointLight' ||
+        child.type === 'HemisphereLight' ||
+        child.type === 'SpotLight' ||
+        child.userData.isPlayer === true || // Current player
+        child.userData.isOtherPlayer === true || // Other players
+        child.userData.preserve === true || // Explicitly marked for preservation
+        child.name === 'AllFloorCubes' || // Existing floor cubes (will be replaced)
+        child.name?.includes('Player') || // Any object with "Player" in name
+        child.name?.includes('player') || // Any object with "player" in name
+        child.name?.includes('Character') || // Any character models
+        child.name?.includes('character') || // Any character models
+        (child.parent && child.parent.userData.isPlayer) || // Child of player
+        (child.parent && child.parent.userData.isOtherPlayer) // Child of other player
+      );
+      
+      if (shouldPreserve) {
+        objectsToPreserve.push(child.name || child.type || 'unnamed');
+      } else {
         objectsToRemove.push(child);
       }
     });
     
-    console.log(`🧹 Clearing ${objectsToRemove.length} scenery objects while preserving players and lighting`);
+    console.log(`🧹 Clearing ${objectsToRemove.length} scenery objects`);
+    console.log(`🛡️ Preserving ${objectsToPreserve.length} objects: ${objectsToPreserve.slice(0, 5).join(', ')}${objectsToPreserve.length > 5 ? '...' : ''}`);
+    
+    // Remove objects in reverse order to avoid issues with nested objects
+    objectsToRemove.reverse().forEach((obj) => {
+      try {
+        if (obj.parent) {
+          obj.parent.remove(obj);
+        }
+        // Dispose of geometries and materials to prevent memory leaks
+        if ('geometry' in obj && obj.geometry) {
+          (obj as any).geometry.dispose();
+        }
+        if ('material' in obj && obj.material) {
+          const material = (obj as any).material;
+          if (Array.isArray(material)) {
+            material.forEach((mat) => mat?.dispose());
+          } else {
+            material?.dispose();
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error removing object ${obj.name || obj.type}:`, error);
+      }
+    });
+    
+    // Double-check that important objects are still in the scene
+    let playerCount = 0;
+    let otherPlayerCount = 0;
+    scene.traverse((child) => {
+      if (child.userData.isPlayer) playerCount++;
+      if (child.userData.isOtherPlayer) otherPlayerCount++;
+    });
+    
+    console.log(`✅ After cleanup: ${playerCount} current players, ${otherPlayerCount} other players preserved`);
+  }
+
+  /**
+   * Debug method to log all objects in the scene
+   */
+  static debugSceneObjects(scene: THREE.Scene): void {
+    console.log(`🔍 Scene Debug - Total objects: ${scene.children.length}`);
+    
+    const objectSummary: { [key: string]: number } = {};
+    const playerObjects: any[] = [];
+    
+    scene.traverse((child) => {
+      const type = child.type || 'Unknown';
+      objectSummary[type] = (objectSummary[type] || 0) + 1;
+      
+      // Log player-related objects
+      if (child.userData.isPlayer || child.userData.isOtherPlayer || 
+          child.name?.toLowerCase().includes('player') ||
+          child.name?.toLowerCase().includes('character')) {
+        playerObjects.push({
+          name: child.name || 'unnamed',
+          type: child.type,
+          isPlayer: child.userData.isPlayer,
+          isOtherPlayer: child.userData.isOtherPlayer,
+          userData: child.userData
+        });
+      }
+    });
+    
+    console.table(objectSummary);
+    console.log(`👥 Player objects found:`, playerObjects);
+  }
+
+  /**
+   * Alternative safer clear method - only removes specific scenery types
+   */
+  static clearSceneryOnly(scene: THREE.Scene): void {
+    const objectsToRemove: THREE.Object3D[] = [];
+    
+    scene.traverse((child) => {
+      // Only remove objects that are clearly scenery
+      const isScenery = (
+        child.name === 'AllFloorCubes' || // Previous floor cubes
+        child.name?.includes('Room') ||
+        child.name?.includes('Hallway') ||
+        child.name?.includes('Floor') ||
+        child.name?.includes('Wall') ||
+        child.name?.includes('Scenery') ||
+        child.userData.isScenery === true ||
+        (child.type === 'Mesh' && 
+         !child.userData.isPlayer && 
+         !child.userData.isOtherPlayer && 
+         !child.userData.preserve &&
+         (child as THREE.Mesh).material && 
+         ((child as THREE.Mesh).material as THREE.MeshLambertMaterial).color &&
+         // Check if it's a colored cube (likely floor/wall)
+         (((child as THREE.Mesh).material as THREE.MeshLambertMaterial).color.getHex() === 0x0080ff || // Blue rooms
+          ((child as THREE.Mesh).material as THREE.MeshLambertMaterial).color.getHex() === 0xff0000 || // Red hallways
+          ((child as THREE.Mesh).material as THREE.MeshLambertMaterial).color.getHex() === 0x800080))  // Purple overlaps
+      );
+      
+      if (isScenery) {
+        objectsToRemove.push(child);
+      }
+    });
+    
+    console.log(`🧹 Safely clearing ${objectsToRemove.length} scenery objects only`);
     
     objectsToRemove.forEach((obj) => {
-      scene.remove(obj);
-      // Dispose of geometries and materials to prevent memory leaks
-      if ('geometry' in obj) {
-        (obj as any).geometry?.dispose();
-      }
-      if ('material' in obj) {
-        const material = (obj as any).material;
-        if (Array.isArray(material)) {
-          material.forEach((mat) => mat?.dispose());
-        } else {
-          material?.dispose();
+      try {
+        if (obj.parent) {
+          obj.parent.remove(obj);
         }
+        // Dispose of resources
+        if ('geometry' in obj && obj.geometry) {
+          (obj as any).geometry.dispose();
+        }
+        if ('material' in obj && obj.material) {
+          const material = (obj as any).material;
+          if (Array.isArray(material)) {
+            material.forEach((mat) => mat?.dispose());
+          } else {
+            material?.dispose();
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error removing scenery object:`, error);
       }
     });
   }
 
   /**
-   * Get the spawn location for new players
+   * Help debug player visibility issues - call from browser console
    */
-  static async getSpawnLocation(serverAddress: string): Promise<string> {
-    console.log(`🎯 ServerSceneryGenerator: Getting spawn location from ${serverAddress}`);
-    return await ServerFloorGenerator.getSpawnLocation(serverAddress);
-  }
-
-  /**
-   * Notify server that player moved to a new floor
-   */
-  static async notifyPlayerMovedFloor(serverAddress: string, newFloorName: string): Promise<void> {
-    return await ServerFloorGenerator.notifyPlayerMovedFloor(serverAddress, newFloorName);
+  static debugPlayerVisibility(scene: THREE.Scene): void {
+    console.log(`🔍 Player Visibility Debug`);
+    console.log(`Browser: ${navigator.userAgent}`);
+    
+    let currentPlayers = 0;
+    let otherPlayers = 0;
+    let allPlayers = 0;
+    
+    scene.traverse((child) => {
+      if (child.userData.isPlayer) {
+        currentPlayers++;
+        console.log(`👤 Current Player:`, {
+          name: child.name,
+          type: child.type,
+          visible: child.visible,
+          position: child.position,
+          userData: child.userData,
+          parent: child.parent?.name || 'scene'
+        });
+      }
+      
+      if (child.userData.isOtherPlayer) {
+        otherPlayers++;
+        console.log(`👥 Other Player:`, {
+          name: child.name,
+          type: child.type,
+          visible: child.visible,
+          position: child.position,
+          userData: child.userData,
+          parent: child.parent?.name || 'scene'
+        });
+      }
+      
+      if (child.name?.toLowerCase().includes('player') || 
+          child.name?.toLowerCase().includes('character')) {
+        allPlayers++;
+        console.log(`🎭 Player-like object:`, {
+          name: child.name,
+          type: child.type,
+          visible: child.visible,
+          userData: child.userData
+        });
+      }
+    });
+    
+    console.log(`📊 Summary: ${currentPlayers} current players, ${otherPlayers} other players, ${allPlayers} total player-like objects`);
+    
+    if (currentPlayers === 0) {
+      console.error(`❌ No current player found! This indicates the player model was accidentally removed.`);
+      console.log(`💡 Try calling ServerSceneryGenerator.debugSceneObjects(scene) to see all objects`);
+    }
   }
 }
