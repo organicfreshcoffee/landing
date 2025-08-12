@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from '../types';
-import { ModelLoader } from '../utils';
+import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
@@ -60,8 +60,15 @@ export class GameManager {
   }
 
   private async createLocalPlayer(): Promise<void> {
+    console.log('🏃 Creating local player...');
     const localPlayerData = await ModelLoader.loadPlayerModel();
     const localPlayerScene = localPlayerData.scene;
+    
+    console.log('📊 Local player data:', {
+      hasAnimations: localPlayerData.animations.length > 0,
+      animationCount: localPlayerData.animations.length,
+      sceneUUID: localPlayerScene.uuid
+    });
     
     // Set up animations for local player
     if (localPlayerData.animations.length > 0) {
@@ -78,6 +85,8 @@ export class GameManager {
           action.weight = 1.0;
           // Prepare the action but don't play it yet
           action.reset();
+          
+          console.log('✅ Local player StickMan_Run action configured');
         }
       });
       
@@ -88,6 +97,13 @@ export class GameManager {
         walkAction.play();
         walkAction.paused = true;
         walkAction.enabled = true;
+        
+        console.log('🎭 Local player animation initialized:', {
+          isRunning: walkAction.isRunning(),
+          paused: walkAction.paused,
+          enabled: walkAction.enabled,
+          timeScale: walkAction.timeScale
+        });
       } else {
         console.error('❌ StickMan_Run action was not created properly!');
       }
@@ -148,6 +164,9 @@ export class GameManager {
     
     // Position player on ground level
     this.positionPlayerOnGround();
+    
+    // Create test runner for animation debugging
+    await AnimationTest.createTestRunner(this.sceneManager.scene);
     
     console.log(`🎯 GameManager: Collision data initialized`);
     
@@ -349,8 +368,18 @@ export class GameManager {
       movement: this.movementController.debugInfo,
       players: Array.from(this.players.keys()),
       localPlayer: this.localPlayerRef.current?.position,
-      animations: Array.from(this.playersAnimations.keys())
+      animations: Array.from(this.playersAnimations.keys()),
+      testRunner: AnimationTest.getDebugInfo()
     };
+  }
+
+  // Debug methods for animation testing
+  toggleTestRunner(): void {
+    AnimationTest.toggleTestRunner(this.sceneManager.scene);
+  }
+
+  removeTestRunner(): void {
+    AnimationTest.removeTestRunner(this.sceneManager.scene);
   }
 
   cleanup(): void {

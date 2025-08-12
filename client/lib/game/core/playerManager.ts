@@ -114,7 +114,9 @@ export class PlayerManager {
           
           // Set initial animation direction if player is moving
           if (player.isMoving) {
-            action.timeScale = player.movementDirection === 'backward' ? -1 : 1;
+            action.timeScale = player.movementDirection === 'backward' ? -300 : 300; // Speed up by factor of 100
+          } else {
+            action.timeScale = 300; // Default speed when not moving but ready
           }
         }
       });
@@ -243,11 +245,11 @@ export class PlayerManager {
         walkAction.paused = false;
         walkAction.enabled = true;
         
-        // Set animation direction based on movement
+        // Set animation direction based on movement with 100x speed
         if (playerData.movementDirection === 'backward') {
-          walkAction.timeScale = -1;
+          walkAction.timeScale = -100; // Speed up by factor of 100
         } else {
-          walkAction.timeScale = 1;
+          walkAction.timeScale = 100; // Speed up by factor of 100
         }
       } else {
         // Pause instead of stop to maintain smooth transitions

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PlayerAnimationData } from '../types';
 import { CollisionSystem } from './collisionSystem';
 import { GameHUD } from '../ui/gameHUD';
+import { AnimationTest } from '../utils/animationTest';
 
 export class MovementController {
   private keysPressed = new Set<string>();
@@ -125,7 +126,8 @@ export class MovementController {
     right.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.localPlayerRotation.y);
 
     // Track movement direction for animation
-    let newMovementDirection: 'forward' | 'backward' | 'none' = this.movementDirection;
+    let newMovementDirection: 'forward' | 'backward' | 'none' = 'none'; // Reset to none first
+    let horizontalMovement = false; // Track WASD movement separately
     
     // Calculate intended movement
     const movement = new THREE.Vector3(0, 0, 0);
@@ -133,23 +135,30 @@ export class MovementController {
     if (this.keysPressed.has('KeyW')) {
       movement.add(forward.clone().multiplyScalar(moveSpeed));
       moved = true;
+      horizontalMovement = true;
       newMovementDirection = 'forward';
     }
     if (this.keysPressed.has('KeyS')) {
       movement.add(forward.clone().multiplyScalar(-moveSpeed));
       moved = true;
+      horizontalMovement = true;
       newMovementDirection = 'backward';
     }
     if (this.keysPressed.has('KeyA')) {
       movement.add(right.clone().multiplyScalar(-moveSpeed));
       moved = true;
+      horizontalMovement = true;
       if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
     if (this.keysPressed.has('KeyD')) {
       movement.add(right.clone().multiplyScalar(moveSpeed));
       moved = true;
+      horizontalMovement = true;
       if (newMovementDirection === 'none') newMovementDirection = 'forward';
     }
+
+    // Set movement direction based on horizontal movement only
+    this.movementDirection = newMovementDirection;
 
     // Handle vertical movement based on admin mode
     if (this.isAdminMode) {
@@ -168,11 +177,6 @@ export class MovementController {
       this.applyGravity(delta);
     }
 
-    if (!moved && this.isAdminMode) {
-      newMovementDirection = 'none';
-    }
-    this.movementDirection = newMovementDirection;
-
     // Apply movement with collision detection
     this.applyMovementWithCollision(localPlayer, movement, oldPosition);
 
@@ -189,7 +193,7 @@ export class MovementController {
     // Update camera
     this.updateCamera(camera, localPlayer.position);
 
-    // Handle animations
+    // Handle animations (use moved for walking animation but only animate on horizontal movement)
     this.updateAnimations(moved);
 
     // Send updates to server
@@ -346,28 +350,51 @@ export class MovementController {
     if (this.localPlayerMixer.current && this.localPlayerActions.current.StickMan_Run) {
       const walkAction = this.localPlayerActions.current.StickMan_Run;
       
-      if (this.isMoving) {
+      // Only animate walking if there's horizontal movement (not just vertical)
+      const shouldAnimate = this.movementDirection !== 'none';
+      
+      // Add occasional debug logging for local player
+      if (Math.random() < 0.01) { // 1% of frames
+        console.log('🚶 Local player animation update:', {
+          shouldAnimate,
+          movementDirection: this.movementDirection,
+          isRunning: walkAction.isRunning(),
+          paused: walkAction.paused,
+          time: walkAction.time.toFixed(3),
+          delta
+        });
+      }
+      
+      if (shouldAnimate) {
         if (!walkAction.isRunning()) {
           walkAction.play();
         }
         walkAction.paused = false;
         
         if (this.movementDirection === 'backward') {
-          walkAction.timeScale = -1;
+          walkAction.timeScale = -300; // Speed up by factor of 100
         } else if (this.movementDirection === 'forward') {
-          walkAction.timeScale = 1;
+          walkAction.timeScale = 300; // Speed up by factor of 100
         }
       } else {
         walkAction.paused = true;
       }
       
       this.localPlayerMixer.current.update(delta);
+    } else if (Math.random() < 0.01) {
+      console.log('⚠️ Local player mixer or action not available:', {
+        hasMixer: !!this.localPlayerMixer.current,
+        hasAction: !!this.localPlayerActions.current.StickMan_Run
+      });
     }
     
     // Update other players' animation mixers
     this.playersAnimations.forEach((animData) => {
       animData.mixer.update(delta);
     });
+    
+    // Update test runner animation for debugging
+    AnimationTest.updateTestRunner(delta);
   }
 
   private sendMovementUpdateIfNeeded(userId: string, moved: boolean, oldRotation: any): void {
