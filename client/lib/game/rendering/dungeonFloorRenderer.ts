@@ -18,6 +18,10 @@ export interface DungeonRenderOptions {
   showWalls?: boolean;
   wallHeight?: number;
   wallColor?: number;
+  showCeiling?: boolean;
+  ceilingColor?: number;
+  cubeMaterial?: THREE.Material;
+  cubeColor?: number;
 }
 
 /**
@@ -34,8 +38,12 @@ export class DungeonFloorRenderer {
     showStairs: false,
     showDebug: false,
     showWalls: true,
-    wallHeight: 3,
-    wallColor: 0x666666 // Gray walls
+    wallHeight: 5,
+    wallColor: 0x666666, // Gray walls
+    showCeiling: true,
+    ceilingColor: 0x444444, // Darker gray ceiling
+    cubeMaterial: new THREE.MeshLambertMaterial(),
+    cubeColor: 0x8B4513 // Brown floor
   };
 
   /**
@@ -48,11 +56,13 @@ export class DungeonFloorRenderer {
   ): {
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
+    ceilingGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
     wallCount: number;
+    ceilingCount: number;
     layout: ServerFloorLayout;
   } {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
@@ -97,24 +107,41 @@ export class DungeonFloorRenderer {
       yOffset: opts.yOffset
     });
     
-    // Generate and render walls around all floor coordinates
+    // Generate and render walls and ceiling around all floor coordinates
     let wallGroup: THREE.Group | null = null;
+    let ceilingGroup: THREE.Group | null = null;
     let wallCount = 0;
+    let ceilingCount = 0;
     if (opts.showWalls) {
       // Get all floor coordinates from the cube renderer
       const allFloorCoords = CubeFloorRenderer.getAllCoordinates();
       
       if (allFloorCoords.length > 0) {
-        const wallResult = WallGenerator.generateAndRenderWalls(scene, allFloorCoords, {
+        // Generate walls around perimeter
+        const wallCoords = WallGenerator.generateWalls(allFloorCoords);
+        
+        // Render walls
+        wallGroup = WallGenerator.renderWalls(scene, wallCoords, {
           wallHeight: opts.wallHeight,
           wallColor: opts.wallColor,
           cubeSize: opts.cubeSize
         });
+        wallCount = wallCoords.length;
         
-        wallGroup = wallResult.wallGroup;
-        wallCount = wallResult.wallCount;
+        // Optionally render ceiling
+        if (opts.showCeiling) {
+          ceilingGroup = WallGenerator.renderCeiling(scene, allFloorCoords, {
+            wallHeight: opts.wallHeight,
+            ceilingColor: opts.ceilingColor,
+            cubeSize: opts.cubeSize
+          });
+          ceilingCount = allFloorCoords.length;
+        }
         
         console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
+        if (ceilingGroup) {
+          console.log(`🏠 Generated ${ceilingCount} ceiling cubes`);
+        }
       }
     }
     
@@ -145,16 +172,21 @@ export class DungeonFloorRenderer {
     console.log(`   🎯 ${totalArea} total floor cubes`);
     console.log(`   🟣 ${overlapCount} overlapping cubes`);
     console.log(`   🧱 ${wallCount} wall cubes`);
+    if (ceilingGroup) {
+      console.log(`   🏠 ${ceilingCount} ceiling cubes`);
+    }
     console.log(`   📐 Bounds: ${layout.bounds.width}x${layout.bounds.height}`);
     
     return {
       floorGroup,
       wallGroup,
+      ceilingGroup,
       roomCount,
       hallwayCount,
       overlapCount,
       totalArea,
       wallCount,
+      ceilingCount,
       layout
     };
   }
@@ -204,11 +236,13 @@ export class DungeonFloorRenderer {
   ): {
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
+    ceilingGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
     wallCount: number;
+    ceilingCount: number;
     layout: ServerFloorLayout;
   } {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
@@ -242,24 +276,41 @@ export class DungeonFloorRenderer {
       yOffset: opts.yOffset
     });
     
-    // Generate and render walls around all floor coordinates
+    // Generate and render walls and ceiling around all floor coordinates
     let wallGroup: THREE.Group | null = null;
+    let ceilingGroup: THREE.Group | null = null;
     let wallCount = 0;
+    let ceilingCount = 0;
     if (opts.showWalls) {
       // Get all floor coordinates from the cube renderer
       const allFloorCoords = CubeFloorRenderer.getAllCoordinates();
       
       if (allFloorCoords.length > 0) {
-        const wallResult = WallGenerator.generateAndRenderWalls(scene, allFloorCoords, {
+        // Generate walls around perimeter
+        const wallCoords = WallGenerator.generateWalls(allFloorCoords);
+        
+        // Render walls
+        wallGroup = WallGenerator.renderWalls(scene, wallCoords, {
           wallHeight: opts.wallHeight,
           wallColor: opts.wallColor,
           cubeSize: opts.cubeSize
         });
+        wallCount = wallCoords.length;
         
-        wallGroup = wallResult.wallGroup;
-        wallCount = wallResult.wallCount;
+        // Optionally render ceiling
+        if (opts.showCeiling) {
+          ceilingGroup = WallGenerator.renderCeiling(scene, allFloorCoords, {
+            wallHeight: opts.wallHeight,
+            ceilingColor: opts.ceilingColor,
+            cubeSize: opts.cubeSize
+          });
+          ceilingCount = allFloorCoords.length;
+        }
         
         console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
+        if (ceilingGroup) {
+          console.log(`🏠 Generated ${ceilingCount} ceiling cubes`);
+        }
       }
     }
     
@@ -286,11 +337,13 @@ export class DungeonFloorRenderer {
     return {
       floorGroup,
       wallGroup,
+      ceilingGroup,
       roomCount,
       hallwayCount,
       overlapCount,
       totalArea,
       wallCount,
+      ceilingCount,
       layout
     };
   }

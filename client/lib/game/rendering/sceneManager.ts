@@ -30,7 +30,9 @@ export class SceneManager {
       0.01, // Much smaller near plane to avoid clipping
       1000
     );
-    camera.position.set(0, 5, 10);
+    // Moved camera closer for better view of walls and ceiling
+    // Height is set to 3 blocks (below the 5-block walls but above player)
+    camera.position.set(0, 3, 6);
     return camera;
   }
 

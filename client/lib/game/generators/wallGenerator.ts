@@ -1,11 +1,14 @@
 import * as THREE from 'three';
-import { CubePosition } from '../rendering/cubeFloorRenderer';
+import { CubePosition, CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 
 export interface WallGenerationOptions {
   wallHeight?: number;
   wallColor?: number;
   wallMaterial?: THREE.Material;
   cubeSize?: number;
+  showCeiling?: boolean;
+  ceilingColor?: number;
+  ceilingMaterial?: THREE.Material;
 }
 
 /**
@@ -13,10 +16,13 @@ export interface WallGenerationOptions {
  */
 export class WallGenerator {
   private static readonly DEFAULT_OPTIONS: Required<WallGenerationOptions> = {
-    wallHeight: 3,
+    wallHeight: 5,
     wallColor: 0x666666, // Gray walls
     wallMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
-    cubeSize: 1
+    cubeSize: 1,
+    showCeiling: true,
+    ceilingColor: 0x444444, // Darker gray ceiling
+    ceilingMaterial: new THREE.MeshLambertMaterial({ color: 0x444444 })
   };
 
   /**
@@ -109,24 +115,83 @@ export class WallGenerator {
   }
 
   /**
-   * Generate and render walls in one step
+   * Render ceiling over floor coordinates
+   */
+  static renderCeiling(
+    scene: THREE.Scene,
+    floorCoords: CubePosition[],
+    options: WallGenerationOptions = {}
+  ): THREE.Group {
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
+    
+    const ceilingGroup = new THREE.Group();
+    ceilingGroup.name = 'Ceiling';
+
+    // Create geometry and material for ceiling
+    const ceilingGeometry = new THREE.BoxGeometry(opts.cubeSize, opts.cubeSize, opts.cubeSize);
+    const ceilingMaterial = opts.ceilingMaterial || new THREE.MeshLambertMaterial({ color: opts.ceilingColor });
+
+    floorCoords.forEach(coord => {
+      const ceilingMesh = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+      
+      // Position the ceiling at the top of the walls
+      ceilingMesh.position.set(
+        coord.x * opts.cubeSize,
+        opts.wallHeight, // Place at top of walls
+        coord.y * opts.cubeSize
+      );
+
+      // Mark as ceiling for identification
+      ceilingMesh.userData.isCeiling = true;
+      ceilingMesh.userData.ceilingCoord = coord;
+      
+      ceilingGroup.add(ceilingMesh);
+    });
+
+    scene.add(ceilingGroup);
+    console.log(`🏠 Rendered ${floorCoords.length} ceiling cubes in scene`);
+    
+    return ceilingGroup;
+  }
+
+    /**
+   * Generate and render walls and ceiling in one call
    */
   static generateAndRenderWalls(
     scene: THREE.Scene,
-    allFloorCoords: CubePosition[],
+    cubeFloorRenderer: CubeFloorRenderer,
     options: WallGenerationOptions = {}
-  ): {
-    wallCoords: CubePosition[];
-    wallGroup: THREE.Group;
-    wallCount: number;
+  ): { 
+    wallGroup: THREE.Group; 
+    ceilingGroup?: THREE.Group;
+    wallCount: number; 
+    ceilingCount: number;
   } {
-    const wallCoords = this.generateWalls(allFloorCoords, options);
-    const wallGroup = this.renderWalls(scene, wallCoords, options);
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
-    return {
-      wallCoords,
-      wallGroup,
-      wallCount: wallCoords.length
+    // Get floor coordinates from the renderer
+    const floorCoords = CubeFloorRenderer.getAllCoordinates();
+    
+    // Generate wall coordinates
+    const wallCoords = this.generateWalls(floorCoords);
+    
+    // Render walls
+    const wallGroup = this.renderWalls(scene, wallCoords, opts);
+    
+    // Optionally render ceiling
+    let ceilingGroup: THREE.Group | undefined;
+    let ceilingCount = 0;
+    
+    if (opts.showCeiling) {
+      ceilingGroup = this.renderCeiling(scene, floorCoords, opts);
+      ceilingCount = floorCoords.length;
+    }
+    
+    return { 
+      wallGroup, 
+      ceilingGroup,
+      wallCount: wallCoords.length,
+      ceilingCount
     };
   }
 
