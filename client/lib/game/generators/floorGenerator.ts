@@ -214,7 +214,7 @@ export class FloorGenerator {
         const childNode = nodeMap.get(childName);
         if (childNode) {
           const { childPosition, childEntrance } = this.calculateChildPosition(
-            room, childNode, entrance
+            childNode, room, entrance
           );
           this.processNode(childNode, nodeMap, processedNodes, childPosition, childEntrance);
         }
@@ -291,12 +291,12 @@ export class FloorGenerator {
     }
   }
 
-  /**
-   * Calculate child position relative to parent room
+    /**
+   * Calculate the position for a child node relative to its parent
    */
   private static calculateChildPosition(
-    parentRoom: ServerRoom,
-    childNode: DungeonNode,
+    childNode: DungeonDagNode,
+    parentRoom: { position: THREE.Vector2; width: number; height: number },
     parentEntrance: 'north' | 'south' | 'east' | 'west'
   ): { childPosition: THREE.Vector2; childEntrance: 'north' | 'south' | 'east' | 'west' } {
     const { position, width, height } = parentRoom;
@@ -310,32 +310,35 @@ export class FloorGenerator {
     // Calculate absolute direction from relative direction
     const absoluteDirection = this.getAbsoluteDirection(parentEntrance, direction);
     
+    // Add a minimal gap to prevent most overlaps but maintain connectivity
+    const gap = 0;
+    
     switch (absoluteDirection) {
       case 'north': // Child extends north from parent
         childEntrance = 'south';
         childPosition = new THREE.Vector2(
           position.x + offset,
-          position.y + height
+          position.y + height + gap
         );
         break;
       case 'south': // Child extends south from parent
         childEntrance = 'north';
         childPosition = new THREE.Vector2(
           position.x + offset,
-          position.y - (childNode.isRoom ? childNode.roomHeight! : 1)
+          position.y - (childNode.isRoom ? childNode.roomHeight! : 1) - gap
         );
         break;
       case 'east': // Child extends east from parent
         childEntrance = 'west';
         childPosition = new THREE.Vector2(
-          position.x + width,
+          position.x + width + gap,
           position.y + offset
         );
         break;
       case 'west': // Child extends west from parent
         childEntrance = 'east';
         childPosition = new THREE.Vector2(
-          position.x - (childNode.isRoom ? childNode.roomWidth! : 1),
+          position.x - (childNode.isRoom ? childNode.roomWidth! : 1) - gap,
           position.y + offset
         );
         break;
@@ -358,11 +361,13 @@ export class FloorGenerator {
     let direction: THREE.Vector2;
     
     if (hallway.parentDirection) {
-      // Turn from current entrance direction
-      const absoluteDirection = this.getAbsoluteDirection(entrance, hallway.parentDirection);
-      direction = this.getDirectionVector(absoluteDirection);
+      // For hallways with a parent direction, we want to extend away from the parent
+      // The entrance tells us which side of the parent we're on
+      // We should extend in the opposite direction to go away from parent
+      const awayDirection = this.getOppositeDirectionString(entrance);
+      direction = this.getDirectionVector(awayDirection);
     } else {
-      // Continue straight
+      // Continue straight in the entrance direction
       direction = this.getDirectionVector(entrance);
     }
     
@@ -411,6 +416,18 @@ export class FloorGenerator {
   }
 
   /**
+   * Get opposite direction from string
+   */
+  private static getOppositeDirectionString(direction: 'north' | 'south' | 'east' | 'west'): 'north' | 'south' | 'east' | 'west' {
+    switch (direction) {
+      case 'north': return 'south';
+      case 'south': return 'north';
+      case 'east': return 'west';
+      case 'west': return 'east';
+    }
+  }
+
+  /**
    * Get opposite direction
    */
   private static getOppositeDirection(direction: THREE.Vector2): 'north' | 'south' | 'east' | 'west' {
@@ -419,6 +436,81 @@ export class FloorGenerator {
     if (direction.x === 1 && direction.y === 0) return 'west';
     if (direction.x === -1 && direction.y === 0) return 'east';
     return 'north'; // fallback
+  }
+
+  /**
+   * Create a bridge connection between a parent room and child to fill gaps
+   */
+  private static createBridgeConnection(
+    parent: { position: THREE.Vector2; width: number; height: number },
+    child: { position: THREE.Vector2; width: number; height: number },
+    parentEntrance: 'north' | 'south' | 'east' | 'west',
+    childEntrance: 'north' | 'south' | 'east' | 'west',
+    bridgeName: string
+  ): ServerHallway | null {
+    // Determine connection points
+    let startPoint: THREE.Vector2;
+    let endPoint: THREE.Vector2;
+    
+    // Calculate connection points based on entrances
+    switch (parentEntrance) {
+      case 'north':
+        startPoint = new THREE.Vector2(parent.position.x + parent.width / 2, parent.position.y + parent.height);
+        break;
+      case 'south':
+        startPoint = new THREE.Vector2(parent.position.x + parent.width / 2, parent.position.y);
+        break;
+      case 'east':
+        startPoint = new THREE.Vector2(parent.position.x + parent.width, parent.position.y + parent.height / 2);
+        break;
+      case 'west':
+        startPoint = new THREE.Vector2(parent.position.x, parent.position.y + parent.height / 2);
+        break;
+    }
+    
+    switch (childEntrance) {
+      case 'north':
+        endPoint = new THREE.Vector2(child.position.x + child.width / 2, child.position.y + child.height);
+        break;
+      case 'south':
+        endPoint = new THREE.Vector2(child.position.x + child.width / 2, child.position.y);
+        break;
+      case 'east':
+        endPoint = new THREE.Vector2(child.position.x + child.width, child.position.y + child.height / 2);
+        break;
+      case 'west':
+        endPoint = new THREE.Vector2(child.position.x, child.position.y + child.height / 2);
+        break;
+    }
+    
+    // Calculate distance to see if bridge is needed
+    const distance = startPoint.distanceTo(endPoint);
+    
+    if (distance <= 1) {
+      // No bridge needed, too close
+      return null;
+    }
+    
+    // Create bridge hallway
+    const direction = new THREE.Vector2(endPoint.x - startPoint.x, endPoint.y - startPoint.y).normalize();
+    
+    const bridge: ServerHallway = {
+      id: `bridge_${Date.now()}`,
+      name: bridgeName,
+      length: Math.ceil(distance),
+      startPosition: startPoint,
+      endPosition: endPoint,
+      direction: direction,
+      children: [], // Bridges don't have children
+      segments: [{
+        start: startPoint.clone(),
+        end: endPoint.clone(),
+        direction: direction.clone(),
+        length: Math.ceil(distance)
+      }]
+    };
+    
+    return bridge;
   }
 
   /**
