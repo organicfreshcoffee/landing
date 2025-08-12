@@ -321,4 +321,58 @@ export class ServerSceneryGenerator {
       console.log(`💡 Try calling ServerSceneryGenerator.debugSceneObjects(scene) to see all objects`);
     }
   }
+
+  /**
+   * Run dungeon floor tests directly from the scenery generator
+   * Useful for debugging rendering issues
+   */
+  static runDungeonTests(): void {
+    console.log(`🧪 Running Dungeon Floor Tests from Scenery Generator...`);
+    
+    if (!DungeonTestRunner) {
+      console.error(`❌ DungeonTestRunner not available. Tests may not be included in this build.`);
+      return;
+    }
+    
+    try {
+      // Run quick test for immediate feedback
+      DungeonTestRunner.quickTest();
+      
+      // Make test runner available globally
+      if (typeof window !== 'undefined') {
+        (window as any).DungeonTestRunner = DungeonTestRunner;
+        console.log(`🌐 DungeonTestRunner is now available in browser console!`);
+        console.log(`📖 Type 'DungeonTestRunner.help()' for more options.`);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error running dungeon tests:`, error);
+    }
+  }
+
+  /**
+   * Validate that the floor generation is working correctly
+   * Call this after generating a floor to check for issues
+   */
+  static validateFloorGeneration(): void {
+    console.log(`✅ Validating current floor generation...`);
+    
+    if (!DungeonTestRunner) {
+      console.error(`❌ DungeonTestRunner not available for validation.`);
+      return;
+    }
+    
+    try {
+      // Test cube renderer validation
+      DungeonTestRunner.validateCubeRenderer();
+      
+      // Run quick overlap and continuity tests
+      DungeonTestRunner.quickTest();
+      
+      console.log(`✅ Floor validation complete. Check logs above for any issues.`);
+      
+    } catch (error) {
+      console.error(`❌ Floor validation failed:`, error);
+    }
+  }
 }
