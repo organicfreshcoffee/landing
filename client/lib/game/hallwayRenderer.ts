@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HallwayNetwork, HallwaySegment, HallwayIntersection } from './serverHallwayGenerator';
+import { HallwayNetwork, HallwaySegment, HallwayIntersection } from './types/generator';
 import { CubeConfig } from './config/cubeConfig';
 
 export interface HallwayRenderOptions {
