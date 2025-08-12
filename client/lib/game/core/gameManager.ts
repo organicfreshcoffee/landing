@@ -319,6 +319,12 @@ export class GameManager {
     const collisionSystem = this.movementController.getCollisionSystem();
     const floorHeight = collisionSystem.getFloorHeight(currentPosition);
     
+    console.log('🏠 Positioning player on ground:', {
+      currentY: currentPosition.y.toFixed(2),
+      floorHeight: floorHeight.toFixed(2),
+      currentPos: `(${currentPosition.x.toFixed(1)}, ${currentPosition.y.toFixed(1)}, ${currentPosition.z.toFixed(1)})`
+    });
+    
     // Position player on the floor
     this.localPlayerRef.current.position.y = floorHeight;
     console.log(`👤 Player positioned on ground at height: ${floorHeight}`);

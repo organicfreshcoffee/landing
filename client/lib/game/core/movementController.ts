@@ -250,6 +250,17 @@ export class MovementController {
     const newY = this.localPlayerRef.current.position.y + this.velocity.y * delta;
     const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
     
+    // Debug: Log gravity information occasionally
+    if (Math.random() < 0.01) {
+      console.log('🌍 Gravity info:', {
+        currentY: this.localPlayerRef.current.position.y.toFixed(2),
+        newY: newY.toFixed(2),
+        floorHeight: floorHeight.toFixed(2),
+        velocity: this.velocity.y.toFixed(2),
+        isGrounded: this.isGrounded
+      });
+    }
+    
     // Check if we hit the ground
     if (newY <= floorHeight) {
       this.localPlayerRef.current.position.y = floorHeight;

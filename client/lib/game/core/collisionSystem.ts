@@ -234,19 +234,26 @@ export class CollisionSystem {
   }
 
   /**
-   * Get floor height at a position
+   * Get floor height at a position - returns the Y position where the player origin should be placed
    */
   getFloorHeight(position: THREE.Vector3): number {
     const cubeCoords = this.worldToCubeCoords(position);
     const key = `${cubeCoords.x},${cubeCoords.y}`;
     
-    // If there's a floor cube at this position, return floor height
+    // If there's a floor cube at this position, return the height where player should be positioned
     if (this.floorCubes.has(key)) {
-      return this.cubeSize; // Floor cubes are positioned with their top at cubeSize height
+      // Floor cubes are positioned with their top at cubeSize height
+      // Player model needs additional height offset to appear standing on top
+      // Based on ModelLoader ground offset: -box.min.y + CubeConfig.getCubeSize()
+      // The player model is approximately 1.8 units tall (scaled), and its origin is at the bottom
+      // So we need to position the player at: cubeSize + modelBottomOffset
+      const modelBottomOffset = 1.8; // Approximate offset to place player bottom at cube top
+      return this.cubeSize + modelBottomOffset;
     }
     
-    // No floor, return ground level
-    return 0;
+    // No floor, return ground level with model offset
+    const modelBottomOffset = 1.8;
+    return modelBottomOffset;
   }
 
   /**
