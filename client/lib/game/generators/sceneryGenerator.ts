@@ -20,9 +20,11 @@ export class ServerSceneryGenerator {
   ): Promise<{
     floorLayout: ServerFloorLayout;
     floorGroup: THREE.Group;
+    wallGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
+    wallCount: number;
     totalArea: number;
   }> {
     const {
@@ -69,13 +71,16 @@ export class ServerSceneryGenerator {
       console.log(`📊 Generated: ${result.roomCount} rooms, ${result.hallwayCount} hallways`);
       console.log(`🎯 Total area: ${result.totalArea} cubes`);
       console.log(`🟣 Overlaps: ${result.overlapCount} cubes`);
+      console.log(`🧱 Walls: ${result.wallCount} cubes`);
 
       return {
         floorLayout: result.layout,
         floorGroup: result.floorGroup,
+        wallGroup: result.wallGroup,
         roomCount: result.roomCount,
         hallwayCount: result.hallwayCount,
         overlapCount: result.overlapCount,
+        wallCount: result.wallCount,
         totalArea: result.totalArea
       };
     } catch (error) {

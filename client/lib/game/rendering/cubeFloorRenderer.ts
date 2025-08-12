@@ -36,6 +36,17 @@ export class CubeFloorRenderer {
   }
 
   /**
+   * Get all registered cube coordinates
+   */
+  static getAllCoordinates(): CubePosition[] {
+    const coordinates: CubePosition[] = [];
+    this.cubeRegistry.forEach((cubeInfo) => {
+      coordinates.push(cubeInfo.position);
+    });
+    return coordinates;
+  }
+
+  /**
    * Register cubes for a specific type and color
    */
   static registerCubes(

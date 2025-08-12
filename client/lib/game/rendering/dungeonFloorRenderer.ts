@@ -3,6 +3,7 @@ import { FloorGenerator, DungeonDagData } from '../generators/floorGenerator';
 import { HallwayRenderer } from './hallwayRenderer';
 import { RoomRenderer } from './roomRenderer';
 import { CubeFloorRenderer } from './cubeFloorRenderer';
+import { WallGenerator } from '../generators/wallGenerator';
 import { ServerFloorLayout } from '../types/generator';
 
 export interface DungeonRenderOptions {
@@ -14,6 +15,9 @@ export interface DungeonRenderOptions {
   showDoors?: boolean;
   showStairs?: boolean;
   showDebug?: boolean;
+  showWalls?: boolean;
+  wallHeight?: number;
+  wallColor?: number;
 }
 
 /**
@@ -28,7 +32,10 @@ export class DungeonFloorRenderer {
     hallwayWidth: 1,
     showDoors: true,
     showStairs: false,
-    showDebug: false
+    showDebug: false,
+    showWalls: true,
+    wallHeight: 3,
+    wallColor: 0x666666 // Gray walls
   };
 
   /**
@@ -40,10 +47,12 @@ export class DungeonFloorRenderer {
     options: DungeonRenderOptions = {}
   ): {
     floorGroup: THREE.Group;
+    wallGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
+    wallCount: number;
     layout: ServerFloorLayout;
   } {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
@@ -88,6 +97,27 @@ export class DungeonFloorRenderer {
       yOffset: opts.yOffset
     });
     
+    // Generate and render walls around all floor coordinates
+    let wallGroup: THREE.Group | null = null;
+    let wallCount = 0;
+    if (opts.showWalls) {
+      // Get all floor coordinates from the cube renderer
+      const allFloorCoords = CubeFloorRenderer.getAllCoordinates();
+      
+      if (allFloorCoords.length > 0) {
+        const wallResult = WallGenerator.generateAndRenderWalls(scene, allFloorCoords, {
+          wallHeight: opts.wallHeight,
+          wallColor: opts.wallColor,
+          cubeSize: opts.cubeSize
+        });
+        
+        wallGroup = wallResult.wallGroup;
+        wallCount = wallResult.wallCount;
+        
+        console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
+      }
+    }
+    
     // Calculate statistics
     const roomCount = layout.rooms.length;
     const hallwayCount = layout.hallways.length;
@@ -114,14 +144,17 @@ export class DungeonFloorRenderer {
     console.log(`   📊 ${roomCount} rooms, ${hallwayCount} hallways`);
     console.log(`   🎯 ${totalArea} total floor cubes`);
     console.log(`   🟣 ${overlapCount} overlapping cubes`);
+    console.log(`   🧱 ${wallCount} wall cubes`);
     console.log(`   📐 Bounds: ${layout.bounds.width}x${layout.bounds.height}`);
     
     return {
       floorGroup,
+      wallGroup,
       roomCount,
       hallwayCount,
       overlapCount,
       totalArea,
+      wallCount,
       layout
     };
   }
@@ -170,10 +203,12 @@ export class DungeonFloorRenderer {
     options: DungeonRenderOptions = {}
   ): {
     floorGroup: THREE.Group;
+    wallGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
+    wallCount: number;
     layout: ServerFloorLayout;
   } {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
@@ -207,6 +242,27 @@ export class DungeonFloorRenderer {
       yOffset: opts.yOffset
     });
     
+    // Generate and render walls around all floor coordinates
+    let wallGroup: THREE.Group | null = null;
+    let wallCount = 0;
+    if (opts.showWalls) {
+      // Get all floor coordinates from the cube renderer
+      const allFloorCoords = CubeFloorRenderer.getAllCoordinates();
+      
+      if (allFloorCoords.length > 0) {
+        const wallResult = WallGenerator.generateAndRenderWalls(scene, allFloorCoords, {
+          wallHeight: opts.wallHeight,
+          wallColor: opts.wallColor,
+          cubeSize: opts.cubeSize
+        });
+        
+        wallGroup = wallResult.wallGroup;
+        wallCount = wallResult.wallCount;
+        
+        console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
+      }
+    }
+    
     // Calculate statistics
     const roomCount = layout.rooms.length;
     const hallwayCount = layout.hallways.length;
@@ -229,10 +285,12 @@ export class DungeonFloorRenderer {
     
     return {
       floorGroup,
+      wallGroup,
       roomCount,
       hallwayCount,
       overlapCount,
       totalArea,
+      wallCount,
       layout
     };
   }
