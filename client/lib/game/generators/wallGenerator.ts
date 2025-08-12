@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CubePosition, CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
+import { CubeConfig } from '../config/cubeConfig';
 
 export interface WallGenerationOptions {
   wallHeight?: number;
@@ -16,10 +17,10 @@ export interface WallGenerationOptions {
  */
 export class WallGenerator {
   private static readonly DEFAULT_OPTIONS: Required<WallGenerationOptions> = {
-    wallHeight: 5,
+    wallHeight: CubeConfig.getWallHeight(),
     wallColor: 0x666666, // Gray walls
     wallMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
-    cubeSize: 1,
+    cubeSize: CubeConfig.getCubeSize(),
     showCeiling: true,
     ceilingColor: 0x444444, // Darker gray ceiling
     ceilingMaterial: new THREE.MeshLambertMaterial({ color: 0x444444 })

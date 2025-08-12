@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ServerHallway } from '../types/generator';
 import { CubeFloorRenderer, CubePosition } from './cubeFloorRenderer';
 import { HallwayGenerator, HallwayGenerationOptions } from '../generators/hallwayGenerator';
+import { CubeConfig } from '../config/cubeConfig';
 
 export interface HallwayRenderOptions extends HallwayGenerationOptions {
   cubeSize?: number;
@@ -14,7 +15,7 @@ export interface HallwayRenderOptions extends HallwayGenerationOptions {
  */
 export class HallwayRenderer {
   private static readonly DEFAULT_OPTIONS: Required<HallwayRenderOptions> = {
-    cubeSize: 1,
+    cubeSize: CubeConfig.getCubeSize(),
     hallwayColor: 0xff0000, // Red for hallways
     yOffset: 0,
     width: 2,

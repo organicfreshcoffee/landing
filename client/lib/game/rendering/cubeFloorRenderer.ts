@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CubeConfig } from '../config/cubeConfig';
 
 export interface CubeFloorOptions {
   cubeSize?: number;
@@ -85,7 +86,7 @@ export class CubeFloorRenderer {
     options: CubeFloorOptions = {}
   ): THREE.Group {
     const {
-      cubeSize = 1,
+      cubeSize = CubeConfig.getCubeSize(),
       yOffset = 0
     } = options;
 

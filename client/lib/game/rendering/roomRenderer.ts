@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ServerRoom } from '../types/generator';
 import { CubeFloorRenderer, CubePosition } from './cubeFloorRenderer';
+import { CubeConfig } from '../config/cubeConfig';
 
 export interface RoomRenderOptions {
   cubeSize?: number;
@@ -17,7 +18,7 @@ export interface RoomRenderOptions {
  */
 export class RoomRenderer {
   private static readonly DEFAULT_OPTIONS: Required<RoomRenderOptions> = {
-    cubeSize: 1,
+    cubeSize: CubeConfig.getCubeSize(),
     roomColor: 0x0080ff, // Blue for rooms
     yOffset: 0,
     showDoors: true,

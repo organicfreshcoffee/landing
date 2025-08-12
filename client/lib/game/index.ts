@@ -5,3 +5,4 @@ export * from './network';
 export * from './rendering';
 export * from './generators';
 export * from './utils';
+export * from './config';

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ServerSceneryGenerator } from '../generators/sceneryGenerator';
+import { CubeConfig } from '../config/cubeConfig';
 
 export class SceneManager {
   scene: THREE.Scene;
@@ -25,14 +26,14 @@ export class SceneManager {
 
   private createCamera(): THREE.PerspectiveCamera {
     const camera = new THREE.PerspectiveCamera(
-      75,
+      85, // Increased FOV for more immersive view
       window.innerWidth / window.innerHeight,
       0.01, // Much smaller near plane to avoid clipping
       1000
     );
-    // Moved camera closer for better view of walls and ceiling
-    // Height is set to 3 blocks (below the 5-block walls but above player)
-    camera.position.set(0, 3, 6);
+    // Much closer camera position for immersive first-person-like perspective
+    // Height at player eye level and very close distance
+    camera.position.set(0, CubeConfig.getPlayerEyeLevel(), 3);
     return camera;
   }
 
@@ -133,7 +134,7 @@ export class SceneManager {
         this.serverAddress, 
         floorName, 
         {
-          cubeSize: 1
+          cubeSize: CubeConfig.getCubeSize()
         }
       );
       
@@ -163,7 +164,7 @@ export class SceneManager {
     this.scene.add(ground);
 
     // Add walls with better materials to show lighting
-    const wallGeometry = new THREE.BoxGeometry(1, 5, 20);
+    const wallGeometry = new THREE.BoxGeometry(1, CubeConfig.getWallHeight(), 20);
     const wallMaterial = new THREE.MeshStandardMaterial({ 
       color: 0xdddddd,
       roughness: 0.7,
@@ -171,13 +172,13 @@ export class SceneManager {
     });
     
     const wall1 = new THREE.Mesh(wallGeometry, wallMaterial);
-    wall1.position.set(-10, 2.5, 0);
+    wall1.position.set(-10, CubeConfig.getWallHeight() / 2, 0);
     wall1.castShadow = true;
     wall1.receiveShadow = true;
     this.scene.add(wall1);
     
     const wall2 = new THREE.Mesh(wallGeometry, wallMaterial);
-    wall2.position.set(10, 2.5, 0);
+    wall2.position.set(10, CubeConfig.getWallHeight() / 2, 0);
     wall2.castShadow = true;
     wall2.receiveShadow = true;
     this.scene.add(wall2);

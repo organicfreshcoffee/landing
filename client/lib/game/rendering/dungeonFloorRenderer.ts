@@ -5,6 +5,7 @@ import { RoomRenderer } from './roomRenderer';
 import { CubeFloorRenderer } from './cubeFloorRenderer';
 import { WallGenerator } from '../generators/wallGenerator';
 import { ServerFloorLayout } from '../types/generator';
+import { CubeConfig } from '../config/cubeConfig';
 
 export interface DungeonRenderOptions {
   cubeSize?: number;
@@ -29,7 +30,7 @@ export interface DungeonRenderOptions {
  */
 export class DungeonFloorRenderer {
   private static readonly DEFAULT_OPTIONS: Required<DungeonRenderOptions> = {
-    cubeSize: 1,
+    cubeSize: CubeConfig.getCubeSize(),
     roomColor: 0x0080ff, // Blue for rooms
     hallwayColor: 0xff0000, // Red for hallways
     yOffset: 0,
@@ -38,7 +39,7 @@ export class DungeonFloorRenderer {
     showStairs: false,
     showDebug: false,
     showWalls: true,
-    wallHeight: 5,
+    wallHeight: CubeConfig.getWallHeight(),
     wallColor: 0x666666, // Gray walls
     showCeiling: true,
     ceilingColor: 0x444444, // Darker gray ceiling

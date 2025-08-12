@@ -3,6 +3,7 @@ import { FloorGenerator, DungeonDagData } from './floorGenerator';
 import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
 import { DungeonFloorRenderer } from '../rendering/dungeonFloorRenderer';
 import { CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
+import { CubeConfig } from '../config/cubeConfig';
 
 export class ServerSceneryGenerator {
   /**
@@ -28,7 +29,7 @@ export class ServerSceneryGenerator {
     totalArea: number;
   }> {
     const {
-      cubeSize = 1,
+      cubeSize = CubeConfig.getCubeSize(),
       floorColor = 0x0080ff, // Blue for rooms
       hallwayFloorColor = 0xff0000 // Red for hallways
     } = options;

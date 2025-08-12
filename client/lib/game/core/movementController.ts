@@ -81,7 +81,7 @@ export class MovementController {
   updateMovement(userId: string): void {
     if (!this.localPlayerRef.current || !this.cameraRef.current || !this.isConnected()) return;
     
-    const moveSpeed = 0.1;
+    const moveSpeed = 0.5;
     const localPlayer = this.localPlayerRef.current;
     const camera = this.cameraRef.current;
     let moved = false;
@@ -144,8 +144,8 @@ export class MovementController {
   }
 
   private updateCamera(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3): void {
-    const cameraHeight = 1.8;
-    const cameraDistance = 3.5;
+    const cameraHeight = 1.0;
+    const cameraDistance = 1.5;
     
     // Calculate camera position based on player's Y rotation
     const cameraX = playerPos.x + Math.sin(this.localPlayerRotation.y) * cameraDistance;

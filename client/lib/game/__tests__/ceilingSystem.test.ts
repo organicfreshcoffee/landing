@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WallGenerator } from '../generators/wallGenerator';
 import { CubePosition } from '../rendering/cubeFloorRenderer';
+import { CubeConfig } from '../config/cubeConfig';
 
 describe('Ceiling System', () => {
   let scene: THREE.Scene;
