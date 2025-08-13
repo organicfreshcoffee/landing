@@ -232,6 +232,8 @@ export class ServerSceneryGenerator {
       const isScenery = (
         child.name === 'AllFloorCubes' || // Previous floor cubes
         child.name === 'stairs' || // Stair group
+        child.name === 'Ceiling' || // Ceiling group
+        child.name === 'Walls' || // Wall group
         child.name?.includes('Room') ||
         child.name?.includes('Hallway') ||
         child.name?.includes('Floor') ||
@@ -239,6 +241,7 @@ export class ServerSceneryGenerator {
         child.name?.includes('Scenery') ||
         child.userData.isScenery === true ||
         child.userData.type === 'stairs' || // Individual stair models
+        child.userData.isCeiling === true || // Individual ceiling blocks
         (child.type === 'Mesh' && 
          !child.userData.isPlayer && 
          !child.userData.isOtherPlayer && 
