@@ -38,13 +38,31 @@ async function initializeServices() {
   try {
     // Initialize Firebase Admin SDK first
     console.log('Initializing Firebase Admin SDK...');
-    await initializeFirebaseAdmin();
+    try {
+      await initializeFirebaseAdmin();
+    } catch (firebaseError) {
+      console.error('Firebase initialization failed:', firebaseError);
+      console.warn('Server will start without Firebase functionality');
+      // Don't exit - allow server to start without Firebase in development
+      if (process.env.NODE_ENV === 'production') {
+        throw firebaseError;
+      }
+    }
     
     // Connect to Database
     console.log('Connecting to database...');
-    await connectToDatabase();
+    try {
+      await connectToDatabase();
+    } catch (dbError) {
+      console.error('Database connection failed:', dbError);
+      console.warn('Server will start without database functionality');
+      // Don't exit - allow server to start without database in development
+      if (process.env.NODE_ENV === 'production') {
+        throw dbError;
+      }
+    }
     
-    console.log('All services initialized successfully');
+    console.log('Service initialization completed');
   } catch (error) {
     console.error('Failed to initialize services:', error);
     process.exit(1);

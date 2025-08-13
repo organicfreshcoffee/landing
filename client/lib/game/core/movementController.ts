@@ -13,6 +13,11 @@ export class MovementController {
   private lastSentMovementState = false;
   private clock = new THREE.Clock();
   
+  // Animation timing properties to smooth out delta inconsistencies
+  private animationClock = new THREE.Clock();
+  private targetFrameTime = 1 / 60; // Target 60 FPS for smooth animation
+  private maxFrameTime = 1 / 30; // Cap at 30 FPS to prevent large jumps
+  
   // Physics and admin mode properties
   private isAdminMode = false;
   private velocity = new THREE.Vector3(0, 0, 0);
@@ -286,21 +291,29 @@ export class MovementController {
     } else {
       // Normal mode: apply collision detection
       const newPosition = oldPosition.clone().add(movement);
-      const collisionResult = this.collisionSystem.checkCollision(newPosition);
       
-      if (collisionResult.collided) {
-        // Use corrected position
-        localPlayer.position.copy(collisionResult.correctedPosition);
+      // Only check collision if we're actually moving horizontally
+      // This reduces collision check frequency and improves performance
+      if (Math.abs(movement.x) > 0.001 || Math.abs(movement.z) > 0.001) {
+        const collisionResult = this.collisionSystem.checkCollision(newPosition);
         
-        // Provide feedback for different collision types
-        if (collisionResult.collisionDirection === 'y') {
-          // Ceiling collision - stop upward movement
-          if (this.velocity.y > 0) {
-            this.velocity.y = 0;
+        if (collisionResult.collided) {
+          // Use corrected position
+          localPlayer.position.copy(collisionResult.correctedPosition);
+          
+          // Provide feedback for different collision types
+          if (collisionResult.collisionDirection === 'y') {
+            // Ceiling collision - stop upward movement
+            if (this.velocity.y > 0) {
+              this.velocity.y = 0;
+            }
           }
+        } else {
+          // No collision, apply normal movement
+          localPlayer.position.copy(newPosition);
         }
       } else {
-        // No collision, apply normal movement
+        // Only vertical movement, skip collision check for better performance
         localPlayer.position.copy(newPosition);
       }
     }
@@ -355,7 +368,13 @@ export class MovementController {
     const wasMoving = this.isMoving;
     this.isMoving = moved;
     
-    const delta = this.clock.getDelta();
+    // Use a separate clock for animations to ensure consistent timing
+    // regardless of collision detection performance
+    const rawDelta = this.animationClock.getDelta();
+    
+    // Smooth out the delta time to prevent animation jerkiness
+    // Cap the delta to prevent large jumps and ensure consistent 60fps feel
+    const smoothDelta = Math.min(rawDelta, this.maxFrameTime);
     
     // Control local player animation
     if (this.localPlayerMixer.current && this.localPlayerActions.current.StickMan_Run) {
@@ -372,7 +391,8 @@ export class MovementController {
           isRunning: walkAction.isRunning(),
           paused: walkAction.paused,
           time: walkAction.time.toFixed(3),
-          delta
+          rawDelta: rawDelta.toFixed(4),
+          smoothDelta: smoothDelta.toFixed(4)
         });
       }
       
@@ -391,7 +411,8 @@ export class MovementController {
         walkAction.paused = true;
       }
       
-      this.localPlayerMixer.current.update(delta);
+      // Use smooth delta for consistent animation timing
+      this.localPlayerMixer.current.update(smoothDelta);
     } else if (Math.random() < 0.01) {
       console.log('⚠️ Local player mixer or action not available:', {
         hasMixer: !!this.localPlayerMixer.current,
@@ -399,13 +420,13 @@ export class MovementController {
       });
     }
     
-    // Update other players' animation mixers
+    // Update other players' animation mixers with smooth delta
     this.playersAnimations.forEach((animData) => {
-      animData.mixer.update(delta);
+      animData.mixer.update(smoothDelta);
     });
     
-    // Update test runner animation for debugging
-    AnimationTest.updateTestRunner(delta);
+    // Update test runner animation for debugging with smooth delta
+    AnimationTest.updateTestRunner(smoothDelta);
   }
 
   private sendMovementUpdateIfNeeded(userId: string, moved: boolean, oldRotation: any): void {
@@ -456,6 +477,10 @@ export class MovementController {
     this.movementDirection = 'none';
     this.velocity.set(0, 0, 0);
     this.isAdminMode = false;
+    
+    // Reset animation timing
+    this.animationClock.stop();
+    this.clock.stop();
     
     this.gameHUD.hideHUD();
     

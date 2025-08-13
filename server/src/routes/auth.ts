@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { getDatabase } from '../config/database';
-import { getFirebaseConfig } from '../config/firebase';
+import { getFirebaseConfig, admin } from '../config/firebase';
 
 const router = Router();
 
@@ -22,11 +22,10 @@ router.get('/firebase-config', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting Firebase config:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    
-    // Send detailed error information (you might want to remove this in production for security)
+
+    // Send minimal error information in production for security
     res.status(500).json({ 
       error: 'Failed to get Firebase configuration',
-      details: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString()
     });
   }
@@ -79,10 +78,11 @@ router.post('/login', authenticateToken, async (req: AuthenticatedRequest, res: 
   }
 });
 
-
 // Endpoint to get servers list
 router.get('/servers', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    console.log(`Servers request from user: ${req.user?.uid} (${req.user?.email})`);
+
     const db = getDatabase();
     const serversCollection = db.collection('servers');
 
@@ -91,6 +91,7 @@ router.get('/servers', authenticateToken, async (req: AuthenticatedRequest, res:
       .sort({ server_name: 1 })
       .toArray();
 
+    console.log(`Found ${servers.length} servers`);
     res.json(servers);
   } catch (error) {
     console.error('Error fetching servers:', error);
