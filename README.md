@@ -459,3 +459,11 @@ If you encounter any issues or need help:
 - [Firebase](https://firebase.google.com/) for authentication services
 - [MongoDB](https://www.mongodb.com/) for the database
 - [Docker](https://www.docker.com/) for containerization
+
+### last-guardian-sprites
+
+https://opengameart.org/content/700-sprites
+
+CC-BY 3.0 license
+
+By Philipp Lenssen : outer-court.com 
