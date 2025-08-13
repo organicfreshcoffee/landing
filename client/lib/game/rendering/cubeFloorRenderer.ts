@@ -192,11 +192,20 @@ export class CubeFloorRenderer {
 
       // Create cube mesh
       const cube = new THREE.Mesh(geometry, material);
+      const cubeWorldX = cubeInfo.position.x * cubeSize;
+      const cubeWorldZ = cubeInfo.position.y * cubeSize;
       cube.position.set(
-        cubeInfo.position.x * cubeSize,
+        cubeWorldX,
         yOffset + cubeSize / 2,
-        cubeInfo.position.y * cubeSize
+        cubeWorldZ
       );
+      
+      // Debug logging for cube positioning
+      if (cubeInfo.position.x === 9 && cubeInfo.position.y === 2) {
+        console.log(`[cube] 🟫 Floor cube at grid (${cubeInfo.position.x}, ${cubeInfo.position.y}) positioned at world (${cubeWorldX}, ${cubeWorldZ})`);
+        console.log(`[cube] 🟫 Floor cube center is at: (${cubeWorldX + cubeSize/2}, ${cubeWorldZ + cubeSize/2})`);
+      }
+      
       cube.name = `FloorCube_${cubeInfo.type}_${cubeInfo.position.x}_${cubeInfo.position.y}`;
       cube.castShadow = true;
       cube.receiveShadow = true;

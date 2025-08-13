@@ -173,8 +173,11 @@ export class StairRenderer {
       const scaledModelBottomOffset = -scaledBox.min.y;
 
       // Position the stairs at the specified location
-      const worldX = (room.position.x + room.stairLocationX) * cubeSize + cubeSize / 2;
-      const worldZ = (room.position.y + room.stairLocationY) * cubeSize + cubeSize / 2;
+      // Use the same coordinate calculation as in getExcludedFloorCoordinates()
+      const gridX = room.position.x + room.stairLocationX;
+      const gridY = room.position.y + room.stairLocationY;
+      const worldX = gridX * cubeSize + cubeSize / 2;
+      const worldZ = gridY * cubeSize + cubeSize / 2;
       
       // Different positioning for upward vs downward stairs
       let worldY: number;
@@ -188,7 +191,7 @@ export class StairRenderer {
         console.log(`⬆️ Positioning upward stairs on top of floor cube for room ${room.name}`);
       }
 
-      stairModel.position.set(worldX, worldY, worldZ);
+      stairModel.position.set(worldX - cubeSize, worldY, worldZ);
 
       // Add metadata for debugging
       stairModel.userData = {
@@ -202,13 +205,13 @@ export class StairRenderer {
       };
 
       console.log(
-        `🏗️ Placed ${room.hasDownwardStair ? 'downward' : 'upward'} stairs for room ${room.name} at cube (${room.stairLocationX}, ${room.stairLocationY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
+        `[stair] 🏗️ Placed ${room.hasDownwardStair ? 'downward' : 'upward'} stairs for room ${room.name} at grid (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
       );
       console.log(
-        `📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)}, ${scaleZ.toFixed(2)})`
+        `[stair] 📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)}, ${scaleZ.toFixed(2)})`
       );
       console.log(
-        `🎯 Target: cube=${cubeSize}×${cubeSize}, wall height=${wallHeight}`
+        `[stair] 🎯 Target: cube=${cubeSize}×${cubeSize}, wall height=${wallHeight}`
       );
 
       return stairModel;
