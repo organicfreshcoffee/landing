@@ -378,8 +378,8 @@ export class GameManager {
       const targetStairLocation = stairsResponse.data.upwardStair;
       console.log(`🔺 Going upstairs to floor: ${targetFloor}`);
       
-      // Switch to the new floor
-      await this.sceneManager.switchFloor(targetFloor);
+      // Load the new floor (includes collision data update)
+      await this.loadFloor(targetFloor);
       
       // Position player at the corresponding downward stair location
       this.positionPlayerAtStair(targetStairLocation, 'downward');
@@ -411,8 +411,8 @@ export class GameManager {
       const targetStairLocation = stairsResponse.data.downwardStair;
       console.log(`🔻 Going downstairs to floor: ${targetFloor}`);
       
-      // Switch to the new floor
-      await this.sceneManager.switchFloor(targetFloor);
+      // Load the new floor (includes collision data update)
+      await this.loadFloor(targetFloor);
       
       // Position player at the corresponding upward stair location
       this.positionPlayerAtStair(targetStairLocation, 'upward');
