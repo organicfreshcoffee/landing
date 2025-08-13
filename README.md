@@ -369,6 +369,16 @@ landing/
    ```
    **Note**: This will delete all existing MongoDB data and recreate the database with initial data.
 
+7. **Docker disk is full**
+    ```
+    Mongodb continually restarts
+    ```
+    ***Solution***
+     - `docker system prune -f`
+     - `docker volume prune -f`
+     - `docker-compose down`
+     - `./start.sh`
+
 ### Debug Commands
 
 ```bash
