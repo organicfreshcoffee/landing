@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CubeConfig } from '../config/cubeConfig';
+import { TextureManager, CubeType } from '../utils/textureManager';
 
 export interface CubeFloorOptions {
   cubeSize?: number;
@@ -79,7 +80,7 @@ export class CubeFloorRenderer {
   }
 
   /**
-   * Render all registered cubes with proper colors
+   * Render all registered cubes with proper textures
    */
   static renderAllCubes(
     scene: THREE.Scene,
@@ -102,8 +103,7 @@ export class CubeFloorRenderer {
     // Clear existing cubes
     sceneGroup.clear();
 
-    // Create materials for each color
-    const materials = new Map<number, THREE.MeshLambertMaterial>();
+    // Create geometry once for all cubes
     const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
 
     // Count types for reporting
@@ -113,11 +113,22 @@ export class CubeFloorRenderer {
 
     // Render all registered cubes
     this.cubeRegistry.forEach((cubeInfo, key) => {
-      // Get or create material for this color
-      let material = materials.get(cubeInfo.color);
-      if (!material) {
-        material = new THREE.MeshLambertMaterial({ color: cubeInfo.color });
-        materials.set(cubeInfo.color, material);
+      // Determine the cube type for texturing
+      let cubeType: CubeType;
+      let material: THREE.MeshLambertMaterial;
+
+      if (cubeInfo.type === 'overlap') {
+        // Use a special purple material for overlaps (no texture)
+        material = new THREE.MeshLambertMaterial({ color: 0x800080 });
+        overlapCount++;
+      } else if (cubeInfo.type === 'hallway') {
+        cubeType = 'hallway-floor';
+        material = TextureManager.createMaterialWithTexture(cubeType);
+        hallwayCount++;
+      } else { // room
+        cubeType = 'room-floor';
+        material = TextureManager.createMaterialWithTexture(cubeType);
+        roomCount++;
       }
 
       // Create cube mesh
@@ -132,16 +143,9 @@ export class CubeFloorRenderer {
       cube.receiveShadow = true;
 
       sceneGroup.add(cube);
-
-      // Count types
-      switch (cubeInfo.type) {
-        case 'room': roomCount++; break;
-        case 'hallway': hallwayCount++; break;
-        case 'overlap': overlapCount++; break;
-      }
     });
 
-    console.log(`🎨 Rendered floor cubes: ${roomCount} rooms (blue), ${hallwayCount} hallways (red), ${overlapCount} overlaps (purple)`);
+    console.log(`🎨 Rendered floor cubes with textures: ${roomCount} rooms, ${hallwayCount} hallways, ${overlapCount} overlaps`);
     
     return sceneGroup;
   }
