@@ -23,11 +23,9 @@ export class MovementController {
   private isAdminMode = false;
   private velocity = new THREE.Vector3(0, 0, 0);
   private isGrounded = false;
-  private isJumping = false;
   
   // Physics constants
   private readonly GRAVITY = -35; // Units per second squared
-  private readonly JUMP_FORCE = 15; // Initial upward velocity
   private readonly TERMINAL_VELOCITY = -50; // Maximum fall speed
   private readonly ADMIN_SPEED_MULTIPLIER = 2; // Admin mode speed multiplier
   
@@ -191,8 +189,7 @@ export class MovementController {
         moved = true;
       }
     } else {
-      // Normal mode: jumping and gravity
-      this.handleJumping();
+      // Normal mode: gravity only (no jumping)
       this.applyGravity(delta);
     }
 
@@ -205,7 +202,7 @@ export class MovementController {
         this.localPlayerRef.current.position, 
         this.velocity, 
         this.isGrounded, 
-        this.isJumping
+        false // No jumping capability
       );
     }
 
@@ -226,7 +223,6 @@ export class MovementController {
       // Reset physics when entering admin mode
       this.velocity.set(0, 0, 0);
       this.isGrounded = false;
-      this.isJumping = false;
       this.gameHUD.updateAdminMode(true);
       this.gameHUD.showMessage('🔧 Admin Mode Enabled', 2000);
       console.log('🔧 Admin mode enabled - No collision, no gravity, use Space/Shift for vertical movement');
@@ -242,15 +238,6 @@ export class MovementController {
       this.gameHUD.updateAdminMode(false);
       this.gameHUD.showMessage('👤 Normal Mode Enabled', 2000);
       console.log('👤 Admin mode disabled - Collision and gravity enabled');
-    }
-  }
-
-  private handleJumping(): void {
-    if (this.keysPressed.has('Space') && this.isGrounded && !this.isJumping) {
-      this.velocity.y = this.JUMP_FORCE;
-      this.isJumping = true;
-      this.isGrounded = false;
-      console.log('🚀 Jump initiated');
     }
   }
 
@@ -285,7 +272,6 @@ export class MovementController {
       this.localPlayerRef.current.position.y = floorHeight;
       this.velocity.y = 0;
       this.isGrounded = true;
-      this.isJumping = false;
     } else {
       this.localPlayerRef.current.position.y = newY;
       this.isGrounded = false;
@@ -552,8 +538,7 @@ export class MovementController {
       localPlayerRotation: this.localPlayerRotation,
       isAdminMode: this.isAdminMode,
       velocity: this.velocity.toArray(),
-      isGrounded: this.isGrounded,
-      isJumping: this.isJumping
+      isGrounded: this.isGrounded
     };
   }
 }
