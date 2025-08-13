@@ -21,8 +21,8 @@ export class StairInteractionManager {
   private readonly INTERACTION_DISTANCE = 12.5; // Distance in world units (accounting for cube size)
   
   // Interaction callbacks
-  private onUpstairsCallback: (() => void) | null = null;
-  private onDownstairsCallback: (() => void) | null = null;
+  private onUpstairsCallback: ((stairData: StairInteractionData) => void) | null = null;
+  private onDownstairsCallback: ((stairData: StairInteractionData) => void) | null = null;
   
   private constructor() {
     console.log(`[popup] StairInteractionManager constructor called`);
@@ -114,8 +114,8 @@ export class StairInteractionManager {
    * Set callback functions for stair interactions
    */
   setCallbacks(
-    onUpstairs: (() => void) | null,
-    onDownstairs: (() => void) | null
+    onUpstairs: ((stairData: StairInteractionData) => void) | null,
+    onDownstairs: ((stairData: StairInteractionData) => void) | null
   ): void {
     this.onUpstairsCallback = onUpstairs;
     this.onDownstairsCallback = onDownstairs;
@@ -230,9 +230,9 @@ export class StairInteractionManager {
     console.log(`🏃 Player interacting with ${this.nearbyStair.stairType} stair in ${this.nearbyStair.roomName}`);
     
     if (this.nearbyStair.stairType === 'upward' && this.onUpstairsCallback) {
-      this.onUpstairsCallback();
+      this.onUpstairsCallback(this.nearbyStair);
     } else if (this.nearbyStair.stairType === 'downward' && this.onDownstairsCallback) {
-      this.onDownstairsCallback();
+      this.onDownstairsCallback(this.nearbyStair);
     }
     
     // Hide the popup after interaction

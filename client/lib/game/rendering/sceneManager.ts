@@ -111,6 +111,13 @@ export class SceneManager {
     console.log(`🔧 SceneManager: Server address set to ${serverAddress}`);
   }
 
+  /**
+   * Get the current server address
+   */
+  getServerAddress(): string | null {
+    return this.serverAddress;
+  }
+
   async loadScenery(floorName?: string): Promise<void> {
     console.log(`🎮 SceneManager: Loading scenery. Server: ${this.serverAddress}, Floor: ${floorName || 'auto-detect'}`);
     
@@ -126,8 +133,8 @@ export class SceneManager {
         floorName = await ServerSceneryGenerator.getSpawnLocation(this.serverAddress);
       }
 
-      // Clear existing scenery
-      ServerSceneryGenerator.clearScene(this.scene);
+      // Clear existing scenery (preserve players and lights)
+      ServerSceneryGenerator.clearSceneryOnly(this.scene);
 
       // Generate floor from server data
       const floorResult = await ServerSceneryGenerator.generateServerFloor(

@@ -5,7 +5,10 @@ import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
 import { SceneManager } from '../rendering';
-import { StairInteractionManager } from '../ui/stairInteractionManager';
+import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
+import { DungeonApi } from '../network/dungeonApi';
+import { StairInfo } from '../types/api';
+import { CubeConfig } from '../config/cubeConfig';
 
 export class GameManager {
   private sceneManager: SceneManager;
@@ -258,6 +261,10 @@ export class GameManager {
       
       const playerResult = await PlayerManager.createPlayerModel(newPlayer);
       newPlayer.mesh = playerResult.model;
+      
+      // Mark as other player for scene preservation during floor changes
+      playerResult.model.userData.isOtherPlayer = true;
+      
       this.sceneManager.addToScene(playerResult.model);
       
       if (playerResult.mixer && playerResult.actions) {
@@ -335,44 +342,84 @@ export class GameManager {
     // Set up callbacks for stair interactions
     stairManager.setCallbacks(
       // Upstairs callback
-      () => {
+      (stairData: StairInteractionData) => {
         console.log('🔺 Player wants to go upstairs!');
-        this.handleUpstairsInteraction();
+        this.handleUpstairsInteraction(stairData);
       },
       // Downstairs callback
-      () => {
+      (stairData: StairInteractionData) => {
         console.log('🔻 Player wants to go downstairs!');
-        this.handleDownstairsInteraction();
+        this.handleDownstairsInteraction(stairData);
       }
     );
     
     console.log('🏗️ Stair interaction callbacks configured');
   }
 
-  private handleUpstairsInteraction(): void {
-    console.log('⬆️ Handling upstairs interaction');
-    // TODO: Implement floor transition logic
-    // For now, just show a message
-    console.log('🚧 Upstairs functionality to be implemented');
+  private async handleUpstairsInteraction(stairData: StairInteractionData): Promise<void> {
+    console.log('⬆️ Handling upstairs interaction for room:', stairData.roomName);
     
-    // Future implementation could include:
-    // 1. Get the target floor name from stair data
-    // 2. Call this.sceneManager.switchFloor(targetFloor)
-    // 3. Update player position on new floor
-    // 4. Send server notification of floor change
+    try {
+      // Get the target floor information from the stairs API
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for stair transition');
+        return;
+      }
+      
+      const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
+      
+      if (!stairsResponse.success || !stairsResponse.data.upwardStair) {
+        console.error('❌ No upward stair found for room:', stairData.roomName);
+        return;
+      }
+      
+      const targetFloor = stairsResponse.data.upwardStair.dungeonDagNodeName;
+      const targetStairLocation = stairsResponse.data.upwardStair;
+      console.log(`🔺 Going upstairs to floor: ${targetFloor}`);
+      
+      // Switch to the new floor
+      await this.sceneManager.switchFloor(targetFloor);
+      
+      // Position player at the corresponding downward stair location
+      this.positionPlayerAtStair(targetStairLocation, 'downward');
+      
+    } catch (error) {
+      console.error('❌ Error during upstairs transition:', error);
+    }
   }
 
-  private handleDownstairsInteraction(): void {
-    console.log('⬇️ Handling downstairs interaction');
-    // TODO: Implement floor transition logic
-    // For now, just show a message
-    console.log('🚧 Downstairs functionality to be implemented');
+  private async handleDownstairsInteraction(stairData: StairInteractionData): Promise<void> {
+    console.log('⬇️ Handling downstairs interaction for room:', stairData.roomName);
     
-    // Future implementation could include:
-    // 1. Get the target floor name from stair data
-    // 2. Call this.sceneManager.switchFloor(targetFloor)
-    // 3. Update player position on new floor
-    // 4. Send server notification of floor change
+    try {
+      // Get the target floor information from the stairs API
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for stair transition');
+        return;
+      }
+      
+      const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
+      
+      if (!stairsResponse.success || !stairsResponse.data.downwardStair) {
+        console.error('❌ No downward stair found for room:', stairData.roomName);
+        return;
+      }
+      
+      const targetFloor = stairsResponse.data.downwardStair.dungeonDagNodeName;
+      const targetStairLocation = stairsResponse.data.downwardStair;
+      console.log(`🔻 Going downstairs to floor: ${targetFloor}`);
+      
+      // Switch to the new floor
+      await this.sceneManager.switchFloor(targetFloor);
+      
+      // Position player at the corresponding upward stair location
+      this.positionPlayerAtStair(targetStairLocation, 'upward');
+      
+    } catch (error) {
+      console.error('❌ Error during downstairs transition:', error);
+    }
   }
 
   private positionPlayerOnGround(): void {
@@ -391,6 +438,39 @@ export class GameManager {
     // Position player on the floor
     this.localPlayerRef.current.position.y = floorHeight;
     console.log(`👤 Player positioned on ground at height: ${floorHeight}`);
+  }
+
+  private resetPlayerToSpawn(): void {
+    if (!this.localPlayerRef.current) return;
+    
+    console.log('🔄 Resetting player to spawn location');
+    
+    // Reset to origin position (spawn point)
+    this.localPlayerRef.current.position.set(0, 0, 0);
+    
+    // Position player on ground level for the new floor
+    this.positionPlayerOnGround();
+    
+    console.log('✅ Player reset to spawn position');
+  }
+
+  private positionPlayerAtStair(stairInfo: StairInfo, stairType: 'upward' | 'downward'): void {
+    if (!this.localPlayerRef.current) return;
+    
+    console.log(`🎯 Positioning player at ${stairType} stair location: (${stairInfo.locationX}, ${stairInfo.locationY})`);
+    
+    // Convert grid coordinates to world coordinates (same logic as in StairInteractionManager)
+    const cubeSize = CubeConfig.getCubeSize();
+    const worldX = stairInfo.locationX * cubeSize + cubeSize / 2;
+    const worldZ = stairInfo.locationY * cubeSize + cubeSize / 2;
+    
+    // Set player position at the stair location
+    this.localPlayerRef.current.position.set(worldX, 0, worldZ);
+    
+    // Position player on ground level for the new floor
+    this.positionPlayerOnGround();
+    
+    console.log(`✅ Player positioned at stair: (${worldX.toFixed(1)}, ${this.localPlayerRef.current.position.y.toFixed(1)}, ${worldZ.toFixed(1)})`);
   }
 
   /**
