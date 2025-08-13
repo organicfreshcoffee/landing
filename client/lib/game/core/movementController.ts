@@ -23,11 +23,9 @@ export class MovementController {
   private isAdminMode = false;
   private velocity = new THREE.Vector3(0, 0, 0);
   private isGrounded = false;
-  private isJumping = false;
   
   // Physics constants
   private readonly GRAVITY = -35; // Units per second squared
-  private readonly JUMP_FORCE = 15; // Initial upward velocity
   private readonly TERMINAL_VELOCITY = -50; // Maximum fall speed
   private readonly ADMIN_SPEED_MULTIPLIER = 2; // Admin mode speed multiplier
   
@@ -191,8 +189,7 @@ export class MovementController {
         moved = true;
       }
     } else {
-      // Normal mode: jumping and gravity
-      this.handleJumping();
+      // Normal mode: gravity only (no jumping)
       this.applyGravity(delta);
     }
 
@@ -205,7 +202,7 @@ export class MovementController {
         this.localPlayerRef.current.position, 
         this.velocity, 
         this.isGrounded, 
-        this.isJumping
+        false // No jumping capability
       );
     }
 
@@ -226,14 +223,13 @@ export class MovementController {
       // Reset physics when entering admin mode
       this.velocity.set(0, 0, 0);
       this.isGrounded = false;
-      this.isJumping = false;
       this.gameHUD.updateAdminMode(true);
       this.gameHUD.showMessage('🔧 Admin Mode Enabled', 2000);
       console.log('🔧 Admin mode enabled - No collision, no gravity, use Space/Shift for vertical movement');
     } else {
       // When exiting admin mode, snap to ground level if above ground
       if (this.localPlayerRef.current) {
-        const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
+        const floorHeight = this.collisionSystem.getVisualFloorHeight(this.localPlayerRef.current.position);
         if (this.localPlayerRef.current.position.y > floorHeight) {
           this.localPlayerRef.current.position.y = floorHeight;
         }
@@ -242,15 +238,6 @@ export class MovementController {
       this.gameHUD.updateAdminMode(false);
       this.gameHUD.showMessage('👤 Normal Mode Enabled', 2000);
       console.log('👤 Admin mode disabled - Collision and gravity enabled');
-    }
-  }
-
-  private handleJumping(): void {
-    if (this.keysPressed.has('Space') && this.isGrounded && !this.isJumping) {
-      this.velocity.y = this.JUMP_FORCE;
-      this.isJumping = true;
-      this.isGrounded = false;
-      console.log('🚀 Jump initiated');
     }
   }
 
@@ -267,7 +254,7 @@ export class MovementController {
 
     // Apply vertical velocity
     const newY = this.localPlayerRef.current.position.y + this.velocity.y * delta;
-    const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
+    const floorHeight = this.collisionSystem.getVisualFloorHeight(this.localPlayerRef.current.position);
     
     // Debug: Log gravity information occasionally
     if (Math.random() < 0.01) {
@@ -285,7 +272,6 @@ export class MovementController {
       this.localPlayerRef.current.position.y = floorHeight;
       this.velocity.y = 0;
       this.isGrounded = true;
-      this.isJumping = false;
     } else {
       this.localPlayerRef.current.position.y = newY;
       this.isGrounded = false;
@@ -303,31 +289,50 @@ export class MovementController {
       // Admin mode: no collision detection
       localPlayer.position.add(movement);
     } else {
-      // Normal mode: apply collision detection
+      // Normal mode: apply collision detection with sliding
       const newPosition = oldPosition.clone().add(movement);
       
-      // Only check collision if we're actually moving horizontally
-      // This reduces collision check frequency and improves performance
-      if (Math.abs(movement.x) > 0.001 || Math.abs(movement.z) > 0.001) {
-        const collisionResult = this.collisionSystem.checkCollision(newPosition);
+      // Use sweep test for more reliable collision detection
+      const collisionResult = this.collisionSystem.sweepTestCollision(oldPosition, newPosition);
+      
+      if (collisionResult.collided) {
+        // Try sliding along walls instead of stopping completely
+        const correctedPosition = collisionResult.correctedPosition;
         
-        if (collisionResult.collided) {
-          // Use corrected position
-          localPlayer.position.copy(collisionResult.correctedPosition);
+        if (collisionResult.collisionDirection === 'x') {
+          // X collision - try to slide in Z direction
+          const slideMovement = new THREE.Vector3(0, movement.y, movement.z);
+          const slideTarget = correctedPosition.clone().add(slideMovement);
+          const slideResult = this.collisionSystem.sweepTestCollision(correctedPosition, slideTarget);
           
-          // Provide feedback for different collision types
-          if (collisionResult.collisionDirection === 'y') {
-            // Ceiling collision - stop upward movement
-            if (this.velocity.y > 0) {
-              this.velocity.y = 0;
-            }
+          if (!slideResult.collided) {
+            localPlayer.position.copy(slideTarget);
+          } else {
+            localPlayer.position.copy(correctedPosition);
+          }
+        } else if (collisionResult.collisionDirection === 'z') {
+          // Z collision - try to slide in X direction
+          const slideMovement = new THREE.Vector3(movement.x, movement.y, 0);
+          const slideTarget = correctedPosition.clone().add(slideMovement);
+          const slideResult = this.collisionSystem.sweepTestCollision(correctedPosition, slideTarget);
+          
+          if (!slideResult.collided) {
+            localPlayer.position.copy(slideTarget);
+          } else {
+            localPlayer.position.copy(correctedPosition);
+          }
+        } else if (collisionResult.collisionDirection === 'y') {
+          // Ceiling collision - stop upward movement but allow horizontal
+          localPlayer.position.copy(correctedPosition);
+          if (this.velocity.y > 0) {
+            this.velocity.y = 0;
           }
         } else {
-          // No collision, apply normal movement
-          localPlayer.position.copy(newPosition);
+          // General collision - use corrected position
+          localPlayer.position.copy(correctedPosition);
         }
       } else {
-        // Only vertical movement, skip collision check for better performance
+        // No collision, apply normal movement
         localPlayer.position.copy(newPosition);
       }
     }
@@ -533,8 +538,7 @@ export class MovementController {
       localPlayerRotation: this.localPlayerRotation,
       isAdminMode: this.isAdminMode,
       velocity: this.velocity.toArray(),
-      isGrounded: this.isGrounded,
-      isJumping: this.isJumping
+      isGrounded: this.isGrounded
     };
   }
 }

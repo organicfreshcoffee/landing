@@ -180,7 +180,7 @@ export default function Game() {
 
         {gameState.connected && (
           <div className={styles.controls}>
-            <div>Controls: WASD to move, Space/Shift for up/down</div>
+            <div>Controls: WASD to move, Tab for Admin mode</div>
             <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
             <div>Players online: {gameManagerRef.current?.playersCount || 1}</div>
           </div>
