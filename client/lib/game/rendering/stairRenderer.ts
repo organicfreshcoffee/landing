@@ -160,16 +160,15 @@ export class StairRenderer {
       const cubeSize = CubeConfig.getCubeSize();
       const wallHeight = CubeConfig.getWallHeight();
       
-      const scaleX = cubeSize / modelWidth;  // Fit to cube width
-      const scaleY = (wallHeight / modelHeight) * 0.3; // Fit to wall height
+      const scaleX = cubeSize / modelWidth;  // Fit to cube width * 2
+      const scaleY = cubeSize / modelHeight; // Fit to wall height
       const scaleZ = cubeSize / modelDepth;  // Fit to cube depth
       
-      // Apply uniform scaling for X and Z to maintain proportions
-      // but scale Y independently to reach wall height
-      const uniformScale = Math.min(scaleX, scaleZ);
+      // Apply individual scaling for each axis
+      // X is doubled, Y fits cube height, Z fits cube depth
       
       // Scale the model appropriately
-      stairModel.scale.set(uniformScale, scaleY, uniformScale);
+      stairModel.scale.set(scaleX, scaleY, scaleZ);
 
       // Recalculate bounding box after scaling
       const scaledBox = new THREE.Box3().setFromObject(stairModel);
@@ -197,7 +196,7 @@ export class StairRenderer {
         `🏗️ Placed stairs for room ${room.name} at cube (${room.stairLocationX}, ${room.stairLocationY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
       );
       console.log(
-        `📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${uniformScale.toFixed(2)}, ${scaleY.toFixed(2)}, ${uniformScale.toFixed(2)})`
+        `📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)}, ${scaleZ.toFixed(2)})`
       );
       console.log(
         `🎯 Target: cube=${cubeSize}×${cubeSize}, wall height=${wallHeight}`
