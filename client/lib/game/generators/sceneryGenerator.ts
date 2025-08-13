@@ -22,10 +22,12 @@ export class ServerSceneryGenerator {
     floorLayout: ServerFloorLayout;
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
+    stairGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     wallCount: number;
+    stairCount: number;
     totalArea: number;
   }> {
     const {
@@ -57,7 +59,7 @@ export class ServerSceneryGenerator {
       }
 
       // Step 2: Render the complete dungeon floor using the new system
-      const result = DungeonFloorRenderer.renderDungeonFloorFromLayout(scene, floorLayout, {
+      const result = await DungeonFloorRenderer.renderDungeonFloorFromLayout(scene, floorLayout, {
         cubeSize,
         roomColor: floorColor,
         hallwayColor: hallwayFloorColor,
@@ -65,6 +67,7 @@ export class ServerSceneryGenerator {
         hallwayWidth: 1,
         showDoors: true,
         showStairs: false,
+        showStairModels: true,
         showDebug: false
       });
 
@@ -73,15 +76,18 @@ export class ServerSceneryGenerator {
       console.log(`🎯 Total area: ${result.totalArea} cubes`);
       console.log(`🟣 Overlaps: ${result.overlapCount} cubes`);
       console.log(`🧱 Walls: ${result.wallCount} cubes`);
+      console.log(`🏗️ Stairs: ${result.stairCount} models`);
 
       return {
         floorLayout: result.layout,
         floorGroup: result.floorGroup,
         wallGroup: result.wallGroup,
+        stairGroup: result.stairGroup,
         roomCount: result.roomCount,
         hallwayCount: result.hallwayCount,
         overlapCount: result.overlapCount,
         wallCount: result.wallCount,
+        stairCount: result.stairCount,
         totalArea: result.totalArea
       };
     } catch (error) {
@@ -225,12 +231,17 @@ export class ServerSceneryGenerator {
       // Only remove objects that are clearly scenery
       const isScenery = (
         child.name === 'AllFloorCubes' || // Previous floor cubes
+        child.name === 'stairs' || // Stair group
+        child.name === 'Ceiling' || // Ceiling group
+        child.name === 'Walls' || // Wall group
         child.name?.includes('Room') ||
         child.name?.includes('Hallway') ||
         child.name?.includes('Floor') ||
         child.name?.includes('Wall') ||
         child.name?.includes('Scenery') ||
         child.userData.isScenery === true ||
+        child.userData.type === 'stairs' || // Individual stair models
+        child.userData.isCeiling === true || // Individual ceiling blocks
         (child.type === 'Mesh' && 
          !child.userData.isPlayer && 
          !child.userData.isOtherPlayer && 

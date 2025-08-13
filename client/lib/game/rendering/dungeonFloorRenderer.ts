@@ -4,6 +4,7 @@ import { HallwayRenderer } from './hallwayRenderer';
 import { RoomRenderer } from './roomRenderer';
 import { CubeFloorRenderer } from './cubeFloorRenderer';
 import { WallGenerator } from '../generators/wallGenerator';
+import { StairRenderer } from './stairRenderer';
 import { ServerFloorLayout } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
 
@@ -15,6 +16,7 @@ export interface DungeonRenderOptions {
   hallwayWidth?: number;
   showDoors?: boolean;
   showStairs?: boolean;
+  showStairModels?: boolean;
   showDebug?: boolean;
   showWalls?: boolean;
   wallHeight?: number;
@@ -37,6 +39,7 @@ export class DungeonFloorRenderer {
     hallwayWidth: 1,
     showDoors: true,
     showStairs: false,
+    showStairModels: true,
     showDebug: false,
     showWalls: true,
     wallHeight: CubeConfig.getWallHeight(),
@@ -50,22 +53,24 @@ export class DungeonFloorRenderer {
   /**
    * Render a complete dungeon floor from DAG data
    */
-  static renderDungeonFloor(
+  static async renderDungeonFloor(
     scene: THREE.Scene,
     dungeonData: DungeonDagData,
     options: DungeonRenderOptions = {}
-  ): {
+  ): Promise<{
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
     ceilingGroup: THREE.Group | null;
+    stairGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
     wallCount: number;
     ceilingCount: number;
+    stairCount: number;
     layout: ServerFloorLayout;
-  } {
+  }> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
     console.log(`🏰 Starting dungeon floor rendering for ${dungeonData.dungeonDagNodeName}`);
@@ -75,6 +80,12 @@ export class DungeonFloorRenderer {
     
     // Process DAG data into positioned layout
     const layout = FloorGenerator.processServerResponse(dungeonData);
+    
+    // Set excluded coordinates for downward stairs BEFORE any registration begins
+    console.log(`🔍 About to check for downward stairs in ${layout.rooms.length} rooms...`);
+    const excludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
+    console.log(`🔍 Got ${excludedCoords.length} excluded coordinates back from StairRenderer`);
+    CubeFloorRenderer.setExcludedCoordinates(excludedCoords);
     
     // Render rooms first
     const roomCoordinates = RoomRenderer.renderMultipleRooms(scene, layout.rooms, {
@@ -102,11 +113,26 @@ export class DungeonFloorRenderer {
       width: opts.hallwayWidth
     });
     
-    // Render all cubes to scene
+    // Render all cubes to scene (exclusions already set earlier)
     const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
       cubeSize: opts.cubeSize,
       yOffset: opts.yOffset
     });
+    
+    // Render stair models if enabled
+    let stairGroup: THREE.Group | null = null;
+    let stairCount = 0;
+    if (opts.showStairModels) {
+      try {
+        stairGroup = await StairRenderer.renderStairs(scene, layout.rooms, {
+          cubeSize: opts.cubeSize,
+          yOffset: opts.yOffset
+        });
+        stairCount = stairGroup.children.length;
+      } catch (error) {
+        console.error('Failed to render stair models:', error);
+      }
+    }
     
     // Generate and render walls and ceiling around all floor coordinates
     let wallGroup: THREE.Group | null = null;
@@ -118,8 +144,13 @@ export class DungeonFloorRenderer {
       const allFloorCoords = CubeFloorRenderer.getAllCoordinates();
       
       if (allFloorCoords.length > 0) {
-        // Generate walls around perimeter
-        const wallCoords = WallGenerator.generateWalls(allFloorCoords);
+        // Generate walls around perimeter, excluding stair coordinates
+        // Use the same logic as floor exclusions to get consistent coordinates
+        const stairExcludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
+        
+        const wallCoords = WallGenerator.generateWalls(allFloorCoords, {}, stairExcludedCoords);
+        
+        console.log(`🧱 Wall generation: ${allFloorCoords.length} floor coords, ${stairExcludedCoords.length} excluded stair coords, ${wallCoords.length} wall positions`);
         
         // Render walls
         wallGroup = WallGenerator.renderWalls(scene, wallCoords, {
@@ -131,12 +162,26 @@ export class DungeonFloorRenderer {
         
         // Optionally render ceiling
         if (opts.showCeiling) {
-          ceilingGroup = WallGenerator.renderCeiling(scene, allFloorCoords, {
+          // For ceiling, we want to include ALL floor locations including downward stairs
+          const allCeilingCoords = [...allFloorCoords];
+          stairExcludedCoords.forEach(stairCoord => {
+            // Only add if not already present in floor coords
+            const exists = allFloorCoords.some(coord => 
+              coord.x === stairCoord.x && coord.y === stairCoord.y
+            );
+            if (!exists) {
+              allCeilingCoords.push(stairCoord);
+            }
+          });
+          
+          ceilingGroup = WallGenerator.renderCeiling(scene, allCeilingCoords, {
             wallHeight: opts.wallHeight,
             ceilingColor: opts.ceilingColor,
             cubeSize: opts.cubeSize
           });
-          ceilingCount = allFloorCoords.length;
+          ceilingCount = allCeilingCoords.length;
+          
+          console.log(`🏠 Generated ceiling: ${allFloorCoords.length} floor coords + ${stairExcludedCoords.length} stair coords = ${allCeilingCoords.length} total ceiling cubes`);
         }
         
         console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
@@ -176,18 +221,23 @@ export class DungeonFloorRenderer {
     if (ceilingGroup) {
       console.log(`   🏠 ${ceilingCount} ceiling cubes`);
     }
+    if (stairGroup) {
+      console.log(`   🏗️ ${stairCount} stair models`);
+    }
     console.log(`   📐 Bounds: ${layout.bounds.width}x${layout.bounds.height}`);
     
     return {
       floorGroup,
       wallGroup,
       ceilingGroup,
+      stairGroup,
       roomCount,
       hallwayCount,
       overlapCount,
       totalArea,
       wallCount,
       ceilingCount,
+      stairCount,
       layout
     };
   }
@@ -195,63 +245,36 @@ export class DungeonFloorRenderer {
   /**
    * Render dungeon floor from server response
    */
-  static async renderDungeonFloorFromServer(
-    scene: THREE.Scene,
-    serverAddress: string,
-    dungeonDagNodeName: string,
-    options: DungeonRenderOptions = {}
-  ): Promise<{
-    floorGroup: THREE.Group;
-    roomCount: number;
-    hallwayCount: number;
-    overlapCount: number;
-    totalArea: number;
-    layout: ServerFloorLayout;
-  }> {
-    try {
-      console.log(`🌐 Fetching dungeon layout from server: ${dungeonDagNodeName}`);
-      
-      const layout = await FloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
-      
-      // Convert to DAG data format for rendering
-      const dagData: DungeonDagData = {
-        dungeonDagNodeName: layout.dungeonDagNodeName,
-        nodes: [] // Layout is already processed
-      };
-      
-      return this.renderDungeonFloorFromLayout(scene, layout, options);
-      
-    } catch (error) {
-      console.error('Failed to render dungeon floor from server:', error);
-      throw error;
-    }
-  }
-
   /**
    * Render dungeon floor from pre-processed layout
    */
-  static renderDungeonFloorFromLayout(
+  static async renderDungeonFloorFromLayout(
     scene: THREE.Scene,
     layout: ServerFloorLayout,
     options: DungeonRenderOptions = {}
-  ): {
+  ): Promise<{
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
     ceilingGroup: THREE.Group | null;
+    stairGroup: THREE.Group | null;
     roomCount: number;
     hallwayCount: number;
     overlapCount: number;
     totalArea: number;
     wallCount: number;
     ceilingCount: number;
+    stairCount: number;
     layout: ServerFloorLayout;
-  } {
+  }> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
     console.log(`🏗️ Rendering dungeon floor from layout: ${layout.dungeonDagNodeName}`);
     
-    // Clear previous cube registrations
-    CubeFloorRenderer.clearRegistry();
+    // Set excluded coordinates for downward stairs BEFORE any registration begins
+    console.log(`🔍 About to check for downward stairs in ${layout.rooms.length} rooms...`);
+    const excludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
+    console.log(`🔍 Got ${excludedCoords.length} excluded coordinates back from StairRenderer`);
+    CubeFloorRenderer.setExcludedCoordinates(excludedCoords);
     
     // Render rooms
     const roomCoordinates = RoomRenderer.renderMultipleRooms(scene, layout.rooms, {
@@ -272,10 +295,31 @@ export class DungeonFloorRenderer {
     });
     
     // Render all cubes
+    console.log(`🔥 DEBUG: About to call CubeFloorRenderer.renderAllCubes()`);
     const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
       cubeSize: opts.cubeSize,
       yOffset: opts.yOffset
     });
+    console.log(`🔥 DEBUG: CubeFloorRenderer.renderAllCubes() returned:`, {
+      floorGroup,
+      childrenCount: floorGroup?.children?.length || 0,
+      groupName: floorGroup?.name
+    });
+    
+    // Render stair models if enabled
+    let stairGroup: THREE.Group | null = null;
+    let stairCount = 0;
+    if (opts.showStairModels) {
+      try {
+        stairGroup = await StairRenderer.renderStairs(scene, layout.rooms, {
+          cubeSize: opts.cubeSize,
+          yOffset: opts.yOffset
+        });
+        stairCount = stairGroup.children.length;
+      } catch (error) {
+        console.error('Failed to render stair models:', error);
+      }
+    }
     
     // Generate and render walls and ceiling around all floor coordinates
     let wallGroup: THREE.Group | null = null;
@@ -287,8 +331,13 @@ export class DungeonFloorRenderer {
       const allFloorCoords = CubeFloorRenderer.getAllCoordinates();
       
       if (allFloorCoords.length > 0) {
-        // Generate walls around perimeter
-        const wallCoords = WallGenerator.generateWalls(allFloorCoords);
+        // Generate walls around perimeter, excluding stair coordinates
+        // Use the same logic as floor exclusions to get consistent coordinates
+        const stairExcludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
+        
+        const wallCoords = WallGenerator.generateWalls(allFloorCoords, {}, stairExcludedCoords);
+        
+        console.log(`🧱 Wall generation: ${allFloorCoords.length} floor coords, ${stairExcludedCoords.length} excluded stair coords, ${wallCoords.length} wall positions`);
         
         // Render walls
         wallGroup = WallGenerator.renderWalls(scene, wallCoords, {
@@ -300,12 +349,26 @@ export class DungeonFloorRenderer {
         
         // Optionally render ceiling
         if (opts.showCeiling) {
-          ceilingGroup = WallGenerator.renderCeiling(scene, allFloorCoords, {
+          // For ceiling, we want to include ALL floor locations including downward stairs
+          const allCeilingCoords = [...allFloorCoords];
+          stairExcludedCoords.forEach(stairCoord => {
+            // Only add if not already present in floor coords
+            const exists = allFloorCoords.some(coord => 
+              coord.x === stairCoord.x && coord.y === stairCoord.y
+            );
+            if (!exists) {
+              allCeilingCoords.push(stairCoord);
+            }
+          });
+          
+          ceilingGroup = WallGenerator.renderCeiling(scene, allCeilingCoords, {
             wallHeight: opts.wallHeight,
             ceilingColor: opts.ceilingColor,
             cubeSize: opts.cubeSize
           });
-          ceilingCount = allFloorCoords.length;
+          ceilingCount = allCeilingCoords.length;
+          
+          console.log(`🏠 Generated ceiling: ${allFloorCoords.length} floor coords + ${stairExcludedCoords.length} stair coords = ${allCeilingCoords.length} total ceiling cubes`);
         }
         
         console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
@@ -339,12 +402,14 @@ export class DungeonFloorRenderer {
       floorGroup,
       wallGroup,
       ceilingGroup,
+      stairGroup,
       roomCount,
       hallwayCount,
       overlapCount,
       totalArea,
       wallCount,
       ceilingCount,
+      stairCount,
       layout
     };
   }
@@ -411,6 +476,7 @@ export class DungeonFloorRenderer {
    */
   static dispose(): void {
     CubeFloorRenderer.dispose();
+    StairRenderer.dispose();
     console.log(`🧹 Dungeon floor renderer resources cleaned up`);
   }
 }

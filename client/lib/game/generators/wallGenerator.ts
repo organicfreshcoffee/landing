@@ -32,7 +32,8 @@ export class WallGenerator {
    */
   static generateWalls(
     allFloorCoords: CubePosition[],
-    options: WallGenerationOptions = {}
+    options: WallGenerationOptions = {},
+    excludedCoords: CubePosition[] = []
   ): CubePosition[] {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
@@ -46,6 +47,16 @@ export class WallGenerator {
     allFloorCoords.forEach(coord => {
       floorSet.add(`${coord.x},${coord.y}`);
     });
+
+    // Create a set of excluded positions (stair locations) for quick lookup
+    const excludedSet = new Set<string>();
+    excludedCoords.forEach(coord => {
+      excludedSet.add(`${coord.x},${coord.y}`);
+    });
+
+    console.log(`🧱 WallGenerator.generateWalls: ${allFloorCoords.length} floor coords, ${excludedCoords.length} excluded coords`);
+    console.log(`🧱 Excluded coordinates:`, excludedCoords);
+    console.log(`🧱 Excluded set keys:`, Array.from(excludedSet));
 
     const wallCoords: CubePosition[] = [];
 
@@ -61,13 +72,20 @@ export class WallGenerator {
       adjacentPositions.forEach(adjPos => {
         const adjKey = `${adjPos.x},${adjPos.y}`;
         
+        // Check conditions
+        const hasFloor = floorSet.has(adjKey);
+        const isExcluded = excludedSet.has(adjKey);
+        
         // If adjacent position doesn't have a floor, place a wall there
-        if (!floorSet.has(adjKey)) {
+        // BUT exclude positions that are stairs (excluded coordinates)
+        if (!hasFloor && !isExcluded) {
           // Check if we already have a wall at this position
           const wallKey = `${adjPos.x},${adjPos.y}`;
           if (!wallCoords.some(w => w.x === adjPos.x && w.y === adjPos.y)) {
             wallCoords.push({ x: adjPos.x, y: adjPos.y });
           }
+        } else if (isExcluded) {
+          console.log(`🚫 Skipping wall at excluded position (${adjPos.x}, ${adjPos.y})`);
         }
       });
     });

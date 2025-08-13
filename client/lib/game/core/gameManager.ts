@@ -5,6 +5,10 @@ import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
 import { SceneManager } from '../rendering';
+import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
+import { DungeonApi } from '../network/dungeonApi';
+import { StairInfo } from '../types/api';
+import { CubeConfig } from '../config/cubeConfig';
 
 export class GameManager {
   private sceneManager: SceneManager;
@@ -17,6 +21,10 @@ export class GameManager {
   
   private players = new Map<string, Player>();
   private playersAnimations = new Map<string, PlayerAnimationData>();
+  
+  // Floor verification tracking
+  private lastFloorVerificationTime = 0;
+  private floorVerificationInterval = 30000; // Check every 30 seconds
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -49,7 +57,16 @@ export class GameManager {
     this.sceneManager.startRenderLoop(() => {
       if (this.user?.uid) {
         this.movementController.updateMovement(this.user.uid);
+        
+        // Update stair interactions with current player position
+        if (this.localPlayerRef.current) {
+          const stairManager = StairInteractionManager.getInstance();
+          stairManager.updatePlayerPosition(this.localPlayerRef.current.position);
+        }
       }
+      
+      // Periodically verify floor integrity
+      this.checkFloorIntegrity();
     });
 
     // Set up visibility change handler
@@ -57,6 +74,9 @@ export class GameManager {
 
     // Set up network connectivity handlers
     this.setupNetworkHandlers();
+    
+    // Set up stair interaction callbacks
+    this.setupStairInteractions();
   }
 
   private async createLocalPlayer(): Promise<void> {
@@ -241,6 +261,10 @@ export class GameManager {
       
       const playerResult = await PlayerManager.createPlayerModel(newPlayer);
       newPlayer.mesh = playerResult.model;
+      
+      // Mark as other player for scene preservation during floor changes
+      playerResult.model.userData.isOtherPlayer = true;
+      
       this.sceneManager.addToScene(playerResult.model);
       
       if (playerResult.mixer && playerResult.actions) {
@@ -312,6 +336,92 @@ export class GameManager {
     };
   }
 
+  private setupStairInteractions(): void {
+    const stairManager = StairInteractionManager.getInstance();
+    
+    // Set up callbacks for stair interactions
+    stairManager.setCallbacks(
+      // Upstairs callback
+      (stairData: StairInteractionData) => {
+        console.log('🔺 Player wants to go upstairs!');
+        this.handleUpstairsInteraction(stairData);
+      },
+      // Downstairs callback
+      (stairData: StairInteractionData) => {
+        console.log('🔻 Player wants to go downstairs!');
+        this.handleDownstairsInteraction(stairData);
+      }
+    );
+    
+    console.log('🏗️ Stair interaction callbacks configured');
+  }
+
+  private async handleUpstairsInteraction(stairData: StairInteractionData): Promise<void> {
+    console.log('⬆️ Handling upstairs interaction for room:', stairData.roomName);
+    
+    try {
+      // Get the target floor information from the stairs API
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for stair transition');
+        return;
+      }
+      
+      const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
+      
+      if (!stairsResponse.success || !stairsResponse.data.upwardStair) {
+        console.error('❌ No upward stair found for room:', stairData.roomName);
+        return;
+      }
+      
+      const targetFloor = stairsResponse.data.upwardStair.dungeonDagNodeName;
+      const currentFloor = stairData.roomName; // The floor we're coming from
+      console.log(`🔺 Going upstairs from ${currentFloor} to floor: ${targetFloor}`);
+      
+      // Load the new floor (includes collision data update)
+      await this.loadFloor(targetFloor);
+      
+      // Find the downward stair on the target floor that leads back to our current floor
+      await this.findAndPositionAtReturnStair(serverAddress, targetFloor, currentFloor, 'downward');
+      
+    } catch (error) {
+      console.error('❌ Error during upstairs transition:', error);
+    }
+  }
+
+  private async handleDownstairsInteraction(stairData: StairInteractionData): Promise<void> {
+    console.log('⬇️ Handling downstairs interaction for room:', stairData.roomName);
+    
+    try {
+      // Get the target floor information from the stairs API
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for stair transition');
+        return;
+      }
+      
+      const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
+      
+      if (!stairsResponse.success || !stairsResponse.data.downwardStair) {
+        console.error('❌ No downward stair found for room:', stairData.roomName);
+        return;
+      }
+      
+      const targetFloor = stairsResponse.data.downwardStair.dungeonDagNodeName;
+      const currentFloor = stairData.roomName; // The floor we're coming from
+      console.log(`🔻 Going downstairs from ${currentFloor} to floor: ${targetFloor}`);
+      
+      // Load the new floor (includes collision data update)
+      await this.loadFloor(targetFloor);
+      
+      // Find the upward stair on the target floor that leads back to our current floor
+      await this.findAndPositionAtReturnStair(serverAddress, targetFloor, currentFloor, 'upward');
+      
+    } catch (error) {
+      console.error('❌ Error during downstairs transition:', error);
+    }
+  }
+
   private positionPlayerOnGround(): void {
     if (!this.localPlayerRef.current) return;
     
@@ -328,6 +438,209 @@ export class GameManager {
     // Position player on the floor
     this.localPlayerRef.current.position.y = floorHeight;
     console.log(`👤 Player positioned on ground at height: ${floorHeight}`);
+  }
+
+  private resetPlayerToSpawn(): void {
+    if (!this.localPlayerRef.current) return;
+    
+    console.log('🔄 Resetting player to spawn location');
+    
+    // Reset to origin position (spawn point)
+    this.localPlayerRef.current.position.set(0, 0, 0);
+    
+    // Position player on ground level for the new floor
+    this.positionPlayerOnGround();
+    
+    console.log('✅ Player reset to spawn position');
+  }
+
+  private positionPlayerAtStair(stairInfo: StairInfo, stairType: 'upward' | 'downward'): void {
+    if (!this.localPlayerRef.current) return;
+    
+    console.log(`🎯 Positioning player at ${stairType} stair location: (${stairInfo.locationX}, ${stairInfo.locationY})`);
+    
+    // Convert grid coordinates to world coordinates (same logic as in StairInteractionManager)
+    const cubeSize = CubeConfig.getCubeSize();
+    const worldX = stairInfo.locationX * cubeSize + cubeSize / 2;
+    const worldZ = stairInfo.locationY * cubeSize + cubeSize / 2;
+    
+    // Set player position at the stair location
+    this.localPlayerRef.current.position.set(worldX, 0, worldZ);
+    
+    // Position player on ground level for the new floor
+    this.positionPlayerOnGround();
+    
+    console.log(`✅ Player positioned at stair: (${worldX.toFixed(1)}, ${this.localPlayerRef.current.position.y.toFixed(1)}, ${worldZ.toFixed(1)})`);
+  }
+
+  private findStairWorldCoordinates(roomName: string, stairType: 'upward' | 'downward'): { x: number, y: number, z: number } | null {
+    // Search through all objects in the scene to find stairs for the specified room
+    const scene = this.sceneManager.scene;
+    let foundStairData: any = null;
+    
+    scene.traverse((object) => {
+      if (object.userData.type === 'stairs' && object.userData.roomName === roomName) {
+        const hasTargetStairType = stairType === 'upward' ? object.userData.hasUpwardStair : object.userData.hasDownwardStair;
+        if (hasTargetStairType) {
+          foundStairData = object.userData;
+        }
+      }
+    });
+    
+    if (foundStairData && typeof foundStairData.worldX === 'number') {
+      console.log(`🎯 Found ${stairType} stair for room ${roomName} at world coordinates: (${foundStairData.worldX}, ${foundStairData.worldY}, ${foundStairData.worldZ})`);
+      return {
+        x: foundStairData.worldX,
+        y: foundStairData.worldY,
+        z: foundStairData.worldZ
+      };
+    }
+    
+    console.warn(`⚠️ Could not find ${stairType} stair world coordinates for room ${roomName}`);
+    return null;
+  }
+
+  private async findAndPositionAtReturnStair(
+    serverAddress: string, 
+    targetFloor: string, 
+    originalFloor: string, 
+    stairType: 'upward' | 'downward'
+  ): Promise<void> {
+    try {
+      const logPrefix = stairType === 'downward' ? '[upstairs]' : '[downstairs]';
+      
+      console.log(`${logPrefix} 🔍 Searching for ${stairType} stair on ${targetFloor} that leads back to ${originalFloor}`);
+      console.log(`${logPrefix} Floor transition: ${originalFloor} → ${targetFloor}`);
+      
+      // Get the floor layout to find all rooms
+      const floorLayout = await DungeonApi.getFloorLayout(serverAddress, targetFloor);
+      
+      if (!floorLayout.success) {
+        console.error(`${logPrefix} ❌ Failed to get floor layout for:`, targetFloor);
+        this.resetPlayerToSpawn();
+        return;
+      }
+      
+      // Find all rooms on the target floor
+      const rooms = floorLayout.data.nodes.filter(node => node.isRoom);
+      console.log(`${logPrefix} 🏠 Found ${rooms.length} rooms on floor ${targetFloor}:`, rooms.map(r => r.name));
+      
+      const stairMappings: { roomName: string, upward?: string, downward?: string }[] = [];
+      let matchingStair: StairInfo | undefined;
+      let matchingRoomName: string | undefined;
+      
+      // Check each room for stairs that lead back to our original floor
+      for (const room of rooms) {
+        try {
+          console.log(`${logPrefix} 🔍 Checking room ${room.name} for stairs...`);
+          const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, room.name);
+          
+          if (!stairsResponse.success) {
+            console.log(`${logPrefix} ⚠️ No stairs data for room ${room.name}`);
+            continue;
+          }
+          
+          const stairMapping: { roomName: string, upward?: string, downward?: string } = { roomName: room.name };
+          
+          if (stairsResponse.data.upwardStair) {
+            stairMapping.upward = stairsResponse.data.upwardStair.dungeonDagNodeName;
+          }
+          if (stairsResponse.data.downwardStair) {
+            stairMapping.downward = stairsResponse.data.downwardStair.dungeonDagNodeName;
+          }
+          
+          stairMappings.push(stairMapping);
+          
+          // Extract floor prefix from original floor (e.g., "AA_A" -> "AA")
+          const originalFloorPrefix = originalFloor.split('_')[0];
+          
+          if (stairType === 'downward' && stairsResponse.data.downwardStair) {
+            const stairDestination = stairsResponse.data.downwardStair.dungeonDagNodeName;
+            console.log(`${logPrefix} 🔍 Room ${room.name} downward stair goes to: ${stairDestination}, comparing with prefix: ${originalFloorPrefix}`);
+            if (stairDestination === originalFloorPrefix) {
+              matchingStair = stairsResponse.data.downwardStair;
+              matchingRoomName = room.name;
+            }
+          } else if (stairType === 'upward' && stairsResponse.data.upwardStair) {
+            const stairDestination = stairsResponse.data.upwardStair.dungeonDagNodeName;
+            console.log(`${logPrefix} 🔍 Room ${room.name} upward stair goes to: ${stairDestination}, comparing with prefix: ${originalFloorPrefix}`);
+            if (stairDestination === originalFloorPrefix) {
+              matchingStair = stairsResponse.data.upwardStair;
+              matchingRoomName = room.name;
+            }
+          }
+          
+        } catch (error) {
+          console.warn(`${logPrefix} ⚠️ Error checking stairs for room ${room.name}:`, error);
+        }
+      }
+      
+      // Log all stair mappings found
+      console.log(`${logPrefix} 📋 Stair mappings on floor ${targetFloor}:`, stairMappings);
+      
+      if (matchingStair && matchingRoomName) {
+        console.log(`${logPrefix} ✅ Found matching ${stairType} stair in room ${matchingRoomName} that leads to ${originalFloor}`);
+        console.log(`${logPrefix} 📍 Stair location: (${matchingStair.locationX}, ${matchingStair.locationY})`);
+        
+        // Log player position before moving
+        if (this.localPlayerRef.current) {
+          const beforePos = this.localPlayerRef.current.position;
+          console.log(`${logPrefix} 👤 Player position before move: (${beforePos.x.toFixed(1)}, ${beforePos.y.toFixed(1)}, ${beforePos.z.toFixed(1)})`);
+        }
+        
+        // Get world coordinates from the rendered stair model
+        const stairWorldCoords = this.findStairWorldCoordinates(matchingRoomName, stairType);
+        
+        if (stairWorldCoords && this.localPlayerRef.current) {
+          console.log(`${logPrefix} 🎯 Using stored world coordinates: (${stairWorldCoords.x.toFixed(1)}, ${stairWorldCoords.y.toFixed(1)}, ${stairWorldCoords.z.toFixed(1)})`);
+          
+          // Position player at the stair's world coordinates
+          this.localPlayerRef.current.position.set(stairWorldCoords.x, stairWorldCoords.y, stairWorldCoords.z);
+          
+          // Position player on ground level for the new floor
+          this.positionPlayerOnGround();
+        } else {
+          console.warn(`${logPrefix} ⚠️ Could not get world coordinates, falling back to calculated position`);
+          this.positionPlayerAtStair(matchingStair, stairType);
+        }
+        
+        // Log player position after moving
+        if (this.localPlayerRef.current) {
+          const afterPos = this.localPlayerRef.current.position;
+          console.log(`${logPrefix} 👤 Player position after move: (${afterPos.x.toFixed(1)}, ${afterPos.y.toFixed(1)}, ${afterPos.z.toFixed(1)})`);
+        }
+        
+        return;
+      } else {
+        console.log(`${logPrefix} ❌ No matching ${stairType} stair found that leads back to ${originalFloor}`);
+      }
+      
+      // If no matching stair found, fall back to spawn
+      console.warn(`${logPrefix} ⚠️ No ${stairType} stair found on ${targetFloor} that leads back to ${originalFloor}, using spawn`);
+      this.resetPlayerToSpawn();
+      
+    } catch (error) {
+      const logPrefix = stairType === 'downward' ? '[upstairs]' : '[downstairs]';
+      console.error(`${logPrefix} ❌ Error finding return stair:`, error);
+      this.resetPlayerToSpawn();
+    }
+  }
+
+  /**
+   * Periodically check floor integrity and refresh if needed
+   */
+  private checkFloorIntegrity(): void {
+    const now = Date.now();
+    if (now - this.lastFloorVerificationTime > this.floorVerificationInterval) {
+      this.lastFloorVerificationTime = now;
+      
+      // Only verify if we have a current floor loaded
+      if (this.sceneManager.getCurrentFloor()) {
+        this.sceneManager.verifyAndRefreshFloor().catch((error) => {
+          console.error('Error during floor verification:', error);
+        });
+      }
+    }
   }
 
   async loadFloor(floorName?: string): Promise<void> {
@@ -392,6 +705,9 @@ export class GameManager {
     this.webSocketManager.close();
     this.movementController.cleanup();
     this.sceneManager.cleanup();
+
+    // Clean up stair interactions
+    StairInteractionManager.getInstance().dispose();
 
     // Clean up animation mixers
     if (this.localPlayerMixer.current) {

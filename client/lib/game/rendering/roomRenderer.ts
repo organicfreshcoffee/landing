@@ -58,9 +58,15 @@ export class RoomRenderer {
     
     // Handle stairs
     if (opts.showStairs && this.hasStairs(room)) {
-      const stairCoords = this.generateStairFloor(room);
-      if (stairCoords.length > 0) {
-        CubeFloorRenderer.registerCubes(stairCoords, opts.stairColor, 'room');
+      // Only register floor cubes for upward stairs, not downward stairs
+      if (room.hasUpwardStair) {
+        const stairCoords = this.generateStairFloor(room);
+        if (stairCoords.length > 0) {
+          CubeFloorRenderer.registerCubes(stairCoords, opts.stairColor, 'room');
+          console.log(`⬆️ Registered floor cube for upward stairs in room ${room.name}`);
+        }
+      } else if (room.hasDownwardStair) {
+        console.log(`⬇️ Skipping floor cube registration for downward stairs in room ${room.name}`);
       }
     }
     
@@ -96,16 +102,43 @@ export class RoomRenderer {
     const coordinates: CubePosition[] = [];
     const { position, width, height } = room;
     
-    // Generate coordinates for entire room area
+    console.log(`🏗️ Generating room floor for ${room.name}: hasUpwardStair=${room.hasUpwardStair}, hasDownwardStair=${room.hasDownwardStair}`);
+    
+    // Calculate downward stair coordinates to exclude
+    let excludeStairCoord: CubePosition | null = null;
+    if (room.hasDownwardStair && 
+        room.stairLocationX !== undefined && 
+        room.stairLocationY !== undefined) {
+      excludeStairCoord = {
+        x: position.x + room.stairLocationX,
+        y: position.y + room.stairLocationY
+      };
+      console.log(`🚫 Will exclude downward stair coordinate (${excludeStairCoord.x}, ${excludeStairCoord.y}) from room ${room.name} floor`);
+    }
+    
+    // Generate coordinates for entire room area, excluding downward stairs
+    let excludedCount = 0;
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
-        coordinates.push({
+        const coord = {
           x: position.x + x,
           y: position.y + y
-        });
+        };
+        
+        // Skip downward stair coordinates
+        if (excludeStairCoord && 
+            coord.x === excludeStairCoord.x && 
+            coord.y === excludeStairCoord.y) {
+          console.log(`🚫 Skipping downward stair coordinate (${coord.x}, ${coord.y}) in room ${room.name}`);
+          excludedCount++;
+          continue;
+        }
+        
+        coordinates.push(coord);
       }
     }
     
+    console.log(`🏗️ Room ${room.name} floor: generated ${coordinates.length} coordinates, excluded ${excludedCount} downward stair coordinates`);
     return coordinates;
   }
 

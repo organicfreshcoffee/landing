@@ -25,6 +25,7 @@ export interface CubeInfo {
 export class CubeFloorRenderer {
   private static cubeRegistry = new Map<string, CubeInfo>();
   private static sceneGroups = new Map<THREE.Scene, THREE.Group>();
+  private static excludedCoordinates = new Set<string>();
 
   private static getCubeKey(x: number, y: number): string {
     return `${x},${y}`;
@@ -34,7 +35,49 @@ export class CubeFloorRenderer {
    * Clear all registered cubes for a fresh start
    */
   static clearRegistry(): void {
+    console.log(`🧹 CubeFloorRenderer.clearRegistry() called - clearing ${this.cubeRegistry.size} cubes and ${this.excludedCoordinates.size} exclusions`);
+    console.log(`🧹 Call stack:`, new Error().stack);
     this.cubeRegistry.clear();
+    this.excludedCoordinates.clear();
+  }
+
+  /**
+   * Set coordinates to exclude from rendering (e.g., for downward stairs)
+   */
+  static setExcludedCoordinates(coordinates: CubePosition[]): void {
+    console.log(`🚫 setExcludedCoordinates called with ${coordinates.length} coordinates:`, coordinates);
+    this.excludedCoordinates.clear();
+    coordinates.forEach(coord => {
+      const key = this.getCubeKey(coord.x, coord.y);
+      this.excludedCoordinates.add(key);
+      console.log(`🚫 Adding exclusion for coordinate (${coord.x}, ${coord.y}) -> key: "${key}"`);
+      
+      // Check if this coordinate is already registered
+      const existing = this.cubeRegistry.get(key);
+      if (existing) {
+        console.log(`⚠️ Coordinate (${coord.x}, ${coord.y}) is already registered as ${existing.type} - will be excluded during rendering`);
+      } else {
+        console.log(`✅ Coordinate (${coord.x}, ${coord.y}) not yet registered - good!`);
+      }
+    });
+    console.log(`🚫 Set ${coordinates.length} coordinates to exclude from floor rendering`);
+    console.log(`🚫 Excluded coordinate keys:`, Array.from(this.excludedCoordinates));
+    console.log(`🚫 Current excludedCoordinates size after setting: ${this.excludedCoordinates.size}`);
+  }
+
+  /**
+   * Unregister specific coordinates from the cube registry
+   */
+  static unregisterCoordinates(coordinates: CubePosition[]): void {
+    coordinates.forEach(coord => {
+      const key = this.getCubeKey(coord.x, coord.y);
+      const removed = this.cubeRegistry.delete(key);
+      if (removed) {
+        console.log(`🗑️ Unregistered cube at coordinate (${coord.x}, ${coord.y})`);
+      } else {
+        console.log(`ℹ️ No cube registered at coordinate (${coord.x}, ${coord.y}) to unregister`);
+      }
+    });
   }
 
   /**
@@ -56,8 +99,21 @@ export class CubeFloorRenderer {
     color: number,
     type: 'room' | 'hallway'
   ): void {
+    console.log(`� DEBUG: registerCubes called for ${type} with ${coordinates.length} coordinates. Current registry size: ${this.cubeRegistry.size}, Current exclusions: ${this.excludedCoordinates.size}`);
+    
+    let registeredCount = 0;
+    let excludedCount = 0;
+    
     coordinates.forEach(coord => {
       const key = this.getCubeKey(coord.x, coord.y);
+      
+      // Check if this coordinate is excluded (e.g., for downward stairs)
+      if (this.excludedCoordinates.has(key)) {
+        console.log(`🚫 Skipping registration of excluded coordinate (${coord.x}, ${coord.y}) for ${type}`);
+        excludedCount++;
+        return;
+      }
+      
       const existing = this.cubeRegistry.get(key);
       
       if (existing) {
@@ -67,16 +123,19 @@ export class CubeFloorRenderer {
           color: 0x800080, // Purple for overlaps
           type: 'overlap'
         });
-        console.log(`🟣 Overlap detected at (${coord.x}, ${coord.y})`);
+        registeredCount++;
       } else {
-        // First time registration
+        // Register new cube
         this.cubeRegistry.set(key, {
           position: coord,
           color,
           type
         });
+        registeredCount++;
       }
     });
+    
+    console.log(`🔥 DEBUG: registerCubes for ${type} completed. Registered: ${registeredCount}, Excluded: ${excludedCount}, New registry size: ${this.cubeRegistry.size}`);
   }
 
   /**
@@ -86,6 +145,24 @@ export class CubeFloorRenderer {
     scene: THREE.Scene,
     options: CubeFloorOptions = {}
   ): THREE.Group {
+    console.log(`🔥 DEBUG: CubeFloorRenderer.renderAllCubes() called!`);
+    console.log(`🔥 DEBUG: Registry size: ${this.cubeRegistry.size}`);
+    console.log(`🔥 DEBUG: Excluded coordinates: ${this.excludedCoordinates.size}`);
+    
+    // Debug: Log some registry contents
+    if (this.cubeRegistry.size > 0) {
+      console.log(`🔥 DEBUG: First 5 registry entries:`);
+      let count = 0;
+      this.cubeRegistry.forEach((cubeInfo, key) => {
+        if (count < 5) {
+          console.log(`  ${key}: ${cubeInfo.type} at (${cubeInfo.position.x}, ${cubeInfo.position.y})`);
+          count++;
+        }
+      });
+    } else {
+      console.log(`🔥 DEBUG: Registry is EMPTY! This is why no floors are rendering!`);
+    }
+
     const {
       cubeSize = CubeConfig.getCubeSize(),
       yOffset = 0
@@ -93,15 +170,26 @@ export class CubeFloorRenderer {
 
     // Create or get existing group for this scene
     let sceneGroup = this.sceneGroups.get(scene);
-    if (!sceneGroup) {
+    if (!sceneGroup || !scene.children.includes(sceneGroup)) {
+      // Group doesn't exist or was removed from scene during clearing
+      console.log(`🔥 DEBUG: Creating new sceneGroup (old one was ${!sceneGroup ? 'null' : 'removed from scene'})`);
       sceneGroup = new THREE.Group();
       sceneGroup.name = 'AllFloorCubes';
       this.sceneGroups.set(scene, sceneGroup);
       scene.add(sceneGroup);
+      console.log(`🔥 DEBUG: Added new sceneGroup to scene. Scene children count: ${scene.children.length}`);
+    } else {
+      console.log(`🔥 DEBUG: Reusing existing sceneGroup with ${sceneGroup.children.length} children`);
     }
 
     // Clear existing cubes
+    console.log(`🔥 DEBUG: About to clear sceneGroup. Current children: ${sceneGroup.children.length}`);
     sceneGroup.clear();
+    console.log(`🔥 DEBUG: After clear, sceneGroup children: ${sceneGroup.children.length}`);
+    
+    // Verify the group is still in the scene
+    const isInScene = scene.children.includes(sceneGroup);
+    console.log(`🔥 DEBUG: Is sceneGroup still in scene after clear? ${isInScene}`);
 
     // Create geometry once for all cubes
     const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
@@ -113,6 +201,12 @@ export class CubeFloorRenderer {
 
     // Render all registered cubes
     this.cubeRegistry.forEach((cubeInfo, key) => {
+      // Skip excluded coordinates
+      if (this.excludedCoordinates.has(key)) {
+        console.log(`🚫 Skipping excluded cube at (${cubeInfo.position.x}, ${cubeInfo.position.y})`);
+        return;
+      }
+
       // Determine the cube type for texturing
       let cubeType: CubeType;
       let material: THREE.MeshLambertMaterial;
@@ -134,11 +228,20 @@ export class CubeFloorRenderer {
 
       // Create cube mesh
       const cube = new THREE.Mesh(geometry, material);
+      const cubeWorldX = cubeInfo.position.x * cubeSize;
+      const cubeWorldZ = cubeInfo.position.y * cubeSize;
       cube.position.set(
-        cubeInfo.position.x * cubeSize,
+        cubeWorldX,
         yOffset + cubeSize / 2,
-        cubeInfo.position.y * cubeSize
+        cubeWorldZ
       );
+      
+      // Debug logging for cube positioning
+      if (cubeInfo.position.x === 9 && cubeInfo.position.y === 2) {
+        console.log(`[cube] 🟫 Floor cube at grid (${cubeInfo.position.x}, ${cubeInfo.position.y}) positioned at world (${cubeWorldX}, ${cubeWorldZ})`);
+        console.log(`[cube] 🟫 Floor cube center is at: (${cubeWorldX + cubeSize/2}, ${cubeWorldZ + cubeSize/2})`);
+      }
+      
       cube.name = `FloorCube_${cubeInfo.type}_${cubeInfo.position.x}_${cubeInfo.position.y}`;
       cube.castShadow = true;
       cube.receiveShadow = true;
@@ -147,6 +250,13 @@ export class CubeFloorRenderer {
     });
 
     console.log(`🎨 Rendered floor cubes with textures: ${roomCount} rooms, ${hallwayCount} hallways, ${overlapCount} overlaps`);
+    console.log(`🔥 DEBUG: Final sceneGroup state:`, {
+      childrenCount: sceneGroup.children.length,
+      isInScene: scene.children.includes(sceneGroup),
+      groupName: sceneGroup.name,
+      groupVisible: sceneGroup.visible,
+      sceneChildrenTotal: scene.children.length
+    });
     
     return sceneGroup;
   }
@@ -231,6 +341,7 @@ export class CubeFloorRenderer {
    */
   static dispose(): void {
     this.cubeRegistry.clear();
+    this.excludedCoordinates.clear();
     this.sceneGroups.forEach((group, scene) => {
       scene.remove(group);
       group.traverse((child) => {
