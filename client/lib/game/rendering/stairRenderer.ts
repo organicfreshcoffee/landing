@@ -161,7 +161,7 @@ export class StairRenderer {
       const wallHeight = CubeConfig.getWallHeight();
       
       const scaleX = cubeSize / modelWidth;  // Fit to cube width
-      const scaleY = wallHeight / modelHeight; // Fit to wall height
+      const scaleY = (wallHeight / modelHeight) * 0.3; // Fit to wall height
       const scaleZ = cubeSize / modelDepth;  // Fit to cube depth
       
       // Apply uniform scaling for X and Z to maintain proportions
