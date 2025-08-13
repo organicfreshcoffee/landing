@@ -5,6 +5,7 @@ import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
 import { SceneManager } from '../rendering';
+import { StairInteractionManager } from '../ui/stairInteractionManager';
 
 export class GameManager {
   private sceneManager: SceneManager;
@@ -53,6 +54,12 @@ export class GameManager {
     this.sceneManager.startRenderLoop(() => {
       if (this.user?.uid) {
         this.movementController.updateMovement(this.user.uid);
+        
+        // Update stair interactions with current player position
+        if (this.localPlayerRef.current) {
+          const stairManager = StairInteractionManager.getInstance();
+          stairManager.updatePlayerPosition(this.localPlayerRef.current.position);
+        }
       }
       
       // Periodically verify floor integrity
@@ -64,6 +71,9 @@ export class GameManager {
 
     // Set up network connectivity handlers
     this.setupNetworkHandlers();
+    
+    // Set up stair interaction callbacks
+    this.setupStairInteractions();
   }
 
   private async createLocalPlayer(): Promise<void> {
@@ -319,6 +329,52 @@ export class GameManager {
     };
   }
 
+  private setupStairInteractions(): void {
+    const stairManager = StairInteractionManager.getInstance();
+    
+    // Set up callbacks for stair interactions
+    stairManager.setCallbacks(
+      // Upstairs callback
+      () => {
+        console.log('🔺 Player wants to go upstairs!');
+        this.handleUpstairsInteraction();
+      },
+      // Downstairs callback
+      () => {
+        console.log('🔻 Player wants to go downstairs!');
+        this.handleDownstairsInteraction();
+      }
+    );
+    
+    console.log('🏗️ Stair interaction callbacks configured');
+  }
+
+  private handleUpstairsInteraction(): void {
+    console.log('⬆️ Handling upstairs interaction');
+    // TODO: Implement floor transition logic
+    // For now, just show a message
+    console.log('🚧 Upstairs functionality to be implemented');
+    
+    // Future implementation could include:
+    // 1. Get the target floor name from stair data
+    // 2. Call this.sceneManager.switchFloor(targetFloor)
+    // 3. Update player position on new floor
+    // 4. Send server notification of floor change
+  }
+
+  private handleDownstairsInteraction(): void {
+    console.log('⬇️ Handling downstairs interaction');
+    // TODO: Implement floor transition logic
+    // For now, just show a message
+    console.log('🚧 Downstairs functionality to be implemented');
+    
+    // Future implementation could include:
+    // 1. Get the target floor name from stair data
+    // 2. Call this.sceneManager.switchFloor(targetFloor)
+    // 3. Update player position on new floor
+    // 4. Send server notification of floor change
+  }
+
   private positionPlayerOnGround(): void {
     if (!this.localPlayerRef.current) return;
     
@@ -416,6 +472,9 @@ export class GameManager {
     this.webSocketManager.close();
     this.movementController.cleanup();
     this.sceneManager.cleanup();
+
+    // Clean up stair interactions
+    StairInteractionManager.getInstance().dispose();
 
     // Clean up animation mixers
     if (this.localPlayerMixer.current) {

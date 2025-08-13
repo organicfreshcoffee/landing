@@ -162,12 +162,26 @@ export class DungeonFloorRenderer {
         
         // Optionally render ceiling
         if (opts.showCeiling) {
-          ceilingGroup = WallGenerator.renderCeiling(scene, allFloorCoords, {
+          // For ceiling, we want to include ALL floor locations including downward stairs
+          const allCeilingCoords = [...allFloorCoords];
+          stairExcludedCoords.forEach(stairCoord => {
+            // Only add if not already present in floor coords
+            const exists = allFloorCoords.some(coord => 
+              coord.x === stairCoord.x && coord.y === stairCoord.y
+            );
+            if (!exists) {
+              allCeilingCoords.push(stairCoord);
+            }
+          });
+          
+          ceilingGroup = WallGenerator.renderCeiling(scene, allCeilingCoords, {
             wallHeight: opts.wallHeight,
             ceilingColor: opts.ceilingColor,
             cubeSize: opts.cubeSize
           });
-          ceilingCount = allFloorCoords.length;
+          ceilingCount = allCeilingCoords.length;
+          
+          console.log(`🏠 Generated ceiling: ${allFloorCoords.length} floor coords + ${stairExcludedCoords.length} stair coords = ${allCeilingCoords.length} total ceiling cubes`);
         }
         
         console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);
@@ -332,12 +346,26 @@ export class DungeonFloorRenderer {
         
         // Optionally render ceiling
         if (opts.showCeiling) {
-          ceilingGroup = WallGenerator.renderCeiling(scene, allFloorCoords, {
+          // For ceiling, we want to include ALL floor locations including downward stairs
+          const allCeilingCoords = [...allFloorCoords];
+          stairExcludedCoords.forEach(stairCoord => {
+            // Only add if not already present in floor coords
+            const exists = allFloorCoords.some(coord => 
+              coord.x === stairCoord.x && coord.y === stairCoord.y
+            );
+            if (!exists) {
+              allCeilingCoords.push(stairCoord);
+            }
+          });
+          
+          ceilingGroup = WallGenerator.renderCeiling(scene, allCeilingCoords, {
             wallHeight: opts.wallHeight,
             ceilingColor: opts.ceilingColor,
             cubeSize: opts.cubeSize
           });
-          ceilingCount = allFloorCoords.length;
+          ceilingCount = allCeilingCoords.length;
+          
+          console.log(`🏠 Generated ceiling: ${allFloorCoords.length} floor coords + ${stairExcludedCoords.length} stair coords = ${allCeilingCoords.length} total ceiling cubes`);
         }
         
         console.log(`🧱 Generated ${wallCount} walls around ${allFloorCoords.length} floor tiles`);

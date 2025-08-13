@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ServerSceneryGenerator } from '../generators/sceneryGenerator';
 import { CubeConfig } from '../config/cubeConfig';
+import { StairInteractionManager } from '../ui/stairInteractionManager';
 
 export class SceneManager {
   scene: THREE.Scene;
@@ -140,6 +141,11 @@ export class SceneManager {
       
       this.currentFloorName = floorName;
       console.log(`✅ Loaded floor: ${floorName} with ${floorResult.floorLayout.rooms.length} rooms, ${floorResult.floorLayout.hallways.length} hallways`);
+      
+      // Initialize stair interactions
+      const stairManager = StairInteractionManager.getInstance();
+      stairManager.initializeStairs(floorResult.floorLayout.rooms);
+      console.log(`🏗️ Stair interactions initialized for ${floorResult.floorLayout.rooms.length} rooms`);
       
       // Detailed rendering verification
       this.verifyFloorRendering(floorResult);
