@@ -120,6 +120,7 @@ export class AnimationTest {
    */
   static updateTestRunner(delta: number): void {
     if (this.testMixer) {
+      // Use the smoothed delta passed from MovementController for consistent animation
       this.testMixer.update(delta);
       
       // Add slow rotation to test runner for visibility

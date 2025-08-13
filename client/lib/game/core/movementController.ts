@@ -13,6 +13,12 @@ export class MovementController {
   private lastSentMovementState = false;
   private clock = new THREE.Clock();
   
+  // Animation timing properties to smooth out delta inconsistencies
+  private animationClock = new THREE.Clock();
+  private targetFrameTime = 1 / 60; // Target 60 FPS for smooth animation
+  private maxFrameTime = 1 / 45; // Cap at 45 FPS to prevent large jumps (more conservative)
+  private lastAnimationTime = 0; // Track time for smoother interpolation
+  
   // Physics and admin mode properties
   private isAdminMode = false;
   private velocity = new THREE.Vector3(0, 0, 0);
@@ -126,35 +132,48 @@ export class MovementController {
     right.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.localPlayerRotation.y);
 
     // Track movement direction for animation
-    let newMovementDirection: 'forward' | 'backward' | 'none' = 'none'; // Reset to none first
-    let horizontalMovement = false; // Track WASD movement separately
+    let newMovementDirection: 'forward' | 'backward' | 'none' = 'none';
+    let horizontalMovement = false;
     
     // Calculate intended movement
     const movement = new THREE.Vector3(0, 0, 0);
     
-    if (this.keysPressed.has('KeyW')) {
+    // Track individual key states for better direction determination
+    const wPressed = this.keysPressed.has('KeyW');
+    const sPressed = this.keysPressed.has('KeyS');
+    const aPressed = this.keysPressed.has('KeyA');
+    const dPressed = this.keysPressed.has('KeyD');
+    
+    if (wPressed) {
       movement.add(forward.clone().multiplyScalar(moveSpeed));
       moved = true;
       horizontalMovement = true;
       newMovementDirection = 'forward';
     }
-    if (this.keysPressed.has('KeyS')) {
+    if (sPressed) {
       movement.add(forward.clone().multiplyScalar(-moveSpeed));
       moved = true;
       horizontalMovement = true;
+      // S key takes priority for backward direction
       newMovementDirection = 'backward';
     }
-    if (this.keysPressed.has('KeyA')) {
+    if (aPressed) {
       movement.add(right.clone().multiplyScalar(-moveSpeed));
       moved = true;
       horizontalMovement = true;
-      if (newMovementDirection === 'none') newMovementDirection = 'forward';
+      // Only set forward if no W/S keys are pressed
+      if (!wPressed && !sPressed) {
+        newMovementDirection = 'forward';
+      }
     }
-    if (this.keysPressed.has('KeyD')) {
+    if (dPressed) {
       movement.add(right.clone().multiplyScalar(moveSpeed));
       moved = true;
       horizontalMovement = true;
-      if (newMovementDirection === 'none') newMovementDirection = 'forward';
+      // Only set forward if no W/S keys are pressed
+      if (!wPressed && !sPressed) {
+        newMovementDirection = 'forward';
+      }
     }
 
     // Set movement direction based on horizontal movement only
@@ -286,21 +305,29 @@ export class MovementController {
     } else {
       // Normal mode: apply collision detection
       const newPosition = oldPosition.clone().add(movement);
-      const collisionResult = this.collisionSystem.checkCollision(newPosition);
       
-      if (collisionResult.collided) {
-        // Use corrected position
-        localPlayer.position.copy(collisionResult.correctedPosition);
+      // Only check collision if we're actually moving horizontally
+      // This reduces collision check frequency and improves performance
+      if (Math.abs(movement.x) > 0.001 || Math.abs(movement.z) > 0.001) {
+        const collisionResult = this.collisionSystem.checkCollision(newPosition);
         
-        // Provide feedback for different collision types
-        if (collisionResult.collisionDirection === 'y') {
-          // Ceiling collision - stop upward movement
-          if (this.velocity.y > 0) {
-            this.velocity.y = 0;
+        if (collisionResult.collided) {
+          // Use corrected position
+          localPlayer.position.copy(collisionResult.correctedPosition);
+          
+          // Provide feedback for different collision types
+          if (collisionResult.collisionDirection === 'y') {
+            // Ceiling collision - stop upward movement
+            if (this.velocity.y > 0) {
+              this.velocity.y = 0;
+            }
           }
+        } else {
+          // No collision, apply normal movement
+          localPlayer.position.copy(newPosition);
         }
       } else {
-        // No collision, apply normal movement
+        // Only vertical movement, skip collision check for better performance
         localPlayer.position.copy(newPosition);
       }
     }
@@ -355,7 +382,24 @@ export class MovementController {
     const wasMoving = this.isMoving;
     this.isMoving = moved;
     
-    const delta = this.clock.getDelta();
+    // Use a separate clock for animations to ensure consistent timing
+    // regardless of collision detection performance
+    const rawDelta = this.animationClock.getDelta();
+    
+    // Improved delta time smoothing for more stable animations
+    const now = performance.now() / 1000;
+    let smoothDelta = rawDelta;
+    
+    if (this.lastAnimationTime > 0) {
+      const expectedDelta = now - this.lastAnimationTime;
+      // Use exponential smoothing to reduce jitter
+      smoothDelta = Math.min(expectedDelta, this.maxFrameTime);
+      // Apply additional smoothing for very small or very large deltas
+      if (smoothDelta < 0.01) smoothDelta = this.targetFrameTime;
+      if (smoothDelta > this.maxFrameTime) smoothDelta = this.maxFrameTime;
+    }
+    
+    this.lastAnimationTime = now;
     
     // Control local player animation
     if (this.localPlayerMixer.current && this.localPlayerActions.current.StickMan_Run) {
@@ -365,47 +409,58 @@ export class MovementController {
       const shouldAnimate = this.movementDirection !== 'none';
       
       // Add occasional debug logging for local player
-      if (Math.random() < 0.01) { // 1% of frames
+      if (Math.random() < 0.005) { // Reduced logging frequency
         console.log('🚶 Local player animation update:', {
           shouldAnimate,
           movementDirection: this.movementDirection,
           isRunning: walkAction.isRunning(),
           paused: walkAction.paused,
+          timeScale: walkAction.timeScale,
           time: walkAction.time.toFixed(3),
-          delta
+          smoothDelta: smoothDelta.toFixed(4)
         });
       }
       
       if (shouldAnimate) {
+        // Start or resume animation
         if (!walkAction.isRunning()) {
+          walkAction.reset();
           walkAction.play();
         }
         walkAction.paused = false;
         
+        // Set reasonable animation speed based on direction
         if (this.movementDirection === 'backward') {
-          walkAction.timeScale = -300; // Speed up by factor of 100
+          walkAction.timeScale = -1.5; // Slightly faster backward walk
         } else if (this.movementDirection === 'forward') {
-          walkAction.timeScale = 300; // Speed up by factor of 100
+          walkAction.timeScale = 1.5; // Slightly faster forward walk
         }
+        
+        // Ensure animation loops
+        walkAction.setLoop(THREE.LoopRepeat, Infinity);
       } else {
-        walkAction.paused = true;
+        // Stop animation smoothly
+        if (walkAction.isRunning()) {
+          walkAction.paused = true;
+        }
       }
       
-      this.localPlayerMixer.current.update(delta);
-    } else if (Math.random() < 0.01) {
+      // Use smooth delta for consistent animation timing
+      this.localPlayerMixer.current.update(smoothDelta);
+    } else if (Math.random() < 0.005) {
       console.log('⚠️ Local player mixer or action not available:', {
         hasMixer: !!this.localPlayerMixer.current,
         hasAction: !!this.localPlayerActions.current.StickMan_Run
       });
     }
     
-    // Update other players' animation mixers
+    // Update other players' animation mixers with smooth delta
     this.playersAnimations.forEach((animData) => {
-      animData.mixer.update(delta);
+      animData.mixer.update(smoothDelta);
     });
     
-    // Update test runner animation for debugging
-    AnimationTest.updateTestRunner(delta);
+    // Update test runner animation for debugging with smooth delta
+    AnimationTest.updateTestRunner(smoothDelta);
   }
 
   private sendMovementUpdateIfNeeded(userId: string, moved: boolean, oldRotation: any): void {
@@ -456,6 +511,11 @@ export class MovementController {
     this.movementDirection = 'none';
     this.velocity.set(0, 0, 0);
     this.isAdminMode = false;
+    
+    // Reset animation timing
+    this.animationClock.stop();
+    this.clock.stop();
+    this.lastAnimationTime = 0;
     
     this.gameHUD.hideHUD();
     

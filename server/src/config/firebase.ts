@@ -60,9 +60,9 @@ export async function initializeFirebaseAdmin() {
   }
 
   try {
-    console.log('Initializing Firebase Admin SDK with GCP Secret Manager...');
+    console.log('Initializing Firebase Admin SDK...');
     
-    // Get Firebase service account from Secret Manager
+    // Get Firebase service account from Secret Manager (for production or when local file not available)
     const serviceAccountJson = await getSecretValue('firebase-service-account');
     const serviceAccount = JSON.parse(serviceAccountJson);
 
@@ -76,7 +76,7 @@ export async function initializeFirebaseAdmin() {
     });
 
     isInitialized = true;
-    console.log('Firebase Admin SDK initialized successfully');
+    console.log('Firebase Admin SDK initialized successfully with GCP Secret Manager');
     return admin;
   } catch (error) {
     console.error('Error initializing Firebase Admin SDK:', error);
@@ -97,7 +97,7 @@ export async function getFirebaseConfig() {
     const configJson = await getSecretValue('firebase-client-config');
     const config = JSON.parse(configJson);
     
-    console.log('Firebase config retrieved successfully');
+    console.log('Firebase config retrieved successfully from GCP Secret Manager');
     return config;
   } catch (error) {
     console.error('Error getting Firebase config:', error);

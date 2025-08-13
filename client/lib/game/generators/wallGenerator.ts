@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CubePosition, CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 import { CubeConfig } from '../config/cubeConfig';
+import { TextureManager } from '../utils/textureManager';
 
 export interface WallGenerationOptions {
   wallHeight?: number;
@@ -88,11 +89,12 @@ export class WallGenerator {
     const wallGroup = new THREE.Group();
     wallGroup.name = 'Walls';
 
-    // Create geometry and material for walls
+    // Create geometry for walls
     const wallGeometry = new THREE.BoxGeometry(opts.cubeSize, opts.wallHeight, opts.cubeSize);
-    const wallMaterial = opts.wallMaterial || new THREE.MeshLambertMaterial({ color: opts.wallColor });
 
     wallCoords.forEach(coord => {
+      // Create a material with wall texture
+      const wallMaterial = TextureManager.createMaterialWithTexture('wall');
       const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
       
       // Position the wall
@@ -111,7 +113,7 @@ export class WallGenerator {
     });
 
     scene.add(wallGroup);
-    console.log(`🏗️ Rendered ${wallCoords.length} wall cubes in scene`);
+    console.log(`🏗️ Rendered ${wallCoords.length} wall cubes with textures in scene`);
     
     return wallGroup;
   }
@@ -129,11 +131,12 @@ export class WallGenerator {
     const ceilingGroup = new THREE.Group();
     ceilingGroup.name = 'Ceiling';
 
-    // Create geometry and material for ceiling
+    // Create geometry for ceiling
     const ceilingGeometry = new THREE.BoxGeometry(opts.cubeSize, opts.cubeSize, opts.cubeSize);
-    const ceilingMaterial = opts.ceilingMaterial || new THREE.MeshLambertMaterial({ color: opts.ceilingColor });
 
     floorCoords.forEach(coord => {
+      // Create a material with ceiling texture
+      const ceilingMaterial = TextureManager.createMaterialWithTexture('ceiling');
       const ceilingMesh = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
       
       // Position the ceiling at the top of the walls
@@ -152,7 +155,7 @@ export class WallGenerator {
     });
 
     scene.add(ceilingGroup);
-    console.log(`🏠 Rendered ${floorCoords.length} ceiling cubes in scene`);
+    console.log(`🏠 Rendered ${floorCoords.length} ceiling cubes with textures in scene`);
     
     return ceilingGroup;
   }
