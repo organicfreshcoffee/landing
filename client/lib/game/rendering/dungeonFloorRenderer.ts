@@ -145,9 +145,8 @@ export class DungeonFloorRenderer {
       
       if (allFloorCoords.length > 0) {
         // Generate walls around perimeter, excluding stair coordinates
-        const stairExcludedCoords = layout.rooms
-          .filter(room => room.hasDownwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined)
-          .map(room => ({ x: room.stairLocationX!, y: room.stairLocationY! }));
+        // Use the same logic as floor exclusions to get consistent coordinates
+        const stairExcludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
         
         const wallCoords = WallGenerator.generateWalls(allFloorCoords, {}, stairExcludedCoords);
         
@@ -316,9 +315,8 @@ export class DungeonFloorRenderer {
       
       if (allFloorCoords.length > 0) {
         // Generate walls around perimeter, excluding stair coordinates
-        const stairExcludedCoords = layout.rooms
-          .filter(room => room.hasDownwardStair && room.stairLocationX !== undefined && room.stairLocationY !== undefined)
-          .map(room => ({ x: room.stairLocationX!, y: room.stairLocationY! }));
+        // Use the same logic as floor exclusions to get consistent coordinates
+        const stairExcludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
         
         const wallCoords = WallGenerator.generateWalls(allFloorCoords, {}, stairExcludedCoords);
         
