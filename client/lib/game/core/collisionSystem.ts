@@ -138,8 +138,8 @@ export class CollisionSystem {
    */
   private worldToCubeCoords(worldPosition: THREE.Vector3): { x: number; y: number } {
     return {
-      x: Math.floor(worldPosition.x / this.cubeSize + 0.5),
-      y: Math.floor(worldPosition.z / this.cubeSize + 0.5)
+      x: Math.round(worldPosition.x / this.cubeSize),
+      y: Math.round(worldPosition.z / this.cubeSize)
     };
   }
 
@@ -151,13 +151,15 @@ export class CollisionSystem {
     const candidates: { x: number; y: number }[] = [];
     
     // Calculate the range of cube coordinates that could intersect with player
-    const minCubeX = Math.floor((playerBox.min.x) / this.cubeSize);
-    const maxCubeX = Math.floor((playerBox.max.x) / this.cubeSize);
-    const minCubeY = Math.floor((playerBox.min.z) / this.cubeSize);
-    const maxCubeY = Math.floor((playerBox.max.z) / this.cubeSize);
+    // Use proper floor division to get grid coordinates
+    const minCubeX = Math.floor(playerBox.min.x / this.cubeSize);
+    const maxCubeX = Math.floor(playerBox.max.x / this.cubeSize);
+    const minCubeY = Math.floor(playerBox.min.z / this.cubeSize);
+    const maxCubeY = Math.floor(playerBox.max.z / this.cubeSize);
     
-    for (let x = minCubeX; x <= maxCubeX; x++) {
-      for (let y = minCubeY; y <= maxCubeY; y++) {
+    // Include adjacent cubes to handle edge cases
+    for (let x = minCubeX - 1; x <= maxCubeX + 1; x++) {
+      for (let y = minCubeY - 1; y <= maxCubeY + 1; y++) {
         candidates.push({ x, y });
       }
     }
@@ -183,32 +185,36 @@ export class CollisionSystem {
         
         if (this.boxesIntersect(playerBox, wallBox)) {
           // Calculate penetration depths for both axes
-          const overlapX = Math.min(playerBox.max.x - wallBox.min.x, wallBox.max.x - playerBox.min.x);
-          const overlapZ = Math.min(playerBox.max.z - wallBox.min.z, wallBox.max.z - playerBox.min.z);
+          const penetrationLeft = playerBox.max.x - wallBox.min.x;
+          const penetrationRight = wallBox.max.x - playerBox.min.x;
+          const penetrationFront = playerBox.max.z - wallBox.min.z;
+          const penetrationBack = wallBox.max.z - playerBox.min.z;
           
-          // Choose the axis with minimum overlap (easiest to resolve)
-          const minOverlap = Math.min(overlapX, overlapZ);
+          // Find the minimum penetration (easiest direction to resolve collision)
+          const minPenetrationX = Math.min(penetrationLeft, penetrationRight);
+          const minPenetrationZ = Math.min(penetrationFront, penetrationBack);
+          const totalMinPenetration = Math.min(minPenetrationX, minPenetrationZ);
           
-          if (minOverlap < minPenetration) {
-            minPenetration = minOverlap;
+          if (totalMinPenetration < minPenetration) {
+            minPenetration = totalMinPenetration;
             
             const correctedPosition = position.clone();
             const wallCenterX = candidate.x * this.cubeSize;
             const wallCenterZ = candidate.y * this.cubeSize;
             
             // Add a larger buffer to prevent edge cases and provide smoother collision
-            const buffer = 0.1;
+            const buffer = 0.15;
             const halfWallSize = this.cubeSize / 2;
             const halfPlayerWidth = (this.PLAYER_WIDTH * this.cubeSize) / 2;
             const halfPlayerDepth = (this.PLAYER_DEPTH * this.cubeSize) / 2;
             
-            if (overlapX < overlapZ) {
+            if (minPenetrationX < minPenetrationZ) {
               // Resolve X collision - push player away from wall in X direction
-              if (position.x < wallCenterX) {
-                // Player is to the left of wall, push left
+              if (penetrationLeft < penetrationRight) {
+                // Player penetrating from left side, push left
                 correctedPosition.x = wallCenterX - halfWallSize - halfPlayerWidth - buffer;
               } else {
-                // Player is to the right of wall, push right
+                // Player penetrating from right side, push right
                 correctedPosition.x = wallCenterX + halfWallSize + halfPlayerWidth + buffer;
               }
               
@@ -219,11 +225,11 @@ export class CollisionSystem {
               };
             } else {
               // Resolve Z collision - push player away from wall in Z direction
-              if (position.z < wallCenterZ) {
-                // Player is in front of wall, push forward
+              if (penetrationFront < penetrationBack) {
+                // Player penetrating from front, push forward (negative Z)
                 correctedPosition.z = wallCenterZ - halfWallSize - halfPlayerDepth - buffer;
               } else {
-                // Player is behind wall, push back
+                // Player penetrating from back, push back (positive Z)
                 correctedPosition.z = wallCenterZ + halfWallSize + halfPlayerDepth + buffer;
               }
               
@@ -290,6 +296,15 @@ export class CollisionSystem {
     
     // No floor, return ground level
     return 0;
+  }
+
+  /**
+   * Get visual floor height for player positioning - includes visual offset
+   */
+  getVisualFloorHeight(position: THREE.Vector3): number {
+    const logicalHeight = this.getFloorHeight(position);
+    // Add small visual offset so player appears to stand on surface rather than intersecting
+    return logicalHeight + (logicalHeight > 0 ? 0.01 : 0.01);
   }
 
   /**

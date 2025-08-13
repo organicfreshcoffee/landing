@@ -233,7 +233,7 @@ export class MovementController {
     } else {
       // When exiting admin mode, snap to ground level if above ground
       if (this.localPlayerRef.current) {
-        const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
+        const floorHeight = this.collisionSystem.getVisualFloorHeight(this.localPlayerRef.current.position);
         if (this.localPlayerRef.current.position.y > floorHeight) {
           this.localPlayerRef.current.position.y = floorHeight;
         }
@@ -267,7 +267,7 @@ export class MovementController {
 
     // Apply vertical velocity
     const newY = this.localPlayerRef.current.position.y + this.velocity.y * delta;
-    const floorHeight = this.collisionSystem.getFloorHeight(this.localPlayerRef.current.position);
+    const floorHeight = this.collisionSystem.getVisualFloorHeight(this.localPlayerRef.current.position);
     
     // Debug: Log gravity information occasionally
     if (Math.random() < 0.01) {
