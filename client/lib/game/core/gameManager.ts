@@ -17,6 +17,10 @@ export class GameManager {
   
   private players = new Map<string, Player>();
   private playersAnimations = new Map<string, PlayerAnimationData>();
+  
+  // Floor verification tracking
+  private lastFloorVerificationTime = 0;
+  private floorVerificationInterval = 30000; // Check every 30 seconds
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -50,6 +54,9 @@ export class GameManager {
       if (this.user?.uid) {
         this.movementController.updateMovement(this.user.uid);
       }
+      
+      // Periodically verify floor integrity
+      this.checkFloorIntegrity();
     });
 
     // Set up visibility change handler
@@ -328,6 +335,23 @@ export class GameManager {
     // Position player on the floor
     this.localPlayerRef.current.position.y = floorHeight;
     console.log(`👤 Player positioned on ground at height: ${floorHeight}`);
+  }
+
+  /**
+   * Periodically check floor integrity and refresh if needed
+   */
+  private checkFloorIntegrity(): void {
+    const now = Date.now();
+    if (now - this.lastFloorVerificationTime > this.floorVerificationInterval) {
+      this.lastFloorVerificationTime = now;
+      
+      // Only verify if we have a current floor loaded
+      if (this.sceneManager.getCurrentFloor()) {
+        this.sceneManager.verifyAndRefreshFloor().catch((error) => {
+          console.error('Error during floor verification:', error);
+        });
+      }
+    }
   }
 
   async loadFloor(floorName?: string): Promise<void> {
