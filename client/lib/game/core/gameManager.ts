@@ -427,7 +427,7 @@ export class GameManager {
     
     const currentPosition = this.localPlayerRef.current.position;
     const collisionSystem = this.movementController.getCollisionSystem();
-    const floorHeight = collisionSystem.getFloorHeight(currentPosition);
+    const floorHeight = collisionSystem.getVisualFloorHeight(currentPosition);
     
     console.log('🏠 Positioning player on ground:', {
       currentY: currentPosition.y.toFixed(2),

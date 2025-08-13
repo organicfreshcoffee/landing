@@ -303,19 +303,31 @@ export class CollisionSystem {
    */
   getVisualFloorHeight(position: THREE.Vector3): number {
     const logicalHeight = this.getFloorHeight(position);
-    // Add small visual offset so player appears to stand on surface rather than intersecting
-    return logicalHeight + (logicalHeight > 0 ? 0.01 : 0.01);
+    
+    if (logicalHeight > 0) {
+      // Player is on a floor cube - position them on top of the cube
+      // Floor cubes go from 0 to cubeSize (5), so logical height is 5
+      // We want the player to appear standing on top, so add a moderate offset
+      const offset = 1.0; // Raise player by 1 unit above the cube top
+      console.log(`🏠 Visual floor height: logical=${logicalHeight}, visual=${logicalHeight + offset}`);
+      return logicalHeight + offset;
+    } else {
+      // Player is on ground level - raise them slightly above ground
+      const offset = 1.0;
+      console.log(`🏠 Visual ground height: ${offset}`);
+      return offset;
+    }
   }
 
   /**
    * Check if player is standing on solid ground
    */
   isOnGround(position: THREE.Vector3): boolean {
-    const floorHeight = this.getFloorHeight(position);
+    const visualFloorHeight = this.getVisualFloorHeight(position);
     const playerBottomY = position.y;
     
-    // Consider player on ground if they're within a small tolerance of floor height
-    return Math.abs(playerBottomY - floorHeight) < 0.1;
+    // Consider player on ground if they're within a reasonable tolerance of visual floor height
+    return Math.abs(playerBottomY - visualFloorHeight) < 0.5;
   }
 
   /**
