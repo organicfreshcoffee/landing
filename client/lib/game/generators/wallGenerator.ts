@@ -32,7 +32,8 @@ export class WallGenerator {
    */
   static generateWalls(
     allFloorCoords: CubePosition[],
-    options: WallGenerationOptions = {}
+    options: WallGenerationOptions = {},
+    excludedCoords: CubePosition[] = []
   ): CubePosition[] {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
@@ -45,6 +46,12 @@ export class WallGenerator {
     const floorSet = new Set<string>();
     allFloorCoords.forEach(coord => {
       floorSet.add(`${coord.x},${coord.y}`);
+    });
+
+    // Create a set of excluded positions (stair locations) for quick lookup
+    const excludedSet = new Set<string>();
+    excludedCoords.forEach(coord => {
+      excludedSet.add(`${coord.x},${coord.y}`);
     });
 
     const wallCoords: CubePosition[] = [];
@@ -62,7 +69,8 @@ export class WallGenerator {
         const adjKey = `${adjPos.x},${adjPos.y}`;
         
         // If adjacent position doesn't have a floor, place a wall there
-        if (!floorSet.has(adjKey)) {
+        // BUT exclude positions that are stairs (excluded coordinates)
+        if (!floorSet.has(adjKey) && !excludedSet.has(adjKey)) {
           // Check if we already have a wall at this position
           const wallKey = `${adjPos.x},${adjPos.y}`;
           if (!wallCoords.some(w => w.x === adjPos.x && w.y === adjPos.y)) {

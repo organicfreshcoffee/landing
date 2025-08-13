@@ -268,18 +268,24 @@ export class StairRenderer {
   static getExcludedFloorCoordinates(rooms: ServerRoom[]): CubePosition[] {
     const excludedCoords: CubePosition[] = [];
     
+    console.log(`🔍 Checking ${rooms.length} rooms for downward stairs to exclude...`);
+    
     rooms.forEach(room => {
+      console.log(`🔍 Room ${room.name}: hasUpwardStair=${room.hasUpwardStair}, hasDownwardStair=${room.hasDownwardStair}, stairLocationX=${room.stairLocationX}, stairLocationY=${room.stairLocationY}`);
+      
       if (room.hasDownwardStair && 
           room.stairLocationX !== undefined && 
           room.stairLocationY !== undefined) {
-        excludedCoords.push({
+        const coord = {
           x: room.position.x + room.stairLocationX,
           y: room.position.y + room.stairLocationY
-        });
-        console.log(`🚫 Excluding floor cube at (${room.position.x + room.stairLocationX}, ${room.position.y + room.stairLocationY}) for downward stairs in room ${room.name}`);
+        };
+        excludedCoords.push(coord);
+        console.log(`🚫 Excluding floor cube at (${coord.x}, ${coord.y}) for downward stairs in room ${room.name}`);
       }
     });
     
+    console.log(`🚫 Total excluded coordinates from StairRenderer: ${excludedCoords.length}`, excludedCoords);
     return excludedCoords;
   }
 

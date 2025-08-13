@@ -35,6 +35,8 @@ export class CubeFloorRenderer {
    * Clear all registered cubes for a fresh start
    */
   static clearRegistry(): void {
+    console.log(`🧹 CubeFloorRenderer.clearRegistry() called - clearing ${this.cubeRegistry.size} cubes and ${this.excludedCoordinates.size} exclusions`);
+    console.log(`🧹 Call stack:`, new Error().stack);
     this.cubeRegistry.clear();
     this.excludedCoordinates.clear();
   }
@@ -43,12 +45,39 @@ export class CubeFloorRenderer {
    * Set coordinates to exclude from rendering (e.g., for downward stairs)
    */
   static setExcludedCoordinates(coordinates: CubePosition[]): void {
+    console.log(`🚫 setExcludedCoordinates called with ${coordinates.length} coordinates:`, coordinates);
     this.excludedCoordinates.clear();
     coordinates.forEach(coord => {
       const key = this.getCubeKey(coord.x, coord.y);
       this.excludedCoordinates.add(key);
+      console.log(`🚫 Adding exclusion for coordinate (${coord.x}, ${coord.y}) -> key: "${key}"`);
+      
+      // Check if this coordinate is already registered
+      const existing = this.cubeRegistry.get(key);
+      if (existing) {
+        console.log(`⚠️ Coordinate (${coord.x}, ${coord.y}) is already registered as ${existing.type} - will be excluded during rendering`);
+      } else {
+        console.log(`✅ Coordinate (${coord.x}, ${coord.y}) not yet registered - good!`);
+      }
     });
     console.log(`🚫 Set ${coordinates.length} coordinates to exclude from floor rendering`);
+    console.log(`🚫 Excluded coordinate keys:`, Array.from(this.excludedCoordinates));
+    console.log(`🚫 Current excludedCoordinates size after setting: ${this.excludedCoordinates.size}`);
+  }
+
+  /**
+   * Unregister specific coordinates from the cube registry
+   */
+  static unregisterCoordinates(coordinates: CubePosition[]): void {
+    coordinates.forEach(coord => {
+      const key = this.getCubeKey(coord.x, coord.y);
+      const removed = this.cubeRegistry.delete(key);
+      if (removed) {
+        console.log(`🗑️ Unregistered cube at coordinate (${coord.x}, ${coord.y})`);
+      } else {
+        console.log(`ℹ️ No cube registered at coordinate (${coord.x}, ${coord.y}) to unregister`);
+      }
+    });
   }
 
   /**
@@ -70,8 +99,17 @@ export class CubeFloorRenderer {
     color: number,
     type: 'room' | 'hallway'
   ): void {
+    console.log(`📝 registerCubes called for ${type} with ${coordinates.length} coordinates. Current exclusions: ${this.excludedCoordinates.size}`);
+    
     coordinates.forEach(coord => {
       const key = this.getCubeKey(coord.x, coord.y);
+      
+      // Check if this coordinate is excluded (e.g., for downward stairs)
+      if (this.excludedCoordinates.has(key)) {
+        console.log(`🚫 Skipping registration of excluded coordinate (${coord.x}, ${coord.y}) for ${type}`);
+        return;
+      }
+      
       const existing = this.cubeRegistry.get(key);
       
       if (existing) {
