@@ -303,31 +303,50 @@ export class MovementController {
       // Admin mode: no collision detection
       localPlayer.position.add(movement);
     } else {
-      // Normal mode: apply collision detection
+      // Normal mode: apply collision detection with sliding
       const newPosition = oldPosition.clone().add(movement);
       
-      // Only check collision if we're actually moving horizontally
-      // This reduces collision check frequency and improves performance
-      if (Math.abs(movement.x) > 0.001 || Math.abs(movement.z) > 0.001) {
-        const collisionResult = this.collisionSystem.checkCollision(newPosition);
+      // Use sweep test for more reliable collision detection
+      const collisionResult = this.collisionSystem.sweepTestCollision(oldPosition, newPosition);
+      
+      if (collisionResult.collided) {
+        // Try sliding along walls instead of stopping completely
+        const correctedPosition = collisionResult.correctedPosition;
         
-        if (collisionResult.collided) {
-          // Use corrected position
-          localPlayer.position.copy(collisionResult.correctedPosition);
+        if (collisionResult.collisionDirection === 'x') {
+          // X collision - try to slide in Z direction
+          const slideMovement = new THREE.Vector3(0, movement.y, movement.z);
+          const slideTarget = correctedPosition.clone().add(slideMovement);
+          const slideResult = this.collisionSystem.sweepTestCollision(correctedPosition, slideTarget);
           
-          // Provide feedback for different collision types
-          if (collisionResult.collisionDirection === 'y') {
-            // Ceiling collision - stop upward movement
-            if (this.velocity.y > 0) {
-              this.velocity.y = 0;
-            }
+          if (!slideResult.collided) {
+            localPlayer.position.copy(slideTarget);
+          } else {
+            localPlayer.position.copy(correctedPosition);
+          }
+        } else if (collisionResult.collisionDirection === 'z') {
+          // Z collision - try to slide in X direction
+          const slideMovement = new THREE.Vector3(movement.x, movement.y, 0);
+          const slideTarget = correctedPosition.clone().add(slideMovement);
+          const slideResult = this.collisionSystem.sweepTestCollision(correctedPosition, slideTarget);
+          
+          if (!slideResult.collided) {
+            localPlayer.position.copy(slideTarget);
+          } else {
+            localPlayer.position.copy(correctedPosition);
+          }
+        } else if (collisionResult.collisionDirection === 'y') {
+          // Ceiling collision - stop upward movement but allow horizontal
+          localPlayer.position.copy(correctedPosition);
+          if (this.velocity.y > 0) {
+            this.velocity.y = 0;
           }
         } else {
-          // No collision, apply normal movement
-          localPlayer.position.copy(newPosition);
+          // General collision - use corrected position
+          localPlayer.position.copy(correctedPosition);
         }
       } else {
-        // Only vertical movement, skip collision check for better performance
+        // No collision, apply normal movement
         localPlayer.position.copy(newPosition);
       }
     }

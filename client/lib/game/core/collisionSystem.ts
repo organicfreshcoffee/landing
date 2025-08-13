@@ -123,10 +123,13 @@ export class CollisionSystem {
    * Check if two collision boxes intersect
    */
   private boxesIntersect(box1: CollisionBox, box2: CollisionBox): boolean {
+    // Add a small epsilon to avoid floating point precision issues
+    const epsilon = 0.001;
+    
     return !(
-      box1.max.x <= box2.min.x || box1.min.x >= box2.max.x ||
-      box1.max.y <= box2.min.y || box1.min.y >= box2.max.y ||
-      box1.max.z <= box2.min.z || box1.min.z >= box2.max.z
+      box1.max.x <= box2.min.x + epsilon || box1.min.x >= box2.max.x - epsilon ||
+      box1.max.y <= box2.min.y + epsilon || box1.min.y >= box2.max.y - epsilon ||
+      box1.max.z <= box2.min.z + epsilon || box1.min.z >= box2.max.z - epsilon
     );
   }
 
@@ -135,9 +138,31 @@ export class CollisionSystem {
    */
   private worldToCubeCoords(worldPosition: THREE.Vector3): { x: number; y: number } {
     return {
-      x: Math.round(worldPosition.x / this.cubeSize),
-      y: Math.round(worldPosition.z / this.cubeSize)
+      x: Math.floor(worldPosition.x / this.cubeSize + 0.5),
+      y: Math.floor(worldPosition.z / this.cubeSize + 0.5)
     };
+  }
+
+  /**
+   * Get all potentially colliding cubes around a position
+   */
+  private getCollisionCandidates(position: THREE.Vector3): { x: number; y: number }[] {
+    const playerBox = this.getPlayerCollisionBox(position);
+    const candidates: { x: number; y: number }[] = [];
+    
+    // Calculate the range of cube coordinates that could intersect with player
+    const minCubeX = Math.floor((playerBox.min.x) / this.cubeSize);
+    const maxCubeX = Math.floor((playerBox.max.x) / this.cubeSize);
+    const minCubeY = Math.floor((playerBox.min.z) / this.cubeSize);
+    const maxCubeY = Math.floor((playerBox.max.z) / this.cubeSize);
+    
+    for (let x = minCubeX; x <= maxCubeX; x++) {
+      for (let y = minCubeY; y <= maxCubeY; y++) {
+        candidates.push({ x, y });
+      }
+    }
+    
+    return candidates;
   }
 
   /**
@@ -145,46 +170,64 @@ export class CollisionSystem {
    */
   checkWallCollision(position: THREE.Vector3): CollisionResult {
     const playerBox = this.getPlayerCollisionBox(position);
-    const cubeCoords = this.worldToCubeCoords(position);
+    const candidates = this.getCollisionCandidates(position);
     
-    // Check surrounding wall cubes in a 3x3 grid
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const checkX = cubeCoords.x + dx;
-        const checkY = cubeCoords.y + dy;
-        const key = `${checkX},${checkY}`;
+    let bestCorrection: CollisionResult | null = null;
+    let minPenetration = Infinity;
+    
+    for (const candidate of candidates) {
+      const key = `${candidate.x},${candidate.y}`;
+      
+      if (this.wallCubes.has(key)) {
+        const wallBox = this.getCubeCollisionBox(candidate.x, candidate.y, 0, true);
         
-        if (this.wallCubes.has(key)) {
-          const wallBox = this.getCubeCollisionBox(checkX, checkY, 0, true);
+        if (this.boxesIntersect(playerBox, wallBox)) {
+          // Calculate penetration depths for both axes
+          const overlapX = Math.min(playerBox.max.x - wallBox.min.x, wallBox.max.x - playerBox.min.x);
+          const overlapZ = Math.min(playerBox.max.z - wallBox.min.z, wallBox.max.z - playerBox.min.z);
           
-          if (this.boxesIntersect(playerBox, wallBox)) {
-            // Calculate corrected position by moving player away from wall
+          // Choose the axis with minimum overlap (easiest to resolve)
+          const minOverlap = Math.min(overlapX, overlapZ);
+          
+          if (minOverlap < minPenetration) {
+            minPenetration = minOverlap;
+            
             const correctedPosition = position.clone();
+            const wallCenterX = candidate.x * this.cubeSize;
+            const wallCenterZ = candidate.y * this.cubeSize;
             
-            // Determine collision direction and push back
-            const playerCenterX = position.x;
-            const playerCenterZ = position.z;
-            const wallCenterX = checkX * this.cubeSize;
-            const wallCenterZ = checkY * this.cubeSize;
+            // Add a larger buffer to prevent edge cases and provide smoother collision
+            const buffer = 0.1;
+            const halfWallSize = this.cubeSize / 2;
+            const halfPlayerWidth = (this.PLAYER_WIDTH * this.cubeSize) / 2;
+            const halfPlayerDepth = (this.PLAYER_DEPTH * this.cubeSize) / 2;
             
-            const deltaX = playerCenterX - wallCenterX;
-            const deltaZ = playerCenterZ - wallCenterZ;
-            
-            // Push back in the direction with larger overlap
-            if (Math.abs(deltaX) > Math.abs(deltaZ)) {
-              // Horizontal collision
-              const direction = deltaX > 0 ? 1 : -1;
-              correctedPosition.x = wallCenterX + direction * (this.cubeSize / 2 + (this.PLAYER_WIDTH * this.cubeSize) / 2);
-              return {
+            if (overlapX < overlapZ) {
+              // Resolve X collision - push player away from wall in X direction
+              if (position.x < wallCenterX) {
+                // Player is to the left of wall, push left
+                correctedPosition.x = wallCenterX - halfWallSize - halfPlayerWidth - buffer;
+              } else {
+                // Player is to the right of wall, push right
+                correctedPosition.x = wallCenterX + halfWallSize + halfPlayerWidth + buffer;
+              }
+              
+              bestCorrection = {
                 collided: true,
                 correctedPosition,
                 collisionDirection: 'x'
               };
             } else {
-              // Vertical collision
-              const direction = deltaZ > 0 ? 1 : -1;
-              correctedPosition.z = wallCenterZ + direction * (this.cubeSize / 2 + (this.PLAYER_DEPTH * this.cubeSize) / 2);
-              return {
+              // Resolve Z collision - push player away from wall in Z direction
+              if (position.z < wallCenterZ) {
+                // Player is in front of wall, push forward
+                correctedPosition.z = wallCenterZ - halfWallSize - halfPlayerDepth - buffer;
+              } else {
+                // Player is behind wall, push back
+                correctedPosition.z = wallCenterZ + halfWallSize + halfPlayerDepth + buffer;
+              }
+              
+              bestCorrection = {
                 collided: true,
                 correctedPosition,
                 collisionDirection: 'z'
@@ -195,7 +238,7 @@ export class CollisionSystem {
       }
     }
     
-    return {
+    return bestCorrection || {
       collided: false,
       correctedPosition: position.clone(),
       collisionDirection: 'none'
@@ -240,20 +283,13 @@ export class CollisionSystem {
     const cubeCoords = this.worldToCubeCoords(position);
     const key = `${cubeCoords.x},${cubeCoords.y}`;
     
-    // If there's a floor cube at this position, return the height where player should be positioned
+    // If there's a floor cube at this position, return the cube size (top of the floor cube)
     if (this.floorCubes.has(key)) {
-      // Floor cubes are positioned with their top at cubeSize height
-      // Player model needs additional height offset to appear standing on top
-      // Based on ModelLoader ground offset: -box.min.y + CubeConfig.getCubeSize()
-      // The player model is approximately 1.8 units tall (scaled), and its origin is at the bottom
-      // So we need to position the player at: cubeSize + modelBottomOffset
-      const modelBottomOffset = 1.8; // Approximate offset to place player bottom at cube top
-      return this.cubeSize + modelBottomOffset;
+      return this.cubeSize;
     }
     
-    // No floor, return ground level with model offset
-    const modelBottomOffset = 1.8;
-    return modelBottomOffset;
+    // No floor, return ground level
+    return 0;
   }
 
   /**
@@ -286,6 +322,57 @@ export class CollisionSystem {
     return {
       collided: false,
       correctedPosition: newPosition.clone(),
+      collisionDirection: 'none'
+    };
+  }
+
+  /**
+   * Sweep test collision check - validates movement from one position to another
+   * This prevents fast movement from skipping through walls
+   */
+  sweepTestCollision(fromPosition: THREE.Vector3, toPosition: THREE.Vector3): CollisionResult {
+    const direction = toPosition.clone().sub(fromPosition);
+    const distance = direction.length();
+    
+    if (distance < 0.001) {
+      return this.checkCollision(toPosition);
+    }
+    
+    direction.normalize();
+    
+    // Sample points along the movement path more densely for better collision detection
+    const stepSize = Math.min(this.cubeSize * 0.2, distance / 10); // Sample every 20% of cube size or 10% of movement
+    const sampleCount = Math.max(5, Math.ceil(distance / stepSize));
+    
+    for (let i = 0; i <= sampleCount; i++) {
+      const t = i / sampleCount;
+      const samplePosition = fromPosition.clone().lerp(toPosition, t);
+      
+      const result = this.checkCollision(samplePosition);
+      if (result.collided) {
+        // If we hit something, try to find a safe position along the path
+        // Go back a bit from the collision point to find a safe spot
+        if (i > 0) {
+          const safeTParam = Math.max(0, (i - 1) / sampleCount);
+          const safePosition = fromPosition.clone().lerp(toPosition, safeTParam);
+          const safeCheck = this.checkCollision(safePosition);
+          
+          if (!safeCheck.collided) {
+            return {
+              collided: true,
+              correctedPosition: safePosition,
+              collisionDirection: result.collisionDirection
+            };
+          }
+        }
+        
+        return result;
+      }
+    }
+    
+    return {
+      collided: false,
+      correctedPosition: toPosition.clone(),
       collisionDirection: 'none'
     };
   }
