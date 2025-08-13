@@ -18,7 +18,7 @@ export class StairInteractionManager {
   private stairs: Map<string, StairInteractionData> = new Map();
   private nearbyStair: StairInteractionData | null = null;
   private interactionPopup: HTMLDivElement | null = null;
-  private readonly INTERACTION_DISTANCE = 15.0; // Distance in world units (accounting for cube size)
+  private readonly INTERACTION_DISTANCE = 12.5; // Distance in world units (accounting for cube size)
   
   // Interaction callbacks
   private onUpstairsCallback: (() => void) | null = null;
