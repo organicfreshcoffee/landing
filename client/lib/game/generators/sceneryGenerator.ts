@@ -231,12 +231,14 @@ export class ServerSceneryGenerator {
       // Only remove objects that are clearly scenery
       const isScenery = (
         child.name === 'AllFloorCubes' || // Previous floor cubes
+        child.name === 'stairs' || // Stair group
         child.name?.includes('Room') ||
         child.name?.includes('Hallway') ||
         child.name?.includes('Floor') ||
         child.name?.includes('Wall') ||
         child.name?.includes('Scenery') ||
         child.userData.isScenery === true ||
+        child.userData.type === 'stairs' || // Individual stair models
         (child.type === 'Mesh' && 
          !child.userData.isPlayer && 
          !child.userData.isOtherPlayer && 
