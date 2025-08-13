@@ -193,7 +193,7 @@ export class StairRenderer {
 
       stairModel.position.set(worldX - cubeSize, worldY, worldZ);
 
-      // Add metadata for debugging
+      // Add metadata for debugging and positioning
       stairModel.userData = {
         type: 'stairs',
         roomName: room.name,
@@ -201,7 +201,11 @@ export class StairRenderer {
         hasUpwardStair: room.hasUpwardStair,
         hasDownwardStair: room.hasDownwardStair,
         stairLocationX: room.stairLocationX,
-        stairLocationY: room.stairLocationY
+        stairLocationY: room.stairLocationY,
+        // Store world coordinates for player positioning
+        worldX: worldX - cubeSize,
+        worldY: worldY,
+        worldZ: worldZ
       };
 
       console.log(

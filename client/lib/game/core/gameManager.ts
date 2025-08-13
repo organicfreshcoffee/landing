@@ -473,6 +473,33 @@ export class GameManager {
     console.log(`✅ Player positioned at stair: (${worldX.toFixed(1)}, ${this.localPlayerRef.current.position.y.toFixed(1)}, ${worldZ.toFixed(1)})`);
   }
 
+  private findStairWorldCoordinates(roomName: string, stairType: 'upward' | 'downward'): { x: number, y: number, z: number } | null {
+    // Search through all objects in the scene to find stairs for the specified room
+    const scene = this.sceneManager.scene;
+    let foundStairData: any = null;
+    
+    scene.traverse((object) => {
+      if (object.userData.type === 'stairs' && object.userData.roomName === roomName) {
+        const hasTargetStairType = stairType === 'upward' ? object.userData.hasUpwardStair : object.userData.hasDownwardStair;
+        if (hasTargetStairType) {
+          foundStairData = object.userData;
+        }
+      }
+    });
+    
+    if (foundStairData && typeof foundStairData.worldX === 'number') {
+      console.log(`🎯 Found ${stairType} stair for room ${roomName} at world coordinates: (${foundStairData.worldX}, ${foundStairData.worldY}, ${foundStairData.worldZ})`);
+      return {
+        x: foundStairData.worldX,
+        y: foundStairData.worldY,
+        z: foundStairData.worldZ
+      };
+    }
+    
+    console.warn(`⚠️ Could not find ${stairType} stair world coordinates for room ${roomName}`);
+    return null;
+  }
+
   private async findAndPositionAtReturnStair(
     serverAddress: string, 
     targetFloor: string, 
@@ -561,7 +588,21 @@ export class GameManager {
           console.log(`${logPrefix} 👤 Player position before move: (${beforePos.x.toFixed(1)}, ${beforePos.y.toFixed(1)}, ${beforePos.z.toFixed(1)})`);
         }
         
-        this.positionPlayerAtStair(matchingStair, stairType);
+        // Get world coordinates from the rendered stair model
+        const stairWorldCoords = this.findStairWorldCoordinates(matchingRoomName, stairType);
+        
+        if (stairWorldCoords && this.localPlayerRef.current) {
+          console.log(`${logPrefix} 🎯 Using stored world coordinates: (${stairWorldCoords.x.toFixed(1)}, ${stairWorldCoords.y.toFixed(1)}, ${stairWorldCoords.z.toFixed(1)})`);
+          
+          // Position player at the stair's world coordinates
+          this.localPlayerRef.current.position.set(stairWorldCoords.x, stairWorldCoords.y, stairWorldCoords.z);
+          
+          // Position player on ground level for the new floor
+          this.positionPlayerOnGround();
+        } else {
+          console.warn(`${logPrefix} ⚠️ Could not get world coordinates, falling back to calculated position`);
+          this.positionPlayerAtStair(matchingStair, stairType);
+        }
         
         // Log player position after moving
         if (this.localPlayerRef.current) {
