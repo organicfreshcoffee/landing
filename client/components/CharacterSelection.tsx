@@ -27,7 +27,7 @@ const CHARACTER_CLASSES = {
   knt: 'Knight', // Found in sprite files
   man: 'Human (Masculine)',
   mnt: 'Mountaineer',
-  mnv: 'Maneuver', // Found in sprite files
+  mnv: 'Maneuverer', // Found in sprite files
   mst: 'Mystic',
   nja: 'Ninja',
   npc: 'Nomad',
