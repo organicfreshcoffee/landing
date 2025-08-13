@@ -25,7 +25,6 @@ const CHARACTER_CLASSES = {
   jli: 'Jelly', // Found in sprite files
   kin: 'King',
   knt: 'Knight', // Found in sprite files
-  man: 'Human (Masculine)',
   mnt: 'Mountaineer',
   mnv: 'Maneuverer', // Found in sprite files
   mst: 'Mystic',
@@ -40,8 +39,9 @@ const CHARACTER_CLASSES = {
   thf: 'Thief',
   trk: 'Cyborg',
   wmg: 'Wanderer',
-  wmn: 'Human (Feminine)', // Found in sprite files
   wnv: 'Barbarian',
+  man: 'Human (Masculine)',
+  wmn: 'Human (Feminine)', // Found in sprite files
   ybo: 'Child (Masculine)',
   ygr: 'Child (Feminine)',
   zph: 'Zeno'
