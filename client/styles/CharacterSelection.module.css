@@ -158,8 +158,8 @@
 
 /* Sprite Animation */
 .spriteContainer {
-  width: 150px;
-  height: 150px;
+  width: 100px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -170,8 +170,8 @@
 }
 
 .spriteContainerLarge {
-  width: 150px;
-  height: 150px;
+  width: 100px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -182,16 +182,16 @@
 }
 
 .sprite {
-  width: 125px;
-  height: 125px;
+  width: 100px;
+  height: 100px;
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
 }
 
 .spriteLarge {
-  width: 200px;
-  height: 200px;
+  width: 100px;
+  height: 100px;
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
