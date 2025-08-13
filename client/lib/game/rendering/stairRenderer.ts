@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ModelLoader } from '../utils/modelLoader';
 import { ServerRoom } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
+import { CubePosition } from './cubeFloorRenderer';
 
 export interface StairRenderOptions {
   cubeSize?: number;
@@ -159,14 +160,11 @@ export class StairRenderer {
       // Calculate scale factors to fit cube dimensions
       const cubeSize = CubeConfig.getCubeSize();
       const wallHeight = CubeConfig.getWallHeight();
-      
-      const scaleX = cubeSize / modelWidth;  // Fit to cube width * 2
-      const scaleY = cubeSize / modelHeight; // Fit to wall height
+
+      const scaleX = cubeSize / modelWidth;  // Fit to cube width
+      const scaleY = cubeSize / modelHeight; // Fit to cube height
       const scaleZ = cubeSize / modelDepth;  // Fit to cube depth
-      
-      // Apply individual scaling for each axis
-      // X is doubled, Y fits cube height, Z fits cube depth
-      
+
       // Scale the model appropriately
       stairModel.scale.set(scaleX, scaleY, scaleZ);
 
@@ -177,7 +175,18 @@ export class StairRenderer {
       // Position the stairs at the specified location
       const worldX = (room.position.x + room.stairLocationX) * cubeSize + cubeSize / 2;
       const worldZ = (room.position.y + room.stairLocationY) * cubeSize + cubeSize / 2;
-      const worldY = options.yOffset! + options.cubeSize! + scaledModelBottomOffset; // Place bottom of model on top of floor cube
+      
+      // Different positioning for upward vs downward stairs
+      let worldY: number;
+      if (room.hasDownwardStair) {
+        // For downward stairs, position at floor level (as if going down)
+        worldY = options.yOffset! + scaledModelBottomOffset;
+        console.log(`⬇️ Positioning downward stairs at floor level for room ${room.name}`);
+      } else {
+        // For upward stairs, position on top of floor cube
+        worldY = options.yOffset! + cubeSize + scaledModelBottomOffset;
+        console.log(`⬆️ Positioning upward stairs on top of floor cube for room ${room.name}`);
+      }
 
       stairModel.position.set(worldX, worldY, worldZ);
 
@@ -193,7 +202,7 @@ export class StairRenderer {
       };
 
       console.log(
-        `🏗️ Placed stairs for room ${room.name} at cube (${room.stairLocationX}, ${room.stairLocationY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
+        `🏗️ Placed ${room.hasDownwardStair ? 'downward' : 'upward'} stairs for room ${room.name} at cube (${room.stairLocationX}, ${room.stairLocationY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
       );
       console.log(
         `📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)}, ${scaleZ.toFixed(2)})`
@@ -250,6 +259,28 @@ export class StairRenderer {
       downwardStairs,
       percentage: totalRooms > 0 ? (roomsWithStairs / totalRooms) * 100 : 0
     };
+  }
+
+  /**
+   * Get stair coordinates that should be excluded from floor cube rendering
+   * (for downward stairs only)
+   */
+  static getExcludedFloorCoordinates(rooms: ServerRoom[]): CubePosition[] {
+    const excludedCoords: CubePosition[] = [];
+    
+    rooms.forEach(room => {
+      if (room.hasDownwardStair && 
+          room.stairLocationX !== undefined && 
+          room.stairLocationY !== undefined) {
+        excludedCoords.push({
+          x: room.position.x + room.stairLocationX,
+          y: room.position.y + room.stairLocationY
+        });
+        console.log(`🚫 Excluding floor cube at (${room.position.x + room.stairLocationX}, ${room.position.y + room.stairLocationY}) for downward stairs in room ${room.name}`);
+      }
+    });
+    
+    return excludedCoords;
   }
 
   /**

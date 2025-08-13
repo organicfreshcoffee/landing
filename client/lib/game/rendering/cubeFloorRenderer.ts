@@ -25,6 +25,7 @@ export interface CubeInfo {
 export class CubeFloorRenderer {
   private static cubeRegistry = new Map<string, CubeInfo>();
   private static sceneGroups = new Map<THREE.Scene, THREE.Group>();
+  private static excludedCoordinates = new Set<string>();
 
   private static getCubeKey(x: number, y: number): string {
     return `${x},${y}`;
@@ -35,6 +36,19 @@ export class CubeFloorRenderer {
    */
   static clearRegistry(): void {
     this.cubeRegistry.clear();
+    this.excludedCoordinates.clear();
+  }
+
+  /**
+   * Set coordinates to exclude from rendering (e.g., for downward stairs)
+   */
+  static setExcludedCoordinates(coordinates: CubePosition[]): void {
+    this.excludedCoordinates.clear();
+    coordinates.forEach(coord => {
+      const key = this.getCubeKey(coord.x, coord.y);
+      this.excludedCoordinates.add(key);
+    });
+    console.log(`🚫 Set ${coordinates.length} coordinates to exclude from floor rendering`);
   }
 
   /**
@@ -113,6 +127,12 @@ export class CubeFloorRenderer {
 
     // Render all registered cubes
     this.cubeRegistry.forEach((cubeInfo, key) => {
+      // Skip excluded coordinates
+      if (this.excludedCoordinates.has(key)) {
+        console.log(`🚫 Skipping excluded cube at (${cubeInfo.position.x}, ${cubeInfo.position.y})`);
+        return;
+      }
+
       // Determine the cube type for texturing
       let cubeType: CubeType;
       let material: THREE.MeshLambertMaterial;
@@ -231,6 +251,7 @@ export class CubeFloorRenderer {
    */
   static dispose(): void {
     this.cubeRegistry.clear();
+    this.excludedCoordinates.clear();
     this.sceneGroups.forEach((group, scene) => {
       scene.remove(group);
       group.traverse((child) => {

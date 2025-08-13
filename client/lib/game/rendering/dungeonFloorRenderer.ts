@@ -107,6 +107,10 @@ export class DungeonFloorRenderer {
       width: opts.hallwayWidth
     });
     
+    // Set excluded coordinates for downward stairs before rendering cubes
+    const excludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
+    CubeFloorRenderer.setExcludedCoordinates(excludedCoords);
+    
     // Render all cubes to scene
     const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
       cubeSize: opts.cubeSize,
