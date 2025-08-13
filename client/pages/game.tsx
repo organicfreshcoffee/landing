@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { GameManager, GameState } from '../lib/game';
 import { ensureProtocol } from '../lib/urlUtils';
+import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -12,6 +13,7 @@ export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameManagerRef = useRef<GameManager | null>(null);
   
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterData | null>(null);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
@@ -27,10 +29,11 @@ export default function Game() {
 
   // Initialize game when component mounts and server is available
   useEffect(() => {
-    if (!server || !user || !canvasRef.current) return;
+    if (!server || !user || !canvasRef.current || !selectedCharacter) return;
 
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
     console.log('🔗 Game: Connecting to server with protocol:', serverAddress);
+    console.log('🎮 Selected Character:', selectedCharacter);
     
     // Initialize game manager
     const initGame = async () => {
@@ -44,7 +47,8 @@ export default function Game() {
       if (typeof window !== 'undefined') {
         (window as any).gameDebug = {
           gameManager,
-          debugInfo: () => gameManager.debugInfo
+          debugInfo: () => gameManager.debugInfo,
+          selectedCharacter
         };
       }
     };
@@ -57,7 +61,7 @@ export default function Game() {
         gameManagerRef.current = null;
       }
     };
-  }, [server, user]);
+  }, [server, user, selectedCharacter]);
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
@@ -65,6 +69,17 @@ export default function Game() {
       gameManagerRef.current.cleanup();
       gameManagerRef.current = null;
     }
+    setSelectedCharacter(null);
+    router.push('/dashboard');
+  };
+
+  // Handle character selection
+  const handleCharacterSelected = (character: CharacterData) => {
+    setSelectedCharacter(character);
+  };
+
+  // Handle back from character selection
+  const handleBackFromCharacterSelection = () => {
     router.push('/dashboard');
   };
 
@@ -92,6 +107,16 @@ export default function Game() {
     );
   }
 
+  // Show character selection if no character is selected yet
+  if (!selectedCharacter) {
+    return (
+      <CharacterSelection 
+        onCharacterSelected={handleCharacterSelected}
+        onBack={handleBackFromCharacterSelection}
+      />
+    );
+  }
+
   return (
     <div className={styles.gameContainer}>
       {/* HUD */}
@@ -102,6 +127,9 @@ export default function Game() {
           </button>
           <div className={styles.serverInfo}>
             Server: {ensureProtocol(decodeURIComponent(server as string))}
+          </div>
+          <div className={styles.characterInfo}>
+            Character: {selectedCharacter.name} (Style {selectedCharacter.style})
           </div>
         </div>
         
