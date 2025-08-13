@@ -270,9 +270,6 @@ export class DungeonFloorRenderer {
     
     console.log(`🏗️ Rendering dungeon floor from layout: ${layout.dungeonDagNodeName}`);
     
-    // Clear previous cube registrations
-    CubeFloorRenderer.clearRegistry();
-    
     // Set excluded coordinates for downward stairs BEFORE any registration begins
     console.log(`🔍 About to check for downward stairs in ${layout.rooms.length} rooms...`);
     const excludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
@@ -298,9 +295,15 @@ export class DungeonFloorRenderer {
     });
     
     // Render all cubes
+    console.log(`🔥 DEBUG: About to call CubeFloorRenderer.renderAllCubes()`);
     const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
       cubeSize: opts.cubeSize,
       yOffset: opts.yOffset
+    });
+    console.log(`🔥 DEBUG: CubeFloorRenderer.renderAllCubes() returned:`, {
+      floorGroup,
+      childrenCount: floorGroup?.children?.length || 0,
+      groupName: floorGroup?.name
     });
     
     // Render stair models if enabled

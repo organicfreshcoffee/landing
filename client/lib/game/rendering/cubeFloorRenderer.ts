@@ -99,7 +99,10 @@ export class CubeFloorRenderer {
     color: number,
     type: 'room' | 'hallway'
   ): void {
-    console.log(`📝 registerCubes called for ${type} with ${coordinates.length} coordinates. Current exclusions: ${this.excludedCoordinates.size}`);
+    console.log(`� DEBUG: registerCubes called for ${type} with ${coordinates.length} coordinates. Current registry size: ${this.cubeRegistry.size}, Current exclusions: ${this.excludedCoordinates.size}`);
+    
+    let registeredCount = 0;
+    let excludedCount = 0;
     
     coordinates.forEach(coord => {
       const key = this.getCubeKey(coord.x, coord.y);
@@ -107,6 +110,7 @@ export class CubeFloorRenderer {
       // Check if this coordinate is excluded (e.g., for downward stairs)
       if (this.excludedCoordinates.has(key)) {
         console.log(`🚫 Skipping registration of excluded coordinate (${coord.x}, ${coord.y}) for ${type}`);
+        excludedCount++;
         return;
       }
       
@@ -119,16 +123,19 @@ export class CubeFloorRenderer {
           color: 0x800080, // Purple for overlaps
           type: 'overlap'
         });
-        console.log(`🟣 Overlap detected at (${coord.x}, ${coord.y})`);
+        registeredCount++;
       } else {
-        // First time registration
+        // Register new cube
         this.cubeRegistry.set(key, {
           position: coord,
           color,
           type
         });
+        registeredCount++;
       }
     });
+    
+    console.log(`🔥 DEBUG: registerCubes for ${type} completed. Registered: ${registeredCount}, Excluded: ${excludedCount}, New registry size: ${this.cubeRegistry.size}`);
   }
 
   /**
@@ -138,6 +145,24 @@ export class CubeFloorRenderer {
     scene: THREE.Scene,
     options: CubeFloorOptions = {}
   ): THREE.Group {
+    console.log(`🔥 DEBUG: CubeFloorRenderer.renderAllCubes() called!`);
+    console.log(`🔥 DEBUG: Registry size: ${this.cubeRegistry.size}`);
+    console.log(`🔥 DEBUG: Excluded coordinates: ${this.excludedCoordinates.size}`);
+    
+    // Debug: Log some registry contents
+    if (this.cubeRegistry.size > 0) {
+      console.log(`🔥 DEBUG: First 5 registry entries:`);
+      let count = 0;
+      this.cubeRegistry.forEach((cubeInfo, key) => {
+        if (count < 5) {
+          console.log(`  ${key}: ${cubeInfo.type} at (${cubeInfo.position.x}, ${cubeInfo.position.y})`);
+          count++;
+        }
+      });
+    } else {
+      console.log(`🔥 DEBUG: Registry is EMPTY! This is why no floors are rendering!`);
+    }
+
     const {
       cubeSize = CubeConfig.getCubeSize(),
       yOffset = 0
@@ -145,15 +170,26 @@ export class CubeFloorRenderer {
 
     // Create or get existing group for this scene
     let sceneGroup = this.sceneGroups.get(scene);
-    if (!sceneGroup) {
+    if (!sceneGroup || !scene.children.includes(sceneGroup)) {
+      // Group doesn't exist or was removed from scene during clearing
+      console.log(`🔥 DEBUG: Creating new sceneGroup (old one was ${!sceneGroup ? 'null' : 'removed from scene'})`);
       sceneGroup = new THREE.Group();
       sceneGroup.name = 'AllFloorCubes';
       this.sceneGroups.set(scene, sceneGroup);
       scene.add(sceneGroup);
+      console.log(`🔥 DEBUG: Added new sceneGroup to scene. Scene children count: ${scene.children.length}`);
+    } else {
+      console.log(`🔥 DEBUG: Reusing existing sceneGroup with ${sceneGroup.children.length} children`);
     }
 
     // Clear existing cubes
+    console.log(`🔥 DEBUG: About to clear sceneGroup. Current children: ${sceneGroup.children.length}`);
     sceneGroup.clear();
+    console.log(`🔥 DEBUG: After clear, sceneGroup children: ${sceneGroup.children.length}`);
+    
+    // Verify the group is still in the scene
+    const isInScene = scene.children.includes(sceneGroup);
+    console.log(`🔥 DEBUG: Is sceneGroup still in scene after clear? ${isInScene}`);
 
     // Create geometry once for all cubes
     const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
@@ -214,6 +250,13 @@ export class CubeFloorRenderer {
     });
 
     console.log(`🎨 Rendered floor cubes with textures: ${roomCount} rooms, ${hallwayCount} hallways, ${overlapCount} overlaps`);
+    console.log(`🔥 DEBUG: Final sceneGroup state:`, {
+      childrenCount: sceneGroup.children.length,
+      isInScene: scene.children.includes(sceneGroup),
+      groupName: sceneGroup.name,
+      groupVisible: sceneGroup.visible,
+      sceneChildrenTotal: scene.children.length
+    });
     
     return sceneGroup;
   }
