@@ -118,8 +118,9 @@ export class CubeFloorRenderer {
       let material: THREE.MeshLambertMaterial;
 
       if (cubeInfo.type === 'overlap') {
-        // Use a special purple material for overlaps (no texture)
-        material = new THREE.MeshLambertMaterial({ color: 0x800080 });
+        // Use hallway floor texture for overlaps
+        cubeType = 'hallway-floor';
+        material = TextureManager.createMaterialWithTexture(cubeType);
         overlapCount++;
       } else if (cubeInfo.type === 'hallway') {
         cubeType = 'hallway-floor';
