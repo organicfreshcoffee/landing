@@ -45,6 +45,8 @@ export class StairRenderer {
         throw new Error('Failed to load stair model');
       }
 
+      console.log(`🏗️ Stair model loaded successfully, children count: ${model.children.length}`);
+      
       // Store the template model
       this.stairModel = model;
       
@@ -94,25 +96,38 @@ export class StairRenderer {
     const stairGroup = new THREE.Group();
     stairGroup.name = 'stairs';
 
-    console.log(`🏗️ Rendering stairs for ${rooms.length} rooms...`);
+    console.log(`🏗️ StairRenderer: Checking ${rooms.length} rooms for stairs...`);
+
+    // First, let's see which rooms have stairs
+    const roomsWithStairs = rooms.filter(room => this.hasStairs(room));
+    console.log(`🏗️ Found ${roomsWithStairs.length} rooms with stairs:`, 
+      roomsWithStairs.map(r => `${r.name}(${r.stairLocationX},${r.stairLocationY})`));
 
     let stairCount = 0;
     for (const room of rooms) {
       if (this.hasStairs(room)) {
         try {
+          console.log(`🏗️ Rendering stairs for room ${room.name}...`);
           const stairMesh = await this.renderRoomStairs(room, opts);
           if (stairMesh) {
             stairGroup.add(stairMesh);
             stairCount++;
+            console.log(`✅ Successfully added stairs for room ${room.name}`);
+          } else {
+            console.warn(`⚠️ Failed to create stairs for room ${room.name}`);
           }
         } catch (error) {
-          console.warn(`Failed to render stairs for room ${room.name}:`, error);
+          console.warn(`❌ Exception rendering stairs for room ${room.name}:`, error);
         }
       }
     }
 
     scene.add(stairGroup);
-    console.log(`✅ Rendered ${stairCount} stair models`);
+    console.log(`✅ StairRenderer: Added stair group to scene with ${stairCount} stair models`);
+    console.log(`🔍 Stair group info: name="${stairGroup.name}", children=${stairGroup.children.length}, visible=${stairGroup.visible}`);
+    
+    // Debug: Check scene hierarchy
+    console.log(`🔍 Scene now has ${scene.children.length} top-level objects`);
     
     return stairGroup;
   }
@@ -134,17 +149,36 @@ export class StairRenderer {
       // Load the stair model
       const stairModel = await this.loadStairModel();
       
-      // Scale the model to fit on a single cube tile
-      stairModel.scale.set(
-        options.stairScale!,
-        options.stairScale!,
-        options.stairScale!
-      );
+      // Calculate bounding box to determine original model dimensions
+      const box = new THREE.Box3().setFromObject(stairModel);
+      const modelWidth = box.max.x - box.min.x;
+      const modelHeight = box.max.y - box.min.y;
+      const modelDepth = box.max.z - box.min.z;
+      const modelBottomOffset = -box.min.y; // Offset to place bottom of model at Y=0
+
+      // Calculate scale factors to fit cube dimensions
+      const cubeSize = CubeConfig.getCubeSize();
+      const wallHeight = CubeConfig.getWallHeight();
+      
+      const scaleX = cubeSize / modelWidth;  // Fit to cube width
+      const scaleY = wallHeight / modelHeight; // Fit to wall height
+      const scaleZ = cubeSize / modelDepth;  // Fit to cube depth
+      
+      // Apply uniform scaling for X and Z to maintain proportions
+      // but scale Y independently to reach wall height
+      const uniformScale = Math.min(scaleX, scaleZ);
+      
+      // Scale the model appropriately
+      stairModel.scale.set(uniformScale, scaleY, uniformScale);
+
+      // Recalculate bounding box after scaling
+      const scaledBox = new THREE.Box3().setFromObject(stairModel);
+      const scaledModelBottomOffset = -scaledBox.min.y;
 
       // Position the stairs at the specified location
-      const worldX = (room.position.x + room.stairLocationX) * options.cubeSize! + options.cubeSize! / 2;
-      const worldZ = (room.position.y + room.stairLocationY) * options.cubeSize! + options.cubeSize! / 2;
-      const worldY = options.yOffset! + options.cubeSize! / 2; // Place on top of the floor cube
+      const worldX = (room.position.x + room.stairLocationX) * cubeSize + cubeSize / 2;
+      const worldZ = (room.position.y + room.stairLocationY) * cubeSize + cubeSize / 2;
+      const worldY = options.yOffset! + options.cubeSize! + scaledModelBottomOffset; // Place bottom of model on top of floor cube
 
       stairModel.position.set(worldX, worldY, worldZ);
 
@@ -162,6 +196,12 @@ export class StairRenderer {
       console.log(
         `🏗️ Placed stairs for room ${room.name} at cube (${room.stairLocationX}, ${room.stairLocationY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
       );
+      console.log(
+        `📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${uniformScale.toFixed(2)}, ${scaleY.toFixed(2)}, ${uniformScale.toFixed(2)})`
+      );
+      console.log(
+        `🎯 Target: cube=${cubeSize}×${cubeSize}, wall height=${wallHeight}`
+      );
 
       return stairModel;
     } catch (error) {
@@ -174,7 +214,11 @@ export class StairRenderer {
    * Check if a room has stairs
    */
   private static hasStairs(room: ServerRoom): boolean {
-    return room.hasUpwardStair || room.hasDownwardStair;
+    const hasStairs = room.hasUpwardStair || room.hasDownwardStair;
+    if (hasStairs) {
+      console.log(`🔍 Room ${room.name} has stairs: upward=${room.hasUpwardStair}, downward=${room.hasDownwardStair}, location=(${room.stairLocationX},${room.stairLocationY})`);
+    }
+    return hasStairs;
   }
 
   /**
@@ -230,6 +274,10 @@ export class StairRenderer {
     }
     this.isLoading = false;
     this.loadPromise = null;
+    
+    // Also dispose of ModelLoader resources
+    ModelLoader.dispose();
+    
     console.log('🧹 Stair renderer resources cleaned up');
   }
 }

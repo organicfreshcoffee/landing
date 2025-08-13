@@ -1,15 +1,31 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three-stdlib';
+import { DRACOLoader } from 'three-stdlib';
 import { SkeletonUtils } from 'three-stdlib';
 import { ModelData } from '../types';
 import { CubeConfig } from '../config/cubeConfig';
 
 export class ModelLoader {
   private static loader: GLTFLoader | null = null;
+  private static dracoLoader: DRACOLoader | null = null;
+
+  private static getDracoLoader(): DRACOLoader {
+    if (!this.dracoLoader) {
+      this.dracoLoader = new DRACOLoader();
+      // Set the path to the DRACO decoder (served from node_modules)
+      this.dracoLoader.setDecoderPath('/draco/');
+      console.log('🔧 DRACOLoader initialized with decoder path: /draco/');
+    }
+    return this.dracoLoader;
+  }
 
   private static getLoader(): GLTFLoader {
-    // Always create a fresh loader to avoid caching issues
-    return new GLTFLoader();
+    // Always create a fresh loader to avoid caching issues, but with DRACO support
+    const loader = new GLTFLoader();
+    const dracoLoader = this.getDracoLoader();
+    loader.setDRACOLoader(dracoLoader);
+    console.log('🔧 GLTFLoader configured with DRACO support');
+    return loader;
   }
 
   static async loadPlayerModel(): Promise<ModelData> {
@@ -168,5 +184,17 @@ export class ModelLoader {
       console.warn(`Failed to load ${assetName}:`, error);
       return null;
     }
+  }
+
+  /**
+   * Clean up loaders
+   */
+  static dispose(): void {
+    if (this.dracoLoader) {
+      this.dracoLoader.dispose();
+      this.dracoLoader = null;
+    }
+    this.loader = null;
+    console.log('🧹 ModelLoader resources cleaned up');
   }
 }
