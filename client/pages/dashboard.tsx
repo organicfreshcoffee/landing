@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [customServerAddress, setCustomServerAddress] = useState('');
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -331,10 +332,184 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    // TODO: Implement delete account functionality
-    console.log('Delete account clicked');
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    
+    // Confirm deletion with user
+    const userConfirmation = window.confirm(
+      "⚠️ WARNING: This action is IRREVERSIBLE!\n\n" +
+      "This will permanently delete:\n" +
+      "• All your game data from all listed servers\n" +
+      "• Your login history\n" +
+      "• Your account from Firebase\n\n" +
+      "Are you absolutely sure you want to delete your account?"
+    );
+    
+    if (!userConfirmation) return;
+    
+    // Second confirmation
+    const finalConfirmation = window.confirm(
+      "This is your final warning!\n\n" +
+      "Once deleted, your account and all associated data cannot be recovered.\n\n" +
+      "Type your email address in the next prompt to confirm deletion."
+    );
+    
+    if (!finalConfirmation) return;
+    
+    // Email confirmation
+    const emailConfirmation = window.prompt(
+      `Please type your email address (${user.email}) to confirm account deletion:`
+    );
+    
+    if (emailConfirmation !== user.email) {
+      alert("Email confirmation did not match. Account deletion cancelled.");
+      return;
+    }
+    
+    setIsDeleting(true);
     setIsAccountMenuOpen(false);
+    
+    try {
+      const token = await user.getIdToken();
+      const deleteResults = {
+        gameServers: [] as any[],
+        landingPage: null as any,
+        firebase: null as any
+      };
+      
+      console.log('Starting account deletion process...');
+      
+      // 1. Delete data from all game servers
+      console.log('Deleting data from game servers...');
+      const serverDeletePromises = servers.map(async (server) => {
+        try {
+          const formattedUrl = formatServerUrl(server.server_address);
+          const response = await axios.delete(`${formattedUrl}/api/user/delete-data`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            timeout: 15000 // 15 second timeout for deletion
+          });
+          
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: true,
+            data: response.data
+          };
+        } catch (error) {
+          console.warn(`Failed to delete data from server ${server.server_name}:`, error);
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      });
+      
+      deleteResults.gameServers = await Promise.all(serverDeletePromises);
+      
+      // 2. Delete data from landing page
+      console.log('Deleting data from landing page...');
+      try {
+        const landingDeleteResponse = await axios.delete(apiEndpoints.deleteUserData(), {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          timeout: 10000
+        });
+        
+        deleteResults.landingPage = {
+          success: true,
+          data: landingDeleteResponse.data
+        };
+      } catch (error) {
+        console.warn('Failed to delete landing page data:', error);
+        deleteResults.landingPage = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+      
+      // 3. Delete user from Firebase Authentication
+      console.log('Deleting Firebase user account...');
+      try {
+        await user.delete();
+        deleteResults.firebase = {
+          success: true,
+          message: 'Firebase user account deleted successfully'
+        };
+      } catch (error) {
+        console.error('Failed to delete Firebase user:', error);
+        deleteResults.firebase = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+        
+        // If Firebase deletion fails, we should still log out the user
+        // but inform them about the partial failure
+      }
+      
+      // Log deletion summary
+      const successfulServerDeletions = deleteResults.gameServers.filter(r => r.success).length;
+      const failedServerDeletions = deleteResults.gameServers.filter(r => !r.success).length;
+      
+      console.log('Account deletion completed:', {
+        gameServers: {
+          successful: successfulServerDeletions,
+          failed: failedServerDeletions
+        },
+        landingPage: deleteResults.landingPage?.success ? 'success' : 'failed',
+        firebase: deleteResults.firebase?.success ? 'success' : 'failed'
+      });
+      
+      // 4. Logout and redirect
+      console.log('Logging out user...');
+      await logout();
+      
+      // Show completion message
+      if (deleteResults.firebase?.success) {
+        alert(
+          `Account deletion completed!\n\n` +
+          `Game servers: ${successfulServerDeletions} successful, ${failedServerDeletions} failed\n` +
+          `Landing page data: ${deleteResults.landingPage?.success ? 'deleted' : 'failed'}\n` +
+          `Firebase account: deleted\n\n` +
+          `You will now be redirected to the home page.`
+        );
+      } else {
+        alert(
+          `Account deletion partially completed!\n\n` +
+          `Game servers: ${successfulServerDeletions} successful, ${failedServerDeletions} failed\n` +
+          `Landing page data: ${deleteResults.landingPage?.success ? 'deleted' : 'failed'}\n` +
+          `Firebase account: FAILED TO DELETE\n\n` +
+          `Please contact support for assistance with Firebase account deletion: https://github.com/organicfreshcoffee/landing/issues\n` +
+          `You will now be logged out and redirected.`
+        );
+      }
+      
+      router.push('/');
+      
+    } catch (error) {
+      console.error('Error during account deletion:', error);
+      alert(
+        'An unexpected error occurred during account deletion.\n\n' +
+        'Some data may have been deleted, but the process was not completed.\n' +
+        'Please contact support for assistance: https://github.com/organicfreshcoffee/landing/issues\n\n' +
+        'You will now be logged out for security.'
+      );
+      
+      // Emergency logout
+      try {
+        await logout();
+        router.push('/');
+      } catch (logoutError) {
+        console.error('Failed to logout after deletion error:', logoutError);
+        window.location.href = '/';
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getServerStatus = (serverId: string) => {
@@ -392,6 +567,22 @@ export default function Dashboard() {
         </div>
       )}
       
+      {isDeleting && (
+        <div className={styles.exportOverlay}>
+          <div className={styles.exportModal}>
+            <div className={styles.deleteSpinner}></div>
+            <h3>Deleting Account</h3>
+            <p>Please wait while we permanently delete your data...</p>
+            <p><small>⚠️ This process cannot be undone</small></p>
+            <div className={styles.deletionSteps}>
+              <div>🎮 Deleting game server data...</div>
+              <div>📝 Deleting login history...</div>
+              <div>🔐 Deleting Firebase account...</div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className={styles.header}>
         <h1 className={styles.title}>Organic Fresh Coffee</h1>
         <div className={styles.userInfo}>
@@ -416,7 +607,7 @@ export default function Dashboard() {
                 <button 
                   onClick={handleExportAccountData}
                   className={styles.accountMenuItem}
-                  disabled={isExporting}
+                  disabled={isExporting || isDeleting}
                 >
                   {isExporting ? (
                     <>
@@ -429,9 +620,17 @@ export default function Dashboard() {
                 </button>
                 <button 
                   onClick={handleDeleteAccount}
-                  className={styles.accountMenuItem}
+                  className={`${styles.accountMenuItem} ${styles.dangerButton}`}
+                  disabled={isExporting || isDeleting}
                 >
-                  🗑️ Delete Account
+                  {isDeleting ? (
+                    <>
+                      <span className={styles.spinner}></span>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>🗑️ Delete Account</>
+                  )}
                 </button>
               </div>
             )}

@@ -30,6 +30,7 @@ export const apiEndpoints = {
   
   // User data endpoints
   exportUserData: () => `${getApiUrl()}/api/user/export-data`,
+  deleteUserData: () => `${getApiUrl()}/api/user/delete-data`,
   
   // Health check
   health: () => `${getApiUrl()}/health`,

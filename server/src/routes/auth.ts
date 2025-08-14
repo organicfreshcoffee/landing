@@ -162,4 +162,35 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
   }
 });
 
+// Endpoint to delete user data from landing page
+router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log(`Delete data request from user: ${req.user?.uid} (${req.user?.email})`);
+
+    const db = getDatabase();
+    const userLoginsCollection = db.collection('user_logins');
+
+    // Delete all login records for the authenticated user
+    const deleteResult = await userLoginsCollection.deleteMany({ 
+      userId: req.user?.uid 
+    });
+
+    console.log(`Deleted ${deleteResult.deletedCount} login records for user ${req.user?.uid}`);
+    
+    res.json({
+      success: true,
+      message: 'User data deleted successfully',
+      deletedRecords: deleteResult.deletedCount,
+      userId: req.user?.uid
+    });
+  } catch (error) {
+    console.error('Error deleting user data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete user data',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
