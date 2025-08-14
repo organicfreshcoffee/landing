@@ -13,10 +13,30 @@ interface Server {
   is_third_party: boolean;
 }
 
+interface HealthResponse {
+  status: string;
+  timestamp: string;
+}
+
+interface PlayerCountResponse {
+  success: boolean;
+  data: {
+    totalPlayers: number;
+    playersByFloor: Record<string, number>;
+  };
+}
+
+interface ServerStatus {
+  isOnline: boolean;
+  playerCount: number;
+  lastChecked: string;
+}
+
 export default function Dashboard() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
   const [servers, setServers] = useState<Server[]>([]);
+  const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({});
   const [loadingServers, setLoadingServers] = useState(true);
   const [customServerAddress, setCustomServerAddress] = useState('');
 
@@ -31,8 +51,17 @@ export default function Dashboard() {
       // Log API configuration in development
       logApiConfig();
       fetchServers();
+      
+      // Set up periodic refresh every 30 seconds
+      const interval = setInterval(() => {
+        if (servers.length > 0) {
+          checkAllServerStatuses(servers);
+        }
+      }, 30000);
+      
+      return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, servers.length]);
 
   const fetchServers = async () => {
     if (!user) return;
@@ -45,11 +74,67 @@ export default function Dashboard() {
         }
       });
       setServers(response.data);
+      
+      // After fetching servers, check their status
+      await checkAllServerStatuses(response.data);
     } catch (error) {
       console.error('Error fetching servers:', error);
     } finally {
       setLoadingServers(false);
     }
+  };
+
+  const checkServerHealth = async (serverAddress: string): Promise<boolean> => {
+    try {
+      const response = await axios.get(`${serverAddress}/health`, {
+        timeout: 5000 // 5 second timeout
+      });
+      return response.data.status === 'ok';
+    } catch (error) {
+      console.warn(`Health check failed for ${serverAddress}:`, error);
+      return false;
+    }
+  };
+
+  const getPlayerCount = async (serverAddress: string): Promise<number> => {
+    try {
+      const response = await axios.get(`${serverAddress}/api/dungeon/player-count`, {
+        timeout: 5000 // 5 second timeout
+      });
+      return response.data.success ? response.data.data.totalPlayers : 0;
+    } catch (error) {
+      console.warn(`Player count fetch failed for ${serverAddress}:`, error);
+      return 0;
+    }
+  };
+
+  const checkServerStatus = async (server: Server): Promise<ServerStatus> => {
+    const [isOnline, playerCount] = await Promise.all([
+      checkServerHealth(server.server_address),
+      getPlayerCount(server.server_address)
+    ]);
+
+    return {
+      isOnline,
+      playerCount: isOnline ? playerCount : 0,
+      lastChecked: new Date().toISOString()
+    };
+  };
+
+  const checkAllServerStatuses = async (serverList: Server[]) => {
+    const statusPromises = serverList.map(async (server) => {
+      const status = await checkServerStatus(server);
+      return { serverId: server._id, status };
+    });
+
+    const results = await Promise.all(statusPromises);
+    const newStatuses: Record<string, ServerStatus> = {};
+    
+    results.forEach(({ serverId, status }) => {
+      newStatuses[serverId] = status;
+    });
+
+    setServerStatuses(newStatuses);
   };
 
   const handleLogout = async () => {
@@ -70,6 +155,40 @@ export default function Dashboard() {
     if (customServerAddress.trim()) {
       handleConnect(customServerAddress.trim());
     }
+  };
+
+  const getServerStatus = (serverId: string) => {
+    return serverStatuses[serverId] || { isOnline: false, playerCount: 0, lastChecked: '' };
+  };
+
+  const renderServerStatus = (serverId: string) => {
+    const status = getServerStatus(serverId);
+    if (!status.lastChecked) {
+      return <span className={styles.statusChecking}>Checking...</span>;
+    }
+    
+    return (
+      <span className={status.isOnline ? styles.statusOnline : styles.statusOffline}>
+        {status.isOnline ? 'Online' : 'Offline'}
+      </span>
+    );
+  };
+
+  const handleRefreshStatuses = async () => {
+    await checkAllServerStatuses(servers);
+  };
+
+  const renderPlayerCount = (serverId: string) => {
+    const status = getServerStatus(serverId);
+    if (!status.lastChecked) {
+      return <span className={styles.playerCountLoading}>-</span>;
+    }
+    
+    return (
+      <span className={styles.playerCount}>
+        {status.isOnline ? status.playerCount : '-'}
+      </span>
+    );
   };
 
   if (loading) {
@@ -93,7 +212,16 @@ export default function Dashboard() {
       </div>
 
       <div className={styles.content}>
-        <h2 className={styles.sectionTitle}>Game Servers</h2>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Game Servers</h2>
+          <button 
+            onClick={handleRefreshStatuses} 
+            className={styles.refreshButton}
+            disabled={loadingServers || servers.length === 0}
+          >
+            🔄 Refresh Status
+          </button>
+        </div>
         {loadingServers ? (
           <div className={styles.loading}>Loading servers...</div>
         ) : (
@@ -126,16 +254,21 @@ export default function Dashboard() {
                 <div className={styles.tableHeader}>
                   <div className={styles.tableCell}>Server Name</div>
                   <div className={styles.tableCell}>Server Address</div>
+                  <div className={styles.tableCell}>Status</div>
+                  <div className={styles.tableCell}>Players</div>
                   <div className={styles.tableCell}>Action</div>
                 </div>
                 {servers.filter(server => server.is_official).map((server) => (
                   <div key={server._id} className={styles.tableRow}>
                     <div className={styles.tableCell}>{server.server_name}</div>
                     <div className={styles.tableCell}>{server.server_address}</div>
+                    <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
+                    <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
                     <div className={styles.tableCell}>
                       <button 
                         className={styles.tableConnectButton}
                         onClick={() => handleConnect(server.server_address)}
+                        disabled={!getServerStatus(server._id).isOnline}
                       >
                         Connect
                       </button>
@@ -155,16 +288,21 @@ export default function Dashboard() {
                 <div className={styles.tableHeader}>
                   <div className={styles.tableCell}>Server Name</div>
                   <div className={styles.tableCell}>Server Address</div>
+                  <div className={styles.tableCell}>Status</div>
+                  <div className={styles.tableCell}>Players</div>
                   <div className={styles.tableCell}>Action</div>
                 </div>
                 {servers.filter(server => server.is_third_party).map((server) => (
                   <div key={server._id} className={styles.tableRow}>
                     <div className={styles.tableCell}>{server.server_name}</div>
                     <div className={styles.tableCell}>{server.server_address}</div>
+                    <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
+                    <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
                     <div className={styles.tableCell}>
                       <button 
                         className={styles.tableConnectButton}
                         onClick={() => handleConnect(server.server_address)}
+                        disabled={!getServerStatus(server._id).isOnline}
                       >
                         Connect
                       </button>
