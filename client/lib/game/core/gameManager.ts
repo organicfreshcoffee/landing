@@ -29,7 +29,13 @@ export class GameManager {
   constructor(
     canvas: HTMLCanvasElement,
     private onStateChange: (state: GameState) => void,
-    private user: any
+    private user: any,
+    private onFloorTransition?: (transition: {
+      isLoading: boolean;
+      direction: 'upstairs' | 'downstairs';
+      fromFloor: string;
+      toFloor: string;
+    }) => void
   ) {
     this.sceneManager = new SceneManager(canvas);
     this.webSocketManager = new WebSocketManager(onStateChange, this.handleGameMessage.bind(this));
@@ -378,14 +384,44 @@ export class GameManager {
       const currentFloor = stairData.roomName; // The floor we're coming from
       console.log(`🔺 Going upstairs from ${currentFloor} to floor: ${targetFloor}`);
       
+      // Show loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: true,
+          direction: 'upstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
       
       // Find the downward stair on the target floor that leads back to our current floor
       await this.findAndPositionAtReturnStair(serverAddress, targetFloor, currentFloor, 'downward');
       
+      // Hide loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'upstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
     } catch (error) {
       console.error('❌ Error during upstairs transition:', error);
+      
+      // Hide loading screen on error
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'upstairs',
+          fromFloor: '',
+          toFloor: ''
+        });
+      }
     }
   }
 
@@ -411,14 +447,44 @@ export class GameManager {
       const currentFloor = stairData.roomName; // The floor we're coming from
       console.log(`🔻 Going downstairs from ${currentFloor} to floor: ${targetFloor}`);
       
+      // Show loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: true,
+          direction: 'downstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
       
       // Find the upward stair on the target floor that leads back to our current floor
       await this.findAndPositionAtReturnStair(serverAddress, targetFloor, currentFloor, 'upward');
       
+      // Hide loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'downstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
     } catch (error) {
       console.error('❌ Error during downstairs transition:', error);
+      
+      // Hide loading screen on error
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'downstairs',
+          fromFloor: '',
+          toFloor: ''
+        });
+      }
     }
   }
 
