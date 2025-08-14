@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import { GameManager, GameState } from '../lib/game';
 import { ensureProtocol } from '../lib/urlUtils';
 import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
+import FloorTransitionLoader from '../components/FloorTransitionLoader';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -19,6 +20,18 @@ export default function Game() {
     error: null,
     loading: true
   });
+  const [floorTransition, setFloorTransition] = useState<{
+    isLoading: boolean;
+    direction: 'upstairs' | 'downstairs';
+    fromFloor: string;
+    toFloor: string;
+  }>({
+    isLoading: false,
+    direction: 'upstairs',
+    fromFloor: '',
+    toFloor: ''
+  });
+  const [currentFloor, setCurrentFloor] = useState<string>('Unknown');
 
   // Handle authentication
   useEffect(() => {
@@ -37,7 +50,13 @@ export default function Game() {
     
     // Initialize game manager
     const initGame = async () => {
-      const gameManager = new GameManager(canvasRef.current!, setGameState, user);
+      const gameManager = new GameManager(
+        canvasRef.current!, 
+        setGameState, 
+        user,
+        setFloorTransition, // Pass floor transition state setter
+        setCurrentFloor // Pass current floor state setter
+      );
       gameManagerRef.current = gameManager;
       
       // Connect to server
@@ -131,6 +150,9 @@ export default function Game() {
           <div className={styles.characterInfo}>
             Character: {selectedCharacter.name} (Style {selectedCharacter.style})
           </div>
+          <div className={styles.floorInfo}>
+            Floor: {currentFloor}
+          </div>
         </div>
         
         <div className={styles.topRight}>
@@ -189,6 +211,14 @@ export default function Game() {
 
       {/* Game Canvas */}
       <canvas ref={canvasRef} className={styles.gameCanvas} />
+
+      {/* Floor Transition Loading Screen */}
+      <FloorTransitionLoader
+        isVisible={floorTransition.isLoading}
+        direction={floorTransition.direction}
+        fromFloor={floorTransition.fromFloor}
+        toFloor={floorTransition.toFloor}
+      />
     </div>
   );
 }

@@ -29,7 +29,14 @@ export class GameManager {
   constructor(
     canvas: HTMLCanvasElement,
     private onStateChange: (state: GameState) => void,
-    private user: any
+    private user: any,
+    private onFloorTransition?: (transition: {
+      isLoading: boolean;
+      direction: 'upstairs' | 'downstairs';
+      fromFloor: string;
+      toFloor: string;
+    }) => void,
+    private onFloorChange?: (floorName: string) => void
   ) {
     this.sceneManager = new SceneManager(canvas);
     this.webSocketManager = new WebSocketManager(onStateChange, this.handleGameMessage.bind(this));
@@ -184,6 +191,12 @@ export class GameManager {
     
     // Position player on ground level
     this.positionPlayerOnGround();
+    
+    // Notify about initial floor
+    const initialFloor = this.sceneManager.getCurrentFloor();
+    if (this.onFloorChange && initialFloor) {
+      this.onFloorChange(initialFloor);
+    }
     
     // Create test runner for animation debugging
     await AnimationTest.createTestRunner(this.sceneManager.scene);
@@ -378,14 +391,48 @@ export class GameManager {
       const currentFloor = stairData.roomName; // The floor we're coming from
       console.log(`🔺 Going upstairs from ${currentFloor} to floor: ${targetFloor}`);
       
+      // Show loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: true,
+          direction: 'upstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
+      // Hide stair interaction popup during transition
+      const stairManager = StairInteractionManager.getInstance();
+      stairManager.forceHidePopup();
+      
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
       
       // Find the downward stair on the target floor that leads back to our current floor
       await this.findAndPositionAtReturnStair(serverAddress, targetFloor, currentFloor, 'downward');
       
+      // Hide loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'upstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
     } catch (error) {
       console.error('❌ Error during upstairs transition:', error);
+      
+      // Hide loading screen on error
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'upstairs',
+          fromFloor: '',
+          toFloor: ''
+        });
+      }
     }
   }
 
@@ -411,14 +458,48 @@ export class GameManager {
       const currentFloor = stairData.roomName; // The floor we're coming from
       console.log(`🔻 Going downstairs from ${currentFloor} to floor: ${targetFloor}`);
       
+      // Show loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: true,
+          direction: 'downstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
+      // Hide stair interaction popup during transition
+      const stairManager = StairInteractionManager.getInstance();
+      stairManager.forceHidePopup();
+      
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
       
       // Find the upward stair on the target floor that leads back to our current floor
       await this.findAndPositionAtReturnStair(serverAddress, targetFloor, currentFloor, 'upward');
       
+      // Hide loading screen
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'downstairs',
+          fromFloor: currentFloor,
+          toFloor: targetFloor
+        });
+      }
+      
     } catch (error) {
       console.error('❌ Error during downstairs transition:', error);
+      
+      // Hide loading screen on error
+      if (this.onFloorTransition) {
+        this.onFloorTransition({
+          isLoading: false,
+          direction: 'downstairs',
+          fromFloor: '',
+          toFloor: ''
+        });
+      }
     }
   }
 
@@ -650,6 +731,13 @@ export class GameManager {
       this.movementController.updateCollisionData(this.sceneManager.scene);
       // Position player on ground
       this.positionPlayerOnGround();
+      
+      // Notify about floor change
+      const currentFloor = this.sceneManager.getCurrentFloor();
+      if (this.onFloorChange && currentFloor) {
+        this.onFloorChange(currentFloor);
+      }
+      
       console.log('🎯 Collision data updated after floor load');
     } catch (error) {
       console.error('Error loading floor:', error);

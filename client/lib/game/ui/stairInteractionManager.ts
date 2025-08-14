@@ -242,6 +242,16 @@ export class StairInteractionManager {
   }
 
   /**
+   * Force hide the popup (useful during scene transitions)
+   */
+  forceHidePopup(): void {
+    if (this.interactionPopup) {
+      this.interactionPopup.style.display = 'none';
+      console.log(`[popup] Force hiding popup during scene transition`);
+    }
+  }
+
+  /**
    * Get debug information about current stair interactions
    */
   getDebugInfo(): {
