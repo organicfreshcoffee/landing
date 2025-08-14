@@ -243,6 +243,12 @@ export class GameManager {
         }
         break;
       
+      case 'player_left_floor':
+        if (message.data.playerId) {
+          this.removePlayer(message.data.playerId);
+        }
+        break;
+
       case 'players_list':
         if (message.data.players && Array.isArray(message.data.players)) {
           message.data.players.forEach((playerData: PlayerUpdate) => {
