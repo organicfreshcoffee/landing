@@ -50,3 +50,12 @@ export interface PlayerMovedFloorResponse {
   success: boolean;
   message: string;
 }
+
+export interface CurrentFloorResponse {
+  success: boolean;
+  data: {
+    currentFloor: string;
+    playerId: string;
+    playerName: string;
+  };
+}
