@@ -28,6 +28,9 @@ export const apiEndpoints = {
   // Server endpoints
   servers: () => `${getApiUrl()}/api/servers`,
   
+  // User data endpoints
+  exportUserData: () => `${getApiUrl()}/api/user/export-data`,
+  
   // Health check
   health: () => `${getApiUrl()}/health`,
 };
