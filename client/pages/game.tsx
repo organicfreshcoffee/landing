@@ -31,6 +31,7 @@ export default function Game() {
     fromFloor: '',
     toFloor: ''
   });
+  const [currentFloor, setCurrentFloor] = useState<string>('Unknown');
 
   // Handle authentication
   useEffect(() => {
@@ -53,7 +54,8 @@ export default function Game() {
         canvasRef.current!, 
         setGameState, 
         user,
-        setFloorTransition // Pass floor transition state setter
+        setFloorTransition, // Pass floor transition state setter
+        setCurrentFloor // Pass current floor state setter
       );
       gameManagerRef.current = gameManager;
       
@@ -147,6 +149,9 @@ export default function Game() {
           </div>
           <div className={styles.characterInfo}>
             Character: {selectedCharacter.name} (Style {selectedCharacter.style})
+          </div>
+          <div className={styles.floorInfo}>
+            Floor: {currentFloor}
           </div>
         </div>
         

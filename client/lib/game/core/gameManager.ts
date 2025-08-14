@@ -35,7 +35,8 @@ export class GameManager {
       direction: 'upstairs' | 'downstairs';
       fromFloor: string;
       toFloor: string;
-    }) => void
+    }) => void,
+    private onFloorChange?: (floorName: string) => void
   ) {
     this.sceneManager = new SceneManager(canvas);
     this.webSocketManager = new WebSocketManager(onStateChange, this.handleGameMessage.bind(this));
@@ -190,6 +191,12 @@ export class GameManager {
     
     // Position player on ground level
     this.positionPlayerOnGround();
+    
+    // Notify about initial floor
+    const initialFloor = this.sceneManager.getCurrentFloor();
+    if (this.onFloorChange && initialFloor) {
+      this.onFloorChange(initialFloor);
+    }
     
     // Create test runner for animation debugging
     await AnimationTest.createTestRunner(this.sceneManager.scene);
@@ -394,6 +401,10 @@ export class GameManager {
         });
       }
       
+      // Hide stair interaction popup during transition
+      const stairManager = StairInteractionManager.getInstance();
+      stairManager.forceHidePopup();
+      
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
       
@@ -456,6 +467,10 @@ export class GameManager {
           toFloor: targetFloor
         });
       }
+      
+      // Hide stair interaction popup during transition
+      const stairManager = StairInteractionManager.getInstance();
+      stairManager.forceHidePopup();
       
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
@@ -716,6 +731,13 @@ export class GameManager {
       this.movementController.updateCollisionData(this.sceneManager.scene);
       // Position player on ground
       this.positionPlayerOnGround();
+      
+      // Notify about floor change
+      const currentFloor = this.sceneManager.getCurrentFloor();
+      if (this.onFloorChange && currentFloor) {
+        this.onFloorChange(currentFloor);
+      }
+      
       console.log('🎯 Collision data updated after floor load');
     } catch (error) {
       console.error('Error loading floor:', error);
