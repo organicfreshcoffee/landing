@@ -26,9 +26,12 @@ export class StairInteractionManager {
   
   private constructor() {
     console.log(`[popup] StairInteractionManager constructor called`);
-    this.createInteractionPopup();
-    this.setupKeyListener();
-    console.log(`[popup] StairInteractionManager fully initialized`);
+    // Don't create popup immediately in constructor, wait for DOM to be ready
+    setTimeout(() => {
+      this.createInteractionPopup();
+      this.setupKeyListener();
+      console.log(`[popup] StairInteractionManager fully initialized`);
+    }, 0);
   }
 
   static getInstance(): StairInteractionManager {
@@ -125,52 +128,70 @@ export class StairInteractionManager {
    * Create the interaction popup element
    */
   private createInteractionPopup(): void {
-    this.interactionPopup = document.createElement('div');
-    this.interactionPopup.id = 'stair-interaction-popup';
-    this.interactionPopup.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 2000;
-      font-family: 'Courier New', monospace;
-      font-size: 16px;
-      font-weight: bold;
-      color: #ffffff;
-      background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(40, 40, 40, 0.9));
-      padding: 15px 25px;
-      border-radius: 8px;
-      border: 2px solid #4a90e2;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(10px);
-      display: none;
-      text-align: center;
-      min-width: 200px;
-      animation: fadeIn 0.3s ease-out;
-    `;
-    
-    // Add CSS animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      }
+    // Ensure we don't have a duplicate popup
+    if (this.interactionPopup) {
+      console.log(`[popup] Popup already exists, removing old one`);
+      this.interactionPopup.remove();
+      this.interactionPopup = null;
+    }
+
+    // Check if DOM is ready
+    if (typeof document === 'undefined') {
+      console.error(`[popup] Document is not available!`);
+      return;
+    }
+
+    try {
+      this.interactionPopup = document.createElement('div');
+      this.interactionPopup.id = 'stair-interaction-popup';
+      this.interactionPopup.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2000;
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(40, 40, 40, 0.9));
+        padding: 15px 25px;
+        border-radius: 8px;
+        border: 2px solid #4a90e2;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+        display: none;
+        text-align: center;
+        min-width: 200px;
+        animation: fadeIn 0.3s ease-out;
+      `;
       
-      #stair-interaction-popup.upward {
-        border-color: #f39c12;
-        background: linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(40, 40, 40, 0.9));
-      }
+      // Add CSS animation
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        #stair-interaction-popup.upward {
+          border-color: #f39c12;
+          background: linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(40, 40, 40, 0.9));
+        }
+        
+        #stair-interaction-popup.downward {
+          border-color: #e74c3c;
+          background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(40, 40, 40, 0.9));
+        }
+      `;
+      document.head.appendChild(style);
       
-      #stair-interaction-popup.downward {
-        border-color: #e74c3c;
-        background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(40, 40, 40, 0.9));
-      }
-    `;
-    document.head.appendChild(style);
-    
-    document.body.appendChild(this.interactionPopup);
-    console.log(`[popup] StairInteractionManager created, popup element added to DOM`);
+      document.body.appendChild(this.interactionPopup);
+      console.log(`[popup] StairInteractionManager created, popup element added to DOM`);
+    } catch (error) {
+      console.error(`[popup] Error creating interaction popup:`, error);
+      this.interactionPopup = null;
+    }
   }
 
   /**
@@ -180,8 +201,12 @@ export class StairInteractionManager {
     console.log(`[popup] updateInteractionUI called, nearbyStair: ${this.nearbyStair ? `${this.nearbyStair.stairType} stair` : 'null'}`);
     
     if (!this.interactionPopup) {
-      console.log(`[popup] ERROR: interactionPopup element is null!`);
-      return;
+      console.log(`[popup] ERROR: interactionPopup element is null! Attempting to recreate...`);
+      this.createInteractionPopup();
+      if (!this.interactionPopup) {
+        console.error(`[popup] CRITICAL: Failed to recreate interactionPopup element!`);
+        return;
+      }
     }
     
     if (this.nearbyStair) {
@@ -279,6 +304,9 @@ export class StairInteractionManager {
     this.nearbyStair = null;
     this.onUpstairsCallback = null;
     this.onDownstairsCallback = null;
+    
+    // Don't reset the singleton instance - just clean up the popup
+    // This allows the instance to be reused
     
     console.log('🧹 StairInteractionManager resources cleaned up');
   }

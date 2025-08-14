@@ -5,7 +5,8 @@ import {
   FloorLayoutResponse,
   RoomStairsResponse,
   SpawnLocationResponse,
-  PlayerMovedFloorResponse
+  PlayerMovedFloorResponse,
+  CurrentFloorResponse
 } from '../types/api';
 
 /**
@@ -24,6 +25,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getFloorLayout: (dungeonDagNodeName: string) => `${baseUrl}/api/dungeon/floor/${dungeonDagNodeName}`,
     getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
+    getCurrentFloor: () => `${baseUrl}/api/dungeon/current-floor`,
   };
 };
 
@@ -131,6 +133,27 @@ export class DungeonApi {
       return response.data;
     } catch (error) {
       console.error('❌ Error getting spawn location:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current floor for the player
+   */
+  static async getCurrentFloor(serverAddress: string): Promise<CurrentFloorResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const url = endpoints.getCurrentFloor();
+      
+      console.log(`🏠 DungeonApi: Getting current floor from ${url}`);
+      
+      const response = await axios.get(url, config);
+      
+      console.log(`✅ DungeonApi: Current floor response:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting current floor:', error);
       throw error;
     }
   }

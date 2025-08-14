@@ -49,6 +49,12 @@ export class WebSocketManager {
         wsUrl = `${wsUrl}/game`;
       }
 
+      // Add auth token as URL parameter if available
+      if (authToken) {
+        const separator = wsUrl.includes('?') ? '&' : '?';
+        wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(authToken)}`;
+      }
+
       console.log('Attempting to connect to:', wsUrl);
       const ws = new WebSocket(wsUrl);
       this.ws = ws;
@@ -74,8 +80,6 @@ export class WebSocketManager {
           loading: false
         });
 
-        // Send initial connection message
-        this.sendConnectionMessage(user, authToken);
         this.startHeartbeat();
         this.startConnectionHealthCheck();
         
@@ -137,27 +141,6 @@ export class WebSocketManager {
         error: 'Invalid server address or authentication failed',
         loading: false
       });
-    }
-  }
-
-  private sendConnectionMessage(user: any, authToken: string | null): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-    try {
-      this.ws.send(JSON.stringify({
-        type: 'connect',
-        data: {
-          playerId: user?.uid,
-          userEmail: user?.email,
-          authToken: authToken,
-          position: { x: 0, y: 0, z: 0 },
-          rotation: { x: 0, y: 0, z: 0 },
-          isMoving: false,
-          movementDirection: 'none'
-        }
-      }));
-    } catch (error) {
-      console.error('Error sending initial connection message:', error);
     }
   }
 

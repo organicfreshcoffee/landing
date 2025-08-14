@@ -289,14 +289,7 @@ export class SceneManager {
     }
 
     if (this.currentFloorName !== newFloorName) {
-      // Notify server about floor change
-      try {
-        await ServerSceneryGenerator.notifyPlayerMovedFloor(this.serverAddress, newFloorName);
-      } catch (error) {
-        console.warn('Failed to notify server of floor change:', error);
-      }
-      
-      // Load new floor
+      // Load new floor (notification is handled by GameManager during transitions)
       await this.loadScenery(newFloorName);
     }
   }

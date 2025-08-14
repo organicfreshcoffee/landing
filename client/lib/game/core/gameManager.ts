@@ -243,6 +243,12 @@ export class GameManager {
         }
         break;
       
+      case 'player_left_floor':
+        if (message.data.playerId) {
+          this.removePlayer(message.data.playerId);
+        }
+        break;
+
       case 'players_list':
         if (message.data.players && Array.isArray(message.data.players)) {
           message.data.players.forEach((playerData: PlayerUpdate) => {
@@ -405,6 +411,15 @@ export class GameManager {
       const stairManager = StairInteractionManager.getInstance();
       stairManager.forceHidePopup();
       
+      // Notify server about floor change before loading
+      try {
+        await DungeonApi.notifyPlayerMovedFloor(serverAddress, targetFloor);
+        console.log(`✅ Successfully notified server of floor change: ${currentFloor} → ${targetFloor}`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to notify server of floor change: ${error}`);
+        // Continue with floor transition even if notification fails
+      }
+      
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
       
@@ -471,6 +486,15 @@ export class GameManager {
       // Hide stair interaction popup during transition
       const stairManager = StairInteractionManager.getInstance();
       stairManager.forceHidePopup();
+      
+      // Notify server about floor change before loading
+      try {
+        await DungeonApi.notifyPlayerMovedFloor(serverAddress, targetFloor);
+        console.log(`✅ Successfully notified server of floor change: ${currentFloor} → ${targetFloor}`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to notify server of floor change: ${error}`);
+        // Continue with floor transition even if notification fails
+      }
       
       // Load the new floor (includes collision data update)
       await this.loadFloor(targetFloor);
