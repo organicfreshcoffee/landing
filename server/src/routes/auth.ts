@@ -111,4 +111,86 @@ router.get('/verify', authenticateToken, (req: AuthenticatedRequest, res: Respon
   });
 });
 
+// Endpoint to export user data
+router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log(`Export data request from user: ${req.user?.uid} (${req.user?.email})`);
+
+    const db = getDatabase();
+    const userLoginsCollection = db.collection('user_logins');
+
+    // Get all login records for the authenticated user
+    const userLogins = await userLoginsCollection
+      .find({ userId: req.user?.uid })
+      .sort({ loginTime: -1 }) // Most recent first
+      .toArray();
+
+    const exportData = {
+      user: {
+        uid: req.user?.uid,
+        email: req.user?.email,
+        emailVerified: req.user?.email_verified
+      },
+      loginHistory: userLogins.map(login => ({
+        _id: login._id,
+        userId: login.userId,
+        email: login.email,
+        loginTime: login.loginTime,
+        userAgent: login.userAgent,
+        ip: login.ip
+      })),
+      exportMetadata: {
+        exportDate: new Date().toISOString(),
+        totalLoginRecords: userLogins.length,
+        source: 'landing_page_server'
+      }
+    };
+
+    console.log(`Exported ${userLogins.length} login records for user ${req.user?.uid}`);
+    
+    res.json({
+      success: true,
+      data: exportData
+    });
+  } catch (error) {
+    console.error('Error exporting user data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to export user data',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Endpoint to delete user data from landing page
+router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log(`Delete data request from user: ${req.user?.uid} (${req.user?.email})`);
+
+    const db = getDatabase();
+    const userLoginsCollection = db.collection('user_logins');
+
+    // Delete all login records for the authenticated user
+    const deleteResult = await userLoginsCollection.deleteMany({ 
+      userId: req.user?.uid 
+    });
+
+    console.log(`Deleted ${deleteResult.deletedCount} login records for user ${req.user?.uid}`);
+    
+    res.json({
+      success: true,
+      message: 'User data deleted successfully',
+      deletedRecords: deleteResult.deletedCount,
+      userId: req.user?.uid
+    });
+  } catch (error) {
+    console.error('Error deleting user data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete user data',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

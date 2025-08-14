@@ -26,6 +26,88 @@
   color: #666;
 }
 
+.accountMenuContainer {
+  position: relative;
+}
+
+.hamburgerButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.hamburgerButton:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.hamburgerIcon {
+  display: flex;
+  flex-direction: column;
+  width: 20px;
+  height: 15px;
+  justify-content: space-between;
+}
+
+.hamburgerIcon span {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: #333;
+  border-radius: 1px;
+  transition: all 0.3s ease;
+}
+
+.accountPopup {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 1000;
+  margin-top: 0.5rem;
+}
+
+.accountMenuItem {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #333;
+  transition: background-color 0.2s;
+  border-radius: 0;
+}
+
+.accountMenuItem:first-child {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.accountMenuItem:last-child {
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.accountMenuItem:hover {
+  background: #f8f9fa;
+}
+
+.accountMenuItem:not(:last-child) {
+  border-bottom: 1px solid #e9ecef;
+}
+
 .logoutButton {
   padding: 0.5rem 1rem;
   background: #e53e3e;
@@ -239,4 +321,108 @@
 .playerCountLoading {
   color: #6c757d;
   font-style: italic;
+}
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #333;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.accountMenuItem:disabled {
+  background: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+.accountMenuItem:disabled:hover {
+  background: #f8f9fa;
+}
+
+/* Export overlay */
+.exportOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.exportModal {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  margin: 1rem;
+}
+
+.exportModal h3 {
+  margin: 1rem 0 0.5rem 0;
+  color: #333;
+}
+
+.exportModal p {
+  margin: 0.5rem 0;
+  color: #666;
+}
+
+.exportSpinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #4299e1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.deleteSpinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #dc3545;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.deletionSteps {
+  margin-top: 1rem;
+  text-align: left;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.deletionSteps div {
+  margin: 0.5rem 0;
+  padding: 0.25rem 0;
+}
+
+.dangerButton {
+  color: #dc3545 !important;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #f8d7da !important;
+  color: #721c24 !important;
 }

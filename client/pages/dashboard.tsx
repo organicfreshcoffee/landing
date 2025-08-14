@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { apiEndpoints, logApiConfig } from '../lib/api';
 import axios from 'axios';
+import JSZip from 'jszip';
 import styles from '../styles/Dashboard.module.css';
 
 interface Server {
@@ -39,6 +40,9 @@ export default function Dashboard() {
   const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({});
   const [loadingServers, setLoadingServers] = useState(true);
   const [customServerAddress, setCustomServerAddress] = useState('');
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -62,6 +66,21 @@ export default function Dashboard() {
       return () => clearInterval(interval);
     }
   }, [user, servers.length]);
+
+  // Close account menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (isAccountMenuOpen && !target.closest(`.${styles.accountMenuContainer}`)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isAccountMenuOpen]);
 
   const fetchServers = async () => {
     if (!user) return;
@@ -176,6 +195,323 @@ export default function Dashboard() {
     }
   };
 
+  const toggleAccountMenu = () => {
+    setIsAccountMenuOpen(!isAccountMenuOpen);
+  };
+
+  const handleExportAccountData = async () => {
+    if (!user) return;
+    
+    setIsExporting(true);
+    setIsAccountMenuOpen(false);
+    
+    try {
+      const token = await user.getIdToken();
+      const zip = new JSZip();
+      
+      // 1. Get Firebase Auth user data
+      console.log('Exporting Firebase Auth data...');
+      const firebaseUserData = {
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        phoneNumber: user.phoneNumber,
+        creationTime: user.metadata.creationTime,
+        lastSignInTime: user.metadata.lastSignInTime,
+        providerData: user.providerData.map(provider => ({
+          providerId: provider.providerId,
+          uid: provider.uid,
+          email: provider.email,
+          displayName: provider.displayName,
+          photoURL: provider.photoURL
+        }))
+      };
+      zip.file('firebase_auth_data.json', JSON.stringify(firebaseUserData, null, 2));
+      
+      // 2. Get user data from landing page MongoDB
+      console.log('Exporting landing page data...');
+      try {
+        const landingDataResponse = await axios.get(apiEndpoints.exportUserData(), {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          timeout: 10000
+        });
+        
+        if (landingDataResponse.data.success) {
+          zip.file('landing_page_data.json', JSON.stringify(landingDataResponse.data.data, null, 2));
+        } else {
+          zip.file('landing_page_data.json', JSON.stringify({ error: 'Failed to retrieve data', details: landingDataResponse.data }, null, 2));
+        }
+      } catch (error) {
+        console.warn('Failed to get landing page data:', error);
+        zip.file('landing_page_data.json', JSON.stringify({ error: 'Failed to retrieve landing page data', details: error instanceof Error ? error.message : 'Unknown error' }, null, 2));
+      }
+      
+      // 3. Get data from each game server
+      console.log('Exporting game server data...');
+      const serverDataPromises = servers.map(async (server) => {
+        try {
+          const formattedUrl = formatServerUrl(server.server_address);
+          const response = await axios.get(`${formattedUrl}/api/user/export-data`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            timeout: 10000
+          });
+          
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: true,
+            data: response.data
+          };
+        } catch (error) {
+          console.warn(`Failed to get data from server ${server.server_name}:`, error);
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      });
+      
+      const serverDataResults = await Promise.all(serverDataPromises);
+      
+      // Add each server's data to the zip
+      serverDataResults.forEach((result, index) => {
+        const fileName = `game_server_${index + 1}_${result.serverName.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+        zip.file(fileName, JSON.stringify(result, null, 2));
+      });
+      
+      // 4. Create a summary file
+      const summary = {
+        exportDate: new Date().toISOString(),
+        userEmail: user.email,
+        userUid: user.uid,
+        totalGameServers: servers.length,
+        successfulServerExports: serverDataResults.filter(r => r.success).length,
+        failedServerExports: serverDataResults.filter(r => !r.success).length,
+        files: {
+          'firebase_auth_data.json': 'Firebase Authentication user data',
+          'landing_page_data.json': 'User login history from landing page',
+          ...Object.fromEntries(
+            serverDataResults.map((result, index) => [
+              `game_server_${index + 1}_${result.serverName.replace(/[^a-zA-Z0-9]/g, '_')}.json`,
+              `Game data from ${result.serverName} (${result.serverAddress})`
+            ])
+          )
+        }
+      };
+      zip.file('export_summary.json', JSON.stringify(summary, null, 2));
+      
+      // 5. Generate and download the zip file
+      console.log('Generating zip file...');
+      const content = await zip.generateAsync({ type: 'blob' });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `account_data_export_${user.email}_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('Account data export completed successfully');
+      
+    } catch (error) {
+      console.error('Error during account data export:', error);
+      alert('Failed to export account data. Please try again later.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    
+    // Confirm deletion with user
+    const userConfirmation = window.confirm(
+      "⚠️ WARNING: This action is IRREVERSIBLE!\n\n" +
+      "This will permanently delete:\n" +
+      "• All your game data from all listed servers\n" +
+      "• Your login history\n" +
+      "• Your account from Firebase\n\n" +
+      "Are you absolutely sure you want to delete your account?"
+    );
+    
+    if (!userConfirmation) return;
+    
+    // Second confirmation
+    const finalConfirmation = window.confirm(
+      "This is your final warning!\n\n" +
+      "Once deleted, your account and all associated data cannot be recovered.\n\n" +
+      "Type your email address in the next prompt to confirm deletion."
+    );
+    
+    if (!finalConfirmation) return;
+    
+    // Email confirmation
+    const emailConfirmation = window.prompt(
+      `Please type your email address (${user.email}) to confirm account deletion:`
+    );
+    
+    if (emailConfirmation !== user.email) {
+      alert("Email confirmation did not match. Account deletion cancelled.");
+      return;
+    }
+    
+    setIsDeleting(true);
+    setIsAccountMenuOpen(false);
+    
+    try {
+      const token = await user.getIdToken();
+      const deleteResults = {
+        gameServers: [] as any[],
+        landingPage: null as any,
+        firebase: null as any
+      };
+      
+      console.log('Starting account deletion process...');
+      
+      // 1. Delete data from all game servers
+      console.log('Deleting data from game servers...');
+      const serverDeletePromises = servers.map(async (server) => {
+        try {
+          const formattedUrl = formatServerUrl(server.server_address);
+          const response = await axios.delete(`${formattedUrl}/api/user/delete-data`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            timeout: 15000 // 15 second timeout for deletion
+          });
+          
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: true,
+            data: response.data
+          };
+        } catch (error) {
+          console.warn(`Failed to delete data from server ${server.server_name}:`, error);
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      });
+      
+      deleteResults.gameServers = await Promise.all(serverDeletePromises);
+      
+      // 2. Delete data from landing page
+      console.log('Deleting data from landing page...');
+      try {
+        const landingDeleteResponse = await axios.delete(apiEndpoints.deleteUserData(), {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          timeout: 10000
+        });
+        
+        deleteResults.landingPage = {
+          success: true,
+          data: landingDeleteResponse.data
+        };
+      } catch (error) {
+        console.warn('Failed to delete landing page data:', error);
+        deleteResults.landingPage = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+      
+      // 3. Delete user from Firebase Authentication
+      console.log('Deleting Firebase user account...');
+      try {
+        await user.delete();
+        deleteResults.firebase = {
+          success: true,
+          message: 'Firebase user account deleted successfully'
+        };
+      } catch (error) {
+        console.error('Failed to delete Firebase user:', error);
+        deleteResults.firebase = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+        
+        // If Firebase deletion fails, we should still log out the user
+        // but inform them about the partial failure
+      }
+      
+      // Log deletion summary
+      const successfulServerDeletions = deleteResults.gameServers.filter(r => r.success).length;
+      const failedServerDeletions = deleteResults.gameServers.filter(r => !r.success).length;
+      
+      console.log('Account deletion completed:', {
+        gameServers: {
+          successful: successfulServerDeletions,
+          failed: failedServerDeletions
+        },
+        landingPage: deleteResults.landingPage?.success ? 'success' : 'failed',
+        firebase: deleteResults.firebase?.success ? 'success' : 'failed'
+      });
+      
+      // 4. Logout and redirect
+      console.log('Logging out user...');
+      await logout();
+      
+      // Show completion message
+      if (deleteResults.firebase?.success) {
+        alert(
+          `Account deletion completed!\n\n` +
+          `Game servers: ${successfulServerDeletions} successful, ${failedServerDeletions} failed\n` +
+          `Landing page data: ${deleteResults.landingPage?.success ? 'deleted' : 'failed'}\n` +
+          `Firebase account: deleted\n\n` +
+          `You will now be redirected to the home page.`
+        );
+      } else {
+        alert(
+          `Account deletion partially completed!\n\n` +
+          `Game servers: ${successfulServerDeletions} successful, ${failedServerDeletions} failed\n` +
+          `Landing page data: ${deleteResults.landingPage?.success ? 'deleted' : 'failed'}\n` +
+          `Firebase account: FAILED TO DELETE\n\n` +
+          `Please contact support for assistance with Firebase account deletion: https://github.com/organicfreshcoffee/landing/issues\n` +
+          `You will now be logged out and redirected.`
+        );
+      }
+      
+      router.push('/');
+      
+    } catch (error) {
+      console.error('Error during account deletion:', error);
+      alert(
+        'An unexpected error occurred during account deletion.\n\n' +
+        'Some data may have been deleted, but the process was not completed.\n' +
+        'Please contact support for assistance: https://github.com/organicfreshcoffee/landing/issues\n\n' +
+        'You will now be logged out for security.'
+      );
+      
+      // Emergency logout
+      try {
+        await logout();
+        router.push('/');
+      } catch (logoutError) {
+        console.error('Failed to logout after deletion error:', logoutError);
+        window.location.href = '/';
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const getServerStatus = (serverId: string) => {
     return serverStatuses[serverId] || { isOnline: false, playerCount: 0, lastChecked: '' };
   };
@@ -220,6 +556,33 @@ export default function Dashboard() {
 
   return (
     <div className={styles.container}>
+      {isExporting && (
+        <div className={styles.exportOverlay}>
+          <div className={styles.exportModal}>
+            <div className={styles.exportSpinner}></div>
+            <h3>Exporting Account Data</h3>
+            <p>Please wait while we gather your data from all sources...</p>
+            <p><small>This may take a few moments.</small></p>
+          </div>
+        </div>
+      )}
+      
+      {isDeleting && (
+        <div className={styles.exportOverlay}>
+          <div className={styles.exportModal}>
+            <div className={styles.deleteSpinner}></div>
+            <h3>Deleting Account</h3>
+            <p>Please wait while we permanently delete your data...</p>
+            <p><small>⚠️ This process cannot be undone</small></p>
+            <div className={styles.deletionSteps}>
+              <div>🎮 Deleting game server data...</div>
+              <div>📝 Deleting login history...</div>
+              <div>🔐 Deleting Firebase account...</div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className={styles.header}>
         <h1 className={styles.title}>Organic Fresh Coffee</h1>
         <div className={styles.userInfo}>
@@ -227,6 +590,51 @@ export default function Dashboard() {
           <button onClick={handleLogout} className={styles.logoutButton}>
             Logout
           </button>
+          <div className={styles.accountMenuContainer}>
+            <button 
+              onClick={toggleAccountMenu} 
+              className={styles.hamburgerButton}
+              aria-label="Account menu"
+            >
+              <div className={styles.hamburgerIcon}>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </button>
+            {isAccountMenuOpen && (
+              <div className={styles.accountPopup}>
+                <button 
+                  onClick={handleExportAccountData}
+                  className={styles.accountMenuItem}
+                  disabled={isExporting || isDeleting}
+                >
+                  {isExporting ? (
+                    <>
+                      <span className={styles.spinner}></span>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>📁 Export Account Data</>
+                  )}
+                </button>
+                <button 
+                  onClick={handleDeleteAccount}
+                  className={`${styles.accountMenuItem} ${styles.dangerButton}`}
+                  disabled={isExporting || isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className={styles.spinner}></span>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>🗑️ Delete Account</>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
