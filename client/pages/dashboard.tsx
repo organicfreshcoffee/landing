@@ -84,9 +84,21 @@ export default function Dashboard() {
     }
   };
 
+  const formatServerUrl = (serverAddress: string): string => {
+    // If the address already has a protocol, return as-is
+    if (serverAddress.startsWith('http://') || serverAddress.startsWith('https://')) {
+      return serverAddress;
+    }
+    
+    // Use http for localhost, https for everything else
+    const protocol = serverAddress.includes('localhost') ? 'http' : 'https';
+    return `${protocol}://${serverAddress}`;
+  };
+
   const checkServerHealth = async (serverAddress: string): Promise<boolean> => {
     try {
-      const response = await axios.get(`${serverAddress}/health`, {
+      const formattedUrl = formatServerUrl(serverAddress);
+      const response = await axios.get(`${formattedUrl}/health`, {
         timeout: 5000 // 5 second timeout
       });
       return response.data.status === 'ok';
@@ -98,7 +110,14 @@ export default function Dashboard() {
 
   const getPlayerCount = async (serverAddress: string): Promise<number> => {
     try {
-      const response = await axios.get(`${serverAddress}/api/dungeon/player-count`, {
+      if (!user) return 0;
+      
+      const token = await user.getIdToken();
+      const formattedUrl = formatServerUrl(serverAddress);
+      const response = await axios.get(`${formattedUrl}/api/dungeon/player-count`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
         timeout: 5000 // 5 second timeout
       });
       return response.data.success ? response.data.data.totalPlayers : 0;
