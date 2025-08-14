@@ -4,6 +4,7 @@ import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
 import { DungeonFloorRenderer } from '../rendering/dungeonFloorRenderer';
 import { CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 import { CubeConfig } from '../config/cubeConfig';
+import { DungeonApi } from '../network/dungeonApi';
 
 export class ServerSceneryGenerator {
   /**
@@ -111,9 +112,14 @@ export class ServerSceneryGenerator {
    * Notify server that player moved to a new floor
    */
   static async notifyPlayerMovedFloor(serverAddress: string, newFloorName: string): Promise<void> {
-    console.log(`� ServerSceneryGenerator: Notifying server of floor change to ${newFloorName}`);
-    // For now, just log - this should be updated when the actual server API is available
-    // await FloorGenerator.notifyPlayerMovedFloor(serverAddress, newFloorName);
+    console.log(`📡 ServerSceneryGenerator: Notifying server of floor change to ${newFloorName}`);
+    try {
+      await DungeonApi.notifyPlayerMovedFloor(serverAddress, newFloorName);
+      console.log(`✅ Successfully notified server of floor change to ${newFloorName}`);
+    } catch (error) {
+      console.error(`❌ Failed to notify server of floor change to ${newFloorName}:`, error);
+      throw error;
+    }
   }
 
   /**
