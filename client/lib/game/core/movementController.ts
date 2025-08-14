@@ -370,7 +370,7 @@ export class MovementController {
     const lookDistance = 10;
     const lookDirection = new THREE.Vector3(
       -Math.sin(this.localPlayerRotation.y),
-      -Math.sin(this.localPlayerRotation.x),
+      Math.sin(this.localPlayerRotation.x),
       -Math.cos(this.localPlayerRotation.y)
     );
     
