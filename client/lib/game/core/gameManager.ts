@@ -627,15 +627,25 @@ export class GameManager {
       }
       
       // Find all rooms on the target floor
-      const rooms = floorLayout.data.nodes.filter(node => node.isRoom);
-      console.log(`${logPrefix} 🏠 Found ${rooms.length} rooms on floor ${targetFloor}:`, rooms.map(r => r.name));
+      const allRooms = floorLayout.data.nodes.filter(node => node.isRoom);
+      console.log(`${logPrefix} 🏠 Found ${allRooms.length} total rooms on floor ${targetFloor}:`, allRooms.map(r => r.name));
+      
+      // Filter to only rooms that have the specific type of stair we're looking for
+      const roomsWithRelevantStairs = allRooms.filter(room => {
+        if (stairType === 'downward') {
+          return room.hasDownwardStair;
+        } else {
+          return room.hasUpwardStair;
+        }
+      });
+      console.log(`${logPrefix} 🏗️ Found ${roomsWithRelevantStairs.length} rooms with ${stairType} stairs:`, roomsWithRelevantStairs.map(r => r.name));
       
       const stairMappings: { roomName: string, upward?: string, downward?: string }[] = [];
       let matchingStair: StairInfo | undefined;
       let matchingRoomName: string | undefined;
       
-      // Check each room for stairs that lead back to our original floor
-      for (const room of rooms) {
+      // Check each room with the relevant stair type for stairs that lead back to our original floor
+      for (const room of roomsWithRelevantStairs) {
         try {
           console.log(`${logPrefix} 🔍 Checking room ${room.name} for stairs...`);
           const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, room.name);
