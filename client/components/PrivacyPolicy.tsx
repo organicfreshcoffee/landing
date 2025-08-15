@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
           </p>
           <ul>
             <li><strong>Email Address:</strong> Used for account authentication and server moderation purposes</li>
-            <li><strong>Login History:</strong> Timestamps and IP addresses for security and moderation</li>
+            <li><strong>Login History:</strong> Timestamps, IP addresses, and browser/device information (user agent) for security and moderation</li>
             <li><strong>Game Data:</strong> In-game progress and activities when you connect to game servers</li>
             <li><strong>Audit Logs:</strong> Records of data access, export, and deletion requests for compliance purposes</li>
           </ul>

@@ -7,7 +7,7 @@
 We collect minimal personal information necessary for user authentication and server moderation:
 
 - **Email Address:** Used for account authentication and server moderation purposes
-- **Login History:** Timestamps and IP addresses for security and moderation
+- **Login History:** Timestamps, IP addresses, and browser/device information (user agent) for security and moderation
 - **Game Data:** In-game progress and activities when you connect to game servers
 - **Audit Logs:** Records of data access, export, and deletion requests for compliance purposes
 
