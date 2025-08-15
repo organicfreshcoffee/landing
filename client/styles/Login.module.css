@@ -216,27 +216,44 @@
   flex-wrap: wrap;
 }
 
-.resetActions .button,
-.resetActions .secondaryButton {
-  padding: 0.75rem 1.5rem;
+.resetActions button {
+  padding: 0.75rem 1.5rem !important;
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 1rem !important;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid;
   min-width: 140px;
+  margin: 0;
 }
 
 .resetActions .button {
-  background: #667eea;
-  color: white;
-  border-color: #667eea;
+  background: #667eea !important;
+  color: white !important;
+  border-color: #667eea !important;
 }
 
 .resetActions .button:hover:not(:disabled) {
-  background: #5a6fd8;
-  border-color: #5a6fd8;
+  background: #5a6fd8 !important;
+  border-color: #5a6fd8 !important;
+}
+
+.resetActions .secondaryButton {
+  background: transparent !important;
+  color: #667eea !important;
+  border-color: #667eea !important;
+}
+
+.resetActions .secondaryButton {
+  background: transparent !important;
+  color: #667eea !important;
+  border-color: #667eea !important;
+}
+
+.resetActions .secondaryButton:hover {
+  background: #667eea !important;
+  color: white !important;
 }
 
 .secondaryButton {
@@ -301,10 +318,9 @@
     gap: 0.75rem;
   }
   
-  .resetActions .button,
-  .resetActions .secondaryButton {
-    padding: 0.65rem 1.2rem;
-    font-size: 0.9rem;
+  .resetActions button {
+    padding: 0.65rem 1.2rem !important;
+    font-size: 0.9rem !important;
     min-width: 120px;
   }
   
