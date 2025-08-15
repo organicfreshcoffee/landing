@@ -3,31 +3,9 @@ import { createHash } from 'crypto';
 
 export interface AuditLogEntry {
   userId: string;
-  email: string;
   action: 'DATA_VIEW' | 'DATA_EXPORT' | 'DATA_DELETE' | 'DATA_PSEUDONYMIZED';
   timestamp: Date;
-  ipAddress?: string;
-  userAgent?: string;
   metadata?: Record<string, any>;
-}
-
-export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
-  try {
-    const db = getDatabase();
-    const auditLogsCollection = db.collection('audit_logs');
-    
-    const auditEntry = {
-      ...entry,
-      timestamp: new Date(),
-      _id: undefined // Let MongoDB generate the ID
-    };
-    
-    await auditLogsCollection.insertOne(auditEntry);
-    console.log(`Audit log created for user ${entry.userId}: ${entry.action}`);
-  } catch (error) {
-    console.error('Error creating audit log:', error);
-    // Don't throw error - audit logging should not break the main functionality
-  }
 }
 
 export async function pseudonymizeUserAuditLogs(userId: string, email: string): Promise<number> {
@@ -44,9 +22,6 @@ export async function pseudonymizeUserAuditLogs(userId: string, email: string): 
       {
         $set: {
           userId: `DELETED_${anonymizedUserId}`,
-          email: '[DELETED_USER]',
-          ipAddress: '[REDACTED]',
-          userAgent: '[REDACTED]',
           pseudonymizedDate: new Date(),
           originalDeletionRequest: true
         }
@@ -54,19 +29,17 @@ export async function pseudonymizeUserAuditLogs(userId: string, email: string): 
     );
 
     // Create a final audit log entry for the pseudonymization action
-    await createAuditLog({
-      userId: `DELETED_${anonymizedUserId}`,
-      email: '[DELETED_USER]',
-      action: 'DATA_PSEUDONYMIZED',
-      timestamp: new Date(),
-      metadata: {
+    await createMinimalAuditLog(
+      `DELETED_${anonymizedUserId}`,
+      'DATA_PSEUDONYMIZED',
+      {
         originalUserId: 'REDACTED',
         originalEmail: 'REDACTED',
         recordsPseudonymized: updateResult.modifiedCount,
         reason: 'GDPR Article 17 - Right to Erasure',
         retentionNote: 'Audit logs pseudonymized for compliance purposes'
       }
-    });
+    );
 
     console.log(`Pseudonymized ${updateResult.modifiedCount} audit log entries for user ${userId}`);
     return updateResult.modifiedCount;
@@ -88,11 +61,8 @@ export async function createMinimalAuditLog(
     // Only store essential information for compliance
     const auditEntry = {
       userId: userId, // Keep user ID for linking to other systems if needed
-      email: '[REDACTED]', // Don't store email unless absolutely necessary
       action: action,
       timestamp: new Date(),
-      ipAddress: '[REDACTED]', // IP not needed for most compliance purposes
-      userAgent: '[REDACTED]', // User agent not needed for most compliance purposes
       metadata: {
         ...metadata,
         dataMinimized: true,
@@ -120,11 +90,8 @@ export async function getAuditLogsForUser(userId: string): Promise<AuditLogEntry
     
     return auditLogs.map(log => ({
       userId: log.userId,
-      email: log.email,
       action: log.action,
       timestamp: log.timestamp,
-      ipAddress: log.ipAddress,
-      userAgent: log.userAgent,
       metadata: log.metadata
     }));
   } catch (error) {

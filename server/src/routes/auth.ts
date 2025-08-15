@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { getDatabase } from '../config/database';
 import { getFirebaseConfig, admin } from '../config/firebase';
-import { createAuditLog, getAuditLogsForUser, pseudonymizeUserAuditLogs } from '../utils/auditLogger';
+import { createMinimalAuditLog, getAuditLogsForUser, pseudonymizeUserAuditLogs } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -118,18 +118,14 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
     console.log(`View data request from user: ${req.user?.uid} (${req.user?.email})`);
 
     // Create audit log for data viewing
-    await createAuditLog({
-      userId: req.user?.uid || '',
-      email: req.user?.email || '',
-      action: 'DATA_VIEW',
-      timestamp: new Date(),
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      metadata: {
+    await createMinimalAuditLog(
+      req.user?.uid || '',
+      'DATA_VIEW',
+      {
         endpoint: '/user/view-data',
         method: 'GET'
       }
-    });
+    );
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
@@ -159,11 +155,8 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
       })),
       auditLogs: auditLogs.map(log => ({
         userId: log.userId,
-        email: log.email,
         action: log.action,
         timestamp: log.timestamp,
-        ipAddress: log.ipAddress,
-        userAgent: log.userAgent,
         metadata: log.metadata
       })),
       viewMetadata: {
@@ -196,18 +189,14 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
     console.log(`Export data request from user: ${req.user?.uid} (${req.user?.email})`);
 
     // Create audit log for data export
-    await createAuditLog({
-      userId: req.user?.uid || '',
-      email: req.user?.email || '',
-      action: 'DATA_EXPORT',
-      timestamp: new Date(),
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      metadata: {
+    await createMinimalAuditLog(
+      req.user?.uid || '',
+      'DATA_EXPORT',
+      {
         endpoint: '/user/export-data',
         method: 'GET'
       }
-    });
+    );
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
@@ -237,11 +226,8 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
       })),
       auditLogs: auditLogs.map(log => ({
         userId: log.userId,
-        email: log.email,
         action: log.action,
         timestamp: log.timestamp,
-        ipAddress: log.ipAddress,
-        userAgent: log.userAgent,
         metadata: log.metadata
       })),
       exportMetadata: {
@@ -274,19 +260,15 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
     console.log(`Delete data request from user: ${req.user?.uid} (${req.user?.email})`);
 
     // Create audit log for data deletion BEFORE deleting the data
-    await createAuditLog({
-      userId: req.user?.uid || '',
-      email: req.user?.email || '',
-      action: 'DATA_DELETE',
-      timestamp: new Date(),
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      metadata: {
+    await createMinimalAuditLog(
+      req.user?.uid || '',
+      'DATA_DELETE',
+      {
         endpoint: '/user/delete-data',
         method: 'DELETE',
         gdprCompliance: 'Article 17 - Right to Erasure'
       }
-    });
+    );
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
