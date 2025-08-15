@@ -7,6 +7,18 @@ import JSZip from 'jszip';
 import styles from '../styles/Dashboard.module.css';
 import PrivacyPolicy from '../components/PrivacyPolicy';
 
+interface AccountData {
+  firebase: any;
+  landingPage: any;
+  gameServers: Array<{
+    serverName: string;
+    serverAddress: string;
+    success: boolean;
+    data?: any;
+    error?: string;
+  }>;
+}
+
 interface Server {
   _id: string;
   server_name: string;
@@ -44,6 +56,9 @@ export default function Dashboard() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isViewingAccountData, setIsViewingAccountData] = useState(false);
+  const [accountData, setAccountData] = useState<AccountData | null>(null);
+  const [isLoadingAccountData, setIsLoadingAccountData] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -77,11 +92,21 @@ export default function Dashboard() {
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (isViewingAccountData) {
+          setIsViewingAccountData(false);
+        }
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAccountMenuOpen]);
+  }, [isAccountMenuOpen, isViewingAccountData]);
 
   const fetchServers = async () => {
     if (!user) return;
@@ -330,6 +355,104 @@ export default function Dashboard() {
       alert('Failed to export account data. Please try again later.');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleViewAccountData = async () => {
+    if (!user) return;
+    
+    setIsLoadingAccountData(true);
+    setIsAccountMenuOpen(false);
+    
+    try {
+      const token = await user.getIdToken();
+      const allAccountData: AccountData = {
+        firebase: {},
+        landingPage: {},
+        gameServers: []
+      };
+      
+      // 1. Get Firebase Auth user data
+      console.log('Loading Firebase Auth data...');
+      allAccountData.firebase = {
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        phoneNumber: user.phoneNumber,
+        creationTime: user.metadata.creationTime,
+        lastSignInTime: user.metadata.lastSignInTime,
+        providerData: user.providerData.map(provider => ({
+          providerId: provider.providerId,
+          uid: provider.uid,
+          email: provider.email,
+          displayName: provider.displayName,
+          photoURL: provider.photoURL
+        }))
+      };
+      
+      // 2. Get user data from landing page MongoDB
+      console.log('Loading landing page data...');
+      try {
+        const landingDataResponse = await axios.get(apiEndpoints.exportUserData(), {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          timeout: 10000
+        });
+        
+        if (landingDataResponse.data.success) {
+          allAccountData.landingPage = landingDataResponse.data.data;
+        } else {
+          allAccountData.landingPage = { error: 'Failed to retrieve data', details: landingDataResponse.data };
+        }
+      } catch (error) {
+        console.warn('Failed to get landing page data:', error);
+        allAccountData.landingPage = { error: 'Failed to retrieve landing page data', details: error instanceof Error ? error.message : 'Unknown error' };
+      }
+      
+      // 3. Get data from each game server
+      console.log('Loading game server data...');
+      const serverDataPromises = servers.map(async (server) => {
+        try {
+          const formattedUrl = formatServerUrl(server.server_address);
+          const response = await axios.get(`${formattedUrl}/api/user/export-data`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            timeout: 10000
+          });
+          
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: true,
+            data: response.data
+          };
+        } catch (error) {
+          console.warn(`Failed to get data from server ${server.server_name}:`, error);
+          return {
+            serverName: server.server_name,
+            serverAddress: server.server_address,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      });
+      
+      allAccountData.gameServers = await Promise.all(serverDataPromises);
+      
+      setAccountData(allAccountData);
+      setIsViewingAccountData(true);
+      
+      console.log('Account data loaded successfully');
+      
+    } catch (error) {
+      console.error('Error loading account data:', error);
+      alert('Failed to load account data. Please try again later.');
+    } finally {
+      setIsLoadingAccountData(false);
     }
   };
 
@@ -584,6 +707,91 @@ export default function Dashboard() {
         </div>
       )}
       
+      {isViewingAccountData && accountData && (
+        <div className={styles.exportOverlay}>
+          <div className={styles.accountDataModal}>
+            <div className={styles.accountDataHeader}>
+              <h3>Account Data</h3>
+              <button 
+                onClick={() => setIsViewingAccountData(false)}
+                className={styles.closeButton}
+              >
+                ✕
+              </button>
+            </div>
+            <div className={styles.accountDataContent}>
+              
+              {/* Firebase Data Section */}
+              <div className={styles.dataSection}>
+                <h4>🔐 Firebase Authentication Data</h4>
+                <div className={styles.dataGrid}>
+                  <div className={styles.dataItem}>
+                    <span className={styles.dataLabel}>User ID:</span>
+                    <span className={styles.dataValue}>{accountData.firebase.uid}</span>
+                  </div>
+                  <div className={styles.dataItem}>
+                    <span className={styles.dataLabel}>Email:</span>
+                    <span className={styles.dataValue}>{accountData.firebase.email}</span>
+                  </div>
+                  <div className={styles.dataItem}>
+                    <span className={styles.dataLabel}>Email Verified:</span>
+                    <span className={styles.dataValue}>{accountData.firebase.emailVerified ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className={styles.dataItem}>
+                    <span className={styles.dataLabel}>Display Name:</span>
+                    <span className={styles.dataValue}>{accountData.firebase.displayName || 'Not set'}</span>
+                  </div>
+                  <div className={styles.dataItem}>
+                    <span className={styles.dataLabel}>Account Created:</span>
+                    <span className={styles.dataValue}>{accountData.firebase.creationTime}</span>
+                  </div>
+                  <div className={styles.dataItem}>
+                    <span className={styles.dataLabel}>Last Sign In:</span>
+                    <span className={styles.dataValue}>{accountData.firebase.lastSignInTime}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Landing Page Data Section */}
+              <div className={styles.dataSection}>
+                <h4>📝 Landing Page Data</h4>
+                {accountData.landingPage.error ? (
+                  <div className={styles.errorBox}>
+                    <strong>Error:</strong> {accountData.landingPage.error}
+                    {accountData.landingPage.details && (
+                      <div><strong>Details:</strong> {JSON.stringify(accountData.landingPage.details)}</div>
+                    )}
+                  </div>
+                ) : (
+                  <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage, null, 2)}</pre>
+                )}
+              </div>
+
+              {/* Game Servers Data Section */}
+              <div className={styles.dataSection}>
+                <h4>🎮 Game Server Data</h4>
+                {accountData.gameServers.length === 0 ? (
+                  <p>No game servers available.</p>
+                ) : (
+                  accountData.gameServers.map((server, index) => (
+                    <div key={index} className={styles.serverDataSection}>
+                      <h5>{server.serverName} ({server.serverAddress})</h5>
+                      {server.success ? (
+                        <pre className={styles.jsonData}>{JSON.stringify(server.data, null, 2)}</pre>
+                      ) : (
+                        <div className={styles.errorBox}>
+                          <strong>Failed to retrieve data:</strong> {server.error}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className={styles.header}>
         <h1 className={styles.title}>Organic Fresh Coffee</h1>
         <div className={styles.userInfo}>
@@ -606,9 +814,23 @@ export default function Dashboard() {
             {isAccountMenuOpen && (
               <div className={styles.accountPopup}>
                 <button 
+                  onClick={handleViewAccountData}
+                  className={styles.accountMenuItem}
+                  disabled={isExporting || isDeleting || isLoadingAccountData}
+                >
+                  {isLoadingAccountData ? (
+                    <>
+                      <span className={styles.spinner}></span>
+                      Loading...
+                    </>
+                  ) : (
+                    <>👁️ View Account Data</>
+                  )}
+                </button>
+                <button 
                   onClick={handleExportAccountData}
                   className={styles.accountMenuItem}
-                  disabled={isExporting || isDeleting}
+                  disabled={isExporting || isDeleting || isLoadingAccountData}
                 >
                   {isExporting ? (
                     <>
@@ -622,7 +844,7 @@ export default function Dashboard() {
                 <button 
                   onClick={handleDeleteAccount}
                   className={`${styles.accountMenuItem} ${styles.dangerButton}`}
-                  disabled={isExporting || isDeleting}
+                  disabled={isExporting || isDeleting || isLoadingAccountData}
                 >
                   {isDeleting ? (
                     <>
