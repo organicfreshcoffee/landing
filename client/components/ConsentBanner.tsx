@@ -21,33 +21,6 @@ export default function ConsentBanner({ onConsentChange, hasConsented }: Consent
             By creating an account, you consent to our processing of your email address, 
             login history, and game data as described in our Privacy Policy.
           </p>
-          
-          <div className={styles.dataProcessingInfo}>
-            <h4>We collect and process:</h4>
-            <ul>
-              <li>📧 <strong>Email address</strong> - for authentication and account management</li>
-              <li>📊 <strong>Login history</strong> - timestamps and IP addresses for security</li>
-              <li>🎮 <strong>Game data</strong> - progress and activities when you connect to servers</li>
-              <li>📝 <strong>Audit logs</strong> - records of data access requests for compliance</li>
-            </ul>
-          </div>
-
-          <div className={styles.legalBasisInfo}>
-            <h4>Legal basis for processing:</h4>
-            <ul>
-              <li><strong>Consent:</strong> You explicitly agree to our privacy policy</li>
-              <li><strong>Contract:</strong> To provide the gaming service you've requested</li>
-              <li><strong>Legitimate Interest:</strong> For security and fraud prevention</li>
-            </ul>
-          </div>
-
-          <div className={styles.rightsInfo}>
-            <h4>Your rights:</h4>
-            <p>
-              You can view, export, or delete your data at any time from your account menu. 
-              You can also request data corrections by creating a GitHub issue.
-            </p>
-          </div>
 
           <div className={styles.privacyPolicySection}>
             <button 
@@ -67,7 +40,7 @@ export default function ConsentBanner({ onConsentChange, hasConsented }: Consent
                 
                 <p>
                   <a 
-                    href="https://github.com/organicfreshcoffee/landing" 
+                    href="https://github.com/organicfreshcoffee/landing/blob/main/PRIVACY.md" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className={styles.privacyPolicyLink}

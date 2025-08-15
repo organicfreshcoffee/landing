@@ -12,7 +12,7 @@
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 400px;
+  max-width: 600px; /* Increased from 400px to accommodate privacy policy */
 }
 
 .title {
@@ -101,4 +101,28 @@
 
 .switchButton:hover {
   color: #5a6fd8;
+}
+
+/* Responsive design for larger signup forms */
+@media (max-width: 768px) {
+  .formContainer {
+    max-width: 95vw;
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+  
+  .title {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .formContainer {
+    padding: 1rem;
+  }
+  
+  .title {
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
 }
