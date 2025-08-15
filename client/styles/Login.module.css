@@ -103,6 +103,43 @@
   color: #5a6fd8;
 }
 
+/* GitHub Badge Styles */
+.githubBadge {
+  text-align: center;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.githubLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.githubLink:hover {
+  color: #374151;
+  background: #f9fafb;
+  text-decoration: none;
+}
+
+.githubIcon {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+}
+
+.githubLink:hover .githubIcon {
+  transform: scale(1.1);
+}
+
 /* Responsive design for larger signup forms */
 @media (max-width: 768px) {
   .formContainer {
@@ -114,6 +151,21 @@
   .title {
     font-size: 1.5rem;
   }
+  
+  .githubBadge {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+  }
+  
+  .githubLink {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .githubIcon {
+    width: 18px;
+    height: 18px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -124,5 +176,10 @@
   .title {
     font-size: 1.25rem;
     margin-bottom: 1.5rem;
+  }
+  
+  .githubBadge {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
   }
 }
