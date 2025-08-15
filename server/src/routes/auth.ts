@@ -158,6 +158,8 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
         ip: login.ip
       })),
       auditLogs: auditLogs.map(log => ({
+        userId: log.userId,
+        email: log.email,
         action: log.action,
         timestamp: log.timestamp,
         ipAddress: log.ipAddress,
@@ -234,6 +236,8 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
         ip: login.ip
       })),
       auditLogs: auditLogs.map(log => ({
+        userId: log.userId,
+        email: log.email,
         action: log.action,
         timestamp: log.timestamp,
         ipAddress: log.ipAddress,
