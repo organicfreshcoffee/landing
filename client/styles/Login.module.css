@@ -85,8 +85,11 @@
 
 .switchText {
   text-align: center;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
   color: #666;
+  font-size: 0.95rem;
+  padding: 1rem 0 0.5rem 0;
+  border-top: 1px solid #f0f0f0;
 }
 
 .switchButton {
@@ -94,13 +97,18 @@
   border: none;
   color: #667eea;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   margin-left: 0.5rem;
-  text-decoration: underline;
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  transition: all 0.2s ease;
 }
 
 .switchButton:hover {
   color: #5a6fd8;
+  background: rgba(102, 126, 234, 0.05);
+  text-decoration: none;
 }
 
 /* GitHub Badge Styles */
@@ -140,6 +148,113 @@
   transform: scale(1.1);
 }
 
+/* Forgot Password Styles */
+.forgotPassword {
+  text-align: center;
+  margin: 1.5rem 0 0.5rem 0;
+}
+
+.forgotPasswordLink {
+  background: none;
+  border: none;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 0.9rem;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.forgotPasswordLink:hover {
+  color: #5a6fd8;
+  background: rgba(102, 126, 234, 0.05);
+  text-decoration: none;
+}
+
+/* Password Reset Form Styles */
+.resetDescription {
+  text-align: center;
+  color: #666;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.resetSuccess {
+  text-align: center;
+}
+
+.successMessage {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  color: #155724;
+}
+
+.successMessage p {
+  margin: 0.5rem 0;
+}
+
+.successMessage strong {
+  font-weight: 600;
+}
+
+.emailNote {
+  font-size: 0.875rem;
+  font-style: italic;
+  margin-top: 1rem !important;
+  color: #6c757d !important;
+}
+
+.resetActions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.resetActions .button,
+.resetActions .secondaryButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+  min-width: 140px;
+}
+
+.resetActions .button {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.resetActions .button:hover:not(:disabled) {
+  background: #5a6fd8;
+  border-color: #5a6fd8;
+}
+
+.secondaryButton {
+  background: transparent;
+  color: #667eea;
+  border-color: #667eea;
+}
+
+.secondaryButton:hover {
+  background: #667eea;
+  color: white;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Responsive design for larger signup forms */
 @media (max-width: 768px) {
   .formContainer {
@@ -166,6 +281,42 @@
     width: 18px;
     height: 18px;
   }
+  
+  .forgotPasswordLink {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .resetDescription {
+    font-size: 0.9rem;
+  }
+  
+  .successMessage {
+    padding: 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .resetActions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .resetActions .button,
+  .resetActions .secondaryButton {
+    padding: 0.65rem 1.2rem;
+    font-size: 0.9rem;
+    min-width: 120px;
+  }
+  
+  .switchText {
+    font-size: 0.9rem;
+    margin-top: 1.25rem;
+    padding: 0.75rem 0 0.25rem 0;
+  }
+  
+  .switchButton {
+    font-size: 0.9rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -181,5 +332,9 @@
   .githubBadge {
     margin-top: 1rem;
     padding-top: 0.75rem;
+  }
+  
+  .successMessage {
+    padding: 0.75rem;
   }
 }
