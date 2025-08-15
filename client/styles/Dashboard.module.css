@@ -575,6 +575,47 @@
   border-bottom: none;
 }
 
+.serverDataSection .errorBox {
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.subDataSection {
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 1rem;
+}
+
+.subDataSection:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.subDataSection h5 {
+  margin: 0 0 0.75rem 0;
+  padding: 0.5rem 1rem;
+  background: #f8f9fa;
+  border-left: 3px solid #007bff;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.auditNote {
+  background: #e7f3ff;
+  border: 1px solid #b8daff;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin: 0.5rem 1rem;
+  color: #004085;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
 /* Responsive design for account data modal */
 @media (max-width: 768px) {
   .accountDataModal {

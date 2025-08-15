@@ -395,7 +395,7 @@ export default function Dashboard() {
       // 2. Get user data from landing page MongoDB
       console.log('Loading landing page data...');
       try {
-        const landingDataResponse = await axios.get(apiEndpoints.exportUserData(), {
+        const landingDataResponse = await axios.get(apiEndpoints.viewUserData(), {
           headers: {
             Authorization: `Bearer ${token}`
           },
@@ -763,7 +763,40 @@ export default function Dashboard() {
                     )}
                   </div>
                 ) : (
-                  <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage, null, 2)}</pre>
+                  <div>
+                    {/* Login History */}
+                    <div className={styles.subDataSection}>
+                      <h5>🔐 Login History</h5>
+                      {accountData.landingPage.loginHistory && accountData.landingPage.loginHistory.length > 0 ? (
+                        <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage.loginHistory, null, 2)}</pre>
+                      ) : (
+                        <p>No login history available.</p>
+                      )}
+                    </div>
+                    
+                    {/* Audit Logs */}
+                    <div className={styles.subDataSection}>
+                      <h5>📋 Audit Logs (Data Access History)</h5>
+                      {accountData.landingPage.auditLogs && accountData.landingPage.auditLogs.length > 0 ? (
+                        <div>
+                          <p className={styles.auditNote}>
+                            ℹ️ These logs track when you access, view, export, or delete your data for compliance purposes.
+                          </p>
+                          <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage.auditLogs, null, 2)}</pre>
+                        </div>
+                      ) : (
+                        <p>No audit logs available yet. Audit logs are created when you view, export, or delete your data.</p>
+                      )}
+                    </div>
+                    
+                    {/* Metadata */}
+                    {accountData.landingPage.viewMetadata && (
+                      <div className={styles.subDataSection}>
+                        <h5>📊 View Metadata</h5>
+                        <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage.viewMetadata, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { getDatabase } from '../config/database';
 import { getFirebaseConfig, admin } from '../config/firebase';
+import { createAuditLog, getAuditLogsForUser } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -111,10 +112,24 @@ router.get('/verify', authenticateToken, (req: AuthenticatedRequest, res: Respon
   });
 });
 
-// Endpoint to export user data
-router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+// Endpoint to view user data (for audit logging purposes)
+router.get('/user/view-data', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log(`Export data request from user: ${req.user?.uid} (${req.user?.email})`);
+    console.log(`View data request from user: ${req.user?.uid} (${req.user?.email})`);
+
+    // Create audit log for data viewing
+    await createAuditLog({
+      userId: req.user?.uid || '',
+      email: req.user?.email || '',
+      action: 'DATA_VIEW',
+      timestamp: new Date(),
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      metadata: {
+        endpoint: '/user/view-data',
+        method: 'GET'
+      }
+    });
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
@@ -124,6 +139,85 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
       .find({ userId: req.user?.uid })
       .sort({ loginTime: -1 }) // Most recent first
       .toArray();
+
+    // Get audit logs for the user
+    const auditLogs = await getAuditLogsForUser(req.user?.uid || '');
+
+    const viewData = {
+      user: {
+        uid: req.user?.uid,
+        email: req.user?.email,
+        emailVerified: req.user?.email_verified
+      },
+      loginHistory: userLogins.map(login => ({
+        _id: login._id,
+        userId: login.userId,
+        email: login.email,
+        loginTime: login.loginTime,
+        userAgent: login.userAgent,
+        ip: login.ip
+      })),
+      auditLogs: auditLogs.map(log => ({
+        action: log.action,
+        timestamp: log.timestamp,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        metadata: log.metadata
+      })),
+      viewMetadata: {
+        viewDate: new Date().toISOString(),
+        totalLoginRecords: userLogins.length,
+        totalAuditRecords: auditLogs.length,
+        source: 'landing_page_server'
+      }
+    };
+
+    console.log(`Viewed ${userLogins.length} login records and ${auditLogs.length} audit records for user ${req.user?.uid}`);
+    
+    res.json({
+      success: true,
+      data: viewData
+    });
+  } catch (error) {
+    console.error('Error viewing user data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to view user data',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Endpoint to export user data
+router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log(`Export data request from user: ${req.user?.uid} (${req.user?.email})`);
+
+    // Create audit log for data export
+    await createAuditLog({
+      userId: req.user?.uid || '',
+      email: req.user?.email || '',
+      action: 'DATA_EXPORT',
+      timestamp: new Date(),
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      metadata: {
+        endpoint: '/user/export-data',
+        method: 'GET'
+      }
+    });
+
+    const db = getDatabase();
+    const userLoginsCollection = db.collection('user_logins');
+
+    // Get all login records for the authenticated user
+    const userLogins = await userLoginsCollection
+      .find({ userId: req.user?.uid })
+      .sort({ loginTime: -1 }) // Most recent first
+      .toArray();
+
+    // Get audit logs for the user
+    const auditLogs = await getAuditLogsForUser(req.user?.uid || '');
 
     const exportData = {
       user: {
@@ -139,14 +233,22 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
         userAgent: login.userAgent,
         ip: login.ip
       })),
+      auditLogs: auditLogs.map(log => ({
+        action: log.action,
+        timestamp: log.timestamp,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        metadata: log.metadata
+      })),
       exportMetadata: {
         exportDate: new Date().toISOString(),
         totalLoginRecords: userLogins.length,
+        totalAuditRecords: auditLogs.length,
         source: 'landing_page_server'
       }
     };
 
-    console.log(`Exported ${userLogins.length} login records for user ${req.user?.uid}`);
+    console.log(`Exported ${userLogins.length} login records and ${auditLogs.length} audit records for user ${req.user?.uid}`);
     
     res.json({
       success: true,
@@ -167,6 +269,20 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
   try {
     console.log(`Delete data request from user: ${req.user?.uid} (${req.user?.email})`);
 
+    // Create audit log for data deletion BEFORE deleting the data
+    await createAuditLog({
+      userId: req.user?.uid || '',
+      email: req.user?.email || '',
+      action: 'DATA_DELETE',
+      timestamp: new Date(),
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      metadata: {
+        endpoint: '/user/delete-data',
+        method: 'DELETE'
+      }
+    });
+
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
 
@@ -175,13 +291,18 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
       userId: req.user?.uid 
     });
 
+    // Note: We intentionally do NOT delete audit logs for compliance reasons
+    // Audit logs must be retained even after account deletion for legal/compliance purposes
+
     console.log(`Deleted ${deleteResult.deletedCount} login records for user ${req.user?.uid}`);
+    console.log(`Audit logs retained for compliance purposes`);
     
     res.json({
       success: true,
       message: 'User data deleted successfully',
       deletedRecords: deleteResult.deletedCount,
-      userId: req.user?.uid
+      userId: req.user?.uid,
+      note: 'Audit logs retained for compliance purposes'
     });
   } catch (error) {
     console.error('Error deleting user data:', error);

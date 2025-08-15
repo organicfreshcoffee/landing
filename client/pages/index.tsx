@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
+import ConsentBanner from '../components/ConsentBanner';
 import styles from '../styles/Login.module.css';
 
 export default function Login() {
@@ -9,6 +10,7 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasConsented, setHasConsented] = useState(false);
   
   const { signIn, signUp } = useAuth();
   const router = useRouter();
@@ -17,6 +19,13 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // Check consent for sign-up
+    if (isSignUp && !hasConsented) {
+      setError('You must consent to the Privacy Policy to create an account.');
+      setLoading(false);
+      return;
+    }
 
     try {
       if (isSignUp) {
@@ -66,9 +75,16 @@ export default function Login() {
           
           {error && <div className={styles.error}>{error}</div>}
           
+          {isSignUp && (
+            <ConsentBanner 
+              onConsentChange={setHasConsented}
+              hasConsented={hasConsented}
+            />
+          )}
+          
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (isSignUp && !hasConsented)}
             className={styles.button}
           >
             {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
@@ -79,7 +95,11 @@ export default function Login() {
           {isSignUp ? 'Already have an account?' : "Don't have an account?"}
           <button
             type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setHasConsented(false); // Reset consent when switching
+              setError(''); // Clear any errors
+            }}
             className={styles.switchButton}
           >
             {isSignUp ? 'Sign In' : 'Sign Up'}
