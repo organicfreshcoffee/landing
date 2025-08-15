@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { getDatabase } from '../config/database';
 import { getFirebaseConfig, admin } from '../config/firebase';
-import { createAuditLog, getAuditLogsForUser } from '../utils/auditLogger';
+import { createAuditLog, getAuditLogsForUser, pseudonymizeUserAuditLogs } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -283,7 +283,8 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
       userAgent: req.get('User-Agent'),
       metadata: {
         endpoint: '/user/delete-data',
-        method: 'DELETE'
+        method: 'DELETE',
+        gdprCompliance: 'Article 17 - Right to Erasure'
       }
     });
 
@@ -295,18 +296,27 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
       userId: req.user?.uid 
     });
 
-    // Note: We intentionally do NOT delete audit logs for compliance reasons
-    // Audit logs must be retained even after account deletion for legal/compliance purposes
+    // Pseudonymize audit logs to comply with GDPR while maintaining compliance records
+    const pseudonymizedCount = await pseudonymizeUserAuditLogs(
+      req.user?.uid || '', 
+      req.user?.email || ''
+    );
 
     console.log(`Deleted ${deleteResult.deletedCount} login records for user ${req.user?.uid}`);
-    console.log(`Audit logs retained for compliance purposes`);
+    console.log(`Pseudonymized ${pseudonymizedCount} audit log entries for GDPR compliance`);
     
     res.json({
       success: true,
       message: 'User data deleted successfully',
       deletedRecords: deleteResult.deletedCount,
+      pseudonymizedAuditLogs: pseudonymizedCount,
       userId: req.user?.uid,
-      note: 'Audit logs retained for compliance purposes'
+      gdprCompliance: {
+        personalDataDeleted: true,
+        auditLogsPseudonymized: true,
+        retentionReason: 'Legal compliance requirements',
+        note: 'Personal identifiers removed from audit logs while preserving compliance records'
+      }
     });
   } catch (error) {
     console.error('Error deleting user data:', error);
