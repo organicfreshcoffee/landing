@@ -5,6 +5,7 @@ import { apiEndpoints, logApiConfig } from '../lib/api';
 import axios from 'axios';
 import JSZip from 'jszip';
 import styles from '../styles/Dashboard.module.css';
+import PrivacyPolicy from '../components/PrivacyPolicy';
 
 interface Server {
   _id: string;
@@ -744,6 +745,8 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      
+      <PrivacyPolicy />
     </div>
   );
 }
