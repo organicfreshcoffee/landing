@@ -15,6 +15,12 @@ export class PlayerManager {
   // Sprite mesh references for texture updates
   private static spriteMeshReferences = new Map<string, THREE.Mesh>();
 
+  // Pre-loaded textures for sprite animation
+  private static spriteTextures = new Map<string, {
+    frame1: THREE.Texture;
+    frame2: THREE.Texture;
+  }>();
+
   static generatePlayerColor(playerId: string): string {
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
@@ -50,25 +56,40 @@ export class PlayerManager {
     const direction = isLocalPlayer ? 'bk' : 'fr'; // Local player shows back, others show front
     const frame = 1;
     
-    // Load the texture for the sprite
-    const spritePath = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${direction}${frame}.gif`;
+    // Pre-load both frame textures for animation
     const textureLoader = new THREE.TextureLoader();
-    const spriteTexture = textureLoader.load(spritePath, 
-      () => console.log(`✅ Loaded sprite: ${spritePath}`),
+    const frame1Path = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${direction}1.gif`;
+    const frame2Path = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${direction}2.gif`;
+    
+    const frame1Texture = textureLoader.load(frame1Path, 
+      () => console.log(`✅ Loaded frame 1: ${frame1Path}`),
       undefined,
-      (error) => {
-        console.error(`❌ Failed to load sprite: ${spritePath}`, error);
-        // Fallback to a default texture or color
-      }
+      (error) => console.error(`❌ Failed to load frame 1: ${frame1Path}`, error)
     );
     
-    // Configure texture
-    spriteTexture.magFilter = THREE.NearestFilter; // Pixelated look for retro sprites
-    spriteTexture.minFilter = THREE.NearestFilter;
+    const frame2Texture = textureLoader.load(frame2Path, 
+      () => console.log(`✅ Loaded frame 2: ${frame2Path}`),
+      undefined,
+      (error) => console.error(`❌ Failed to load frame 2: ${frame2Path}`, error)
+    );
     
-    // Create material with transparency
+    // Configure textures
+    [frame1Texture, frame2Texture].forEach(texture => {
+      texture.magFilter = THREE.NearestFilter; // Pixelated look for retro sprites
+      texture.minFilter = THREE.NearestFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+    });
+    
+    // Store pre-loaded textures
+    this.spriteTextures.set(player.id, {
+      frame1: frame1Texture,
+      frame2: frame2Texture
+    });
+    
+    // Create material with transparency using frame 1 initially
     const spriteMaterial = new THREE.MeshBasicMaterial({
-      map: spriteTexture,
+      map: frame1Texture,
       transparent: true,
       alphaTest: 0.1, // Remove pixels with alpha below 0.1
       side: THREE.DoubleSide // Make sprite visible from both sides
@@ -348,7 +369,10 @@ export class PlayerManager {
    */
   static updateSpriteAnimation(playerId: string, isMoving: boolean): void {
     const animData = this.spriteAnimations.get(playerId);
-    if (!animData) return;
+    if (!animData) {
+      console.log(`❌ No animation data found for player: ${playerId}`);
+      return;
+    }
 
     const now = Date.now();
     const FRAME_DURATION = 500; // ms per frame (slower than UI preview)
@@ -356,17 +380,23 @@ export class PlayerManager {
     // Update moving state
     animData.isMoving = isMoving;
 
+    console.log(`🎬 Sprite animation update - Player: ${playerId}, Moving: ${isMoving}, Current Frame: ${animData.currentFrame}, Last Frame Time: ${now - animData.lastFrameTime}ms ago`);
+
     // Only animate frames if moving
     if (isMoving && (now - animData.lastFrameTime) > FRAME_DURATION) {
       // Toggle between frame 1 and 2
+      const oldFrame = animData.currentFrame;
       animData.currentFrame = animData.currentFrame === 1 ? 2 : 1;
       animData.lastFrameTime = now;
+
+      console.log(`🔄 Frame change - Player: ${playerId}, ${oldFrame} → ${animData.currentFrame}`);
 
       // Update the sprite texture
       this.updateSpriteTexture(playerId);
     } else if (!isMoving) {
       // Reset to frame 1 when not moving
       if (animData.currentFrame !== 1) {
+        console.log(`⏹️ Resetting to frame 1 - Player: ${playerId}`);
         animData.currentFrame = 1;
         this.updateSpriteTexture(playerId);
       }
@@ -378,34 +408,38 @@ export class PlayerManager {
    */
   private static updateSpriteTexture(playerId: string): void {
     const animData = this.spriteAnimations.get(playerId);
-    if (!animData) return;
+    if (!animData) {
+      console.log(`❌ No animation data for texture update: ${playerId}`);
+      return;
+    }
 
     // Find the sprite mesh reference
     const spriteMeshRef = this.spriteMeshReferences.get(playerId);
-    if (!spriteMeshRef) return;
+    if (!spriteMeshRef) {
+      console.log(`❌ No sprite mesh reference found: ${playerId}`);
+      return;
+    }
 
-    const character = spriteMeshRef.userData.character;
-    if (!character) return;
+    // Get pre-loaded textures
+    const textures = this.spriteTextures.get(playerId);
+    if (!textures) {
+      console.log(`❌ No pre-loaded textures found: ${playerId}`);
+      return;
+    }
 
-    // Generate the new sprite path
-    const spritePath = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${animData.direction}${animData.currentFrame}.gif`;
+    // Get the material
+    const material = spriteMeshRef.material as THREE.MeshBasicMaterial;
     
-    // Update texture
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load(spritePath, (newTexture) => {
-      newTexture.magFilter = THREE.NearestFilter;
-      newTexture.minFilter = THREE.NearestFilter;
-      
-      // Dispose of old texture
-      const material = spriteMeshRef.material as THREE.MeshBasicMaterial;
-      if (material.map) {
-        material.map.dispose();
-      }
-      
-      // Apply new texture
-      material.map = newTexture;
-      material.needsUpdate = true;
-    });
+    // Switch to the appropriate frame texture
+    const newTexture = animData.currentFrame === 1 ? textures.frame1 : textures.frame2;
+    
+    console.log(`🔄 Switching to frame ${animData.currentFrame} for player: ${playerId}`);
+    
+    // Apply new texture (no loading needed since it's pre-loaded)
+    material.map = newTexture;
+    material.needsUpdate = true;
+    
+    console.log(`✅ Texture switched successfully to frame ${animData.currentFrame}`);
   }
 
   /**
@@ -514,8 +548,19 @@ export class PlayerManager {
   static disposePlayerMesh(mesh: THREE.Object3D): void {
     // Clean up sprite references if this is a sprite player
     if (mesh.userData.playerId) {
-      this.spriteMeshReferences.delete(mesh.userData.playerId);
-      this.spriteAnimations.delete(mesh.userData.playerId);
+      const playerId = mesh.userData.playerId;
+      
+      // Clean up pre-loaded textures
+      const textures = this.spriteTextures.get(playerId);
+      if (textures) {
+        textures.frame1.dispose();
+        textures.frame2.dispose();
+        this.spriteTextures.delete(playerId);
+      }
+      
+      // Clean up other references
+      this.spriteMeshReferences.delete(playerId);
+      this.spriteAnimations.delete(playerId);
     }
 
     if (mesh instanceof THREE.Mesh) {
