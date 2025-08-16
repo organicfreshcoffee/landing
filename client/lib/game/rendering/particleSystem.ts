@@ -69,13 +69,21 @@ export class ParticleSystem {
     console.log('🌐 ParticleSystem.castSpellFromNetwork called!', {
       from: fromPosition,
       to: toPosition,
-      currentParticleCount: this.particles.length
+      currentParticleCount: this.particles.length,
+      particleSystemInScene: this.scene.children.includes(this.particleSystem)
     });
     
     this.createSpellEffect(fromPosition, toPosition, true); // true = from other player
   }
 
   private createSpellEffect(fromPosition: THREE.Vector3, toPosition: THREE.Vector3, isFromOtherPlayer: boolean): void {
+    console.log('🔮 createSpellEffect called!', {
+      from: fromPosition,
+      to: toPosition,
+      isFromOtherPlayer,
+      particleSystemInScene: this.scene.children.includes(this.particleSystem)
+    });
+    
     // Ensure particle system is in the scene
     if (!this.scene.children.includes(this.particleSystem)) {
       console.log('⚠️ Particle system not in scene, re-adding...');
@@ -218,6 +226,15 @@ export class ParticleSystem {
     
     // Clamp delta to prevent huge jumps
     const clampedDelta = Math.min(delta, 1/30); // Max 30fps to prevent big jumps
+    
+    // Log particle count occasionally for debugging
+    if (this.particles.length > 0 && Math.random() < 0.01) { // 1% chance to log
+      console.log('🌟 Particle system update:', {
+        particleCount: this.particles.length,
+        delta: clampedDelta,
+        particleSystemInScene: this.scene.children.includes(this.particleSystem)
+      });
+    }
     
     // Ensure particle system is still in scene
     if (!this.scene.children.includes(this.particleSystem)) {

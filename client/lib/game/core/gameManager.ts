@@ -194,6 +194,8 @@ export class GameManager {
   }
 
   private handleGameMessage(message: GameMessage): void {
+    console.log('📥 RECEIVED MESSAGE:', message.type, message.data);
+    
     switch (message.type) {
       case 'player_joined':
         // Handle new player joining with full player data
@@ -262,7 +264,7 @@ export class GameManager {
 
       case 'player_action':
         if (message.data.playerId && message.data.action) {
-          console.log('⚡ Received player action:', message.data.action, 'from player:', message.data.playerId);
+          console.log('⚡ Received player action:', message.data.action, 'from player:', message.data.playerId, 'raw data:', message.data);
           this.handlePlayerAction(message.data);
         } else {
           console.warn('⚠️ Invalid player_action message data:', message.data);
@@ -465,10 +467,29 @@ export class GameManager {
   }
 
   private handlePlayerAction(actionData: any): void {
-    const { playerId, action, data } = actionData;
+    console.log('🎭 Raw actionData received:', actionData);
+    
+    // Handle potential nested structure from server
+    let playerId, action, data;
+    
+    if (actionData.action && typeof actionData.action === 'object') {
+      // Server wrapped our action data in another layer
+      console.log('🔄 Detected wrapped message structure');
+      playerId = actionData.action.playerId;
+      action = actionData.action.action;
+      data = actionData.action.data;
+    } else {
+      // Direct structure as expected
+      playerId = actionData.playerId;
+      action = actionData.action;
+      data = actionData.data;
+    }
+    
+    console.log('🎬 Parsed action data:', { playerId, action, data });
     
     // Skip if this is the local player (we don't need to visualize our own actions)
     if (playerId === this.currentPlayerId) {
+      console.log('⏭️ Skipping action from local player:', playerId);
       return;
     }
 
@@ -485,6 +506,15 @@ export class GameManager {
   }
 
   private handleSpellCastAction(playerId: string, spellData: any): void {
+    console.log('🎪 handleSpellCastAction called with:', {
+      playerId,
+      spellData,
+      hasFromPosition: !!spellData?.fromPosition,
+      hasToPosition: !!spellData?.toPosition,
+      currentPlayerId: this.currentPlayerId,
+      isLocalPlayer: playerId === this.currentPlayerId
+    });
+
     if (!spellData || !spellData.fromPosition || !spellData.toPosition) {
       console.warn('⚠️ Invalid spell cast data:', spellData);
       return;
@@ -504,6 +534,11 @@ export class GameManager {
       spellData.toPosition.y,
       spellData.toPosition.z
     );
+
+    console.log('🚀 About to call particleSystem.castSpellFromNetwork with:', {
+      fromPosition: fromPosition.toArray(),
+      toPosition: toPosition.toArray()
+    });
 
     // Render the spell effect using our particle system
     this.particleSystem.castSpellFromNetwork(fromPosition, toPosition);
