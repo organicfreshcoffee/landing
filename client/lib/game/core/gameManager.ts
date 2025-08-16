@@ -360,6 +360,16 @@ export class GameManager {
       try {
         PlayerManager.updatePlayerPosition(existingPlayer, playerData);
         PlayerManager.updatePlayerAnimation(playerData.id, playerData, this.playersAnimations);
+        
+        // Update sprite direction based on rotation and local player position
+        if (this.localPlayerRef.current && existingPlayer.mesh && existingPlayer.mesh.userData.spriteMesh) {
+          PlayerManager.updateSpriteDirection(
+            playerData.id,
+            new THREE.Vector3(playerData.position.x, playerData.position.y, playerData.position.z),
+            playerData.rotation || { x: 0, y: 0, z: 0 },
+            this.localPlayerRef.current.position
+          );
+        }
       } catch (error) {
         console.error('❌ Error updating existing player:', playerData.id, error);
       }
@@ -404,6 +414,16 @@ export class GameManager {
         
         this.players.set(playerData.id, newPlayer);
         console.log('✅ Successfully created and added new player:', playerData.id);
+        
+        // Set initial sprite direction based on rotation and local player position
+        if (this.localPlayerRef.current) {
+          PlayerManager.updateSpriteDirection(
+            playerData.id,
+            new THREE.Vector3(playerData.position.x, playerData.position.y, playerData.position.z),
+            playerData.rotation || { x: 0, y: 0, z: 0 },
+            this.localPlayerRef.current.position
+          );
+        }
         
       } catch (error) {
         console.error('❌ Error creating new player:', playerData.id, error);
