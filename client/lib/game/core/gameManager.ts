@@ -288,9 +288,67 @@ export class GameManager {
       // Update existing player
       console.log('🔄 Updating existing player:', playerData.id, 'at position:', playerData.position);
       
-      // Update character data if provided
-      if (playerData.character) {
-        existingPlayer.character = playerData.character;
+      // Check if character has changed and needs sprite recreation
+      let needsSpriteRecreation = false;
+      if (playerData.character && existingPlayer.character) {
+        needsSpriteRecreation = (
+          playerData.character.type !== existingPlayer.character.type ||
+          playerData.character.style !== existingPlayer.character.style
+        );
+        
+        if (needsSpriteRecreation) {
+          console.log('🎭 Character changed for player:', playerData.id, {
+            from: `${existingPlayer.character.type}${existingPlayer.character.style}`,
+            to: `${playerData.character.type}${playerData.character.style}`
+          });
+        }
+      }
+      
+      // If character changed, recreate the sprite
+      if (needsSpriteRecreation && playerData.character) {
+        try {
+          // Remove old mesh from scene
+          if (existingPlayer.mesh) {
+            this.sceneManager.removeFromScene(existingPlayer.mesh);
+            PlayerManager.disposePlayerMesh(existingPlayer.mesh);
+          }
+          
+          // Update character data
+          existingPlayer.character = playerData.character;
+          
+          // Create new sprite mesh
+          const playerResult = PlayerManager.createSpritePlayerModel(existingPlayer, false);
+          if (!playerResult || !playerResult.model) {
+            console.error('❌ Failed to recreate sprite for:', playerData.id);
+            return;
+          }
+          
+          // Update player mesh
+          existingPlayer.mesh = playerResult.model;
+          
+          // Position at current location
+          existingPlayer.mesh.position.set(
+            playerData.position.x,
+            playerData.position.y,
+            playerData.position.z
+          );
+          
+          // Mark as other player
+          playerResult.model.userData.isOtherPlayer = true;
+          
+          // Add to scene
+          this.sceneManager.addToScene(playerResult.model);
+          
+          console.log('✅ Successfully recreated sprite for character change:', playerData.id);
+          
+        } catch (error) {
+          console.error('❌ Error recreating sprite:', playerData.id, error);
+        }
+      } else {
+        // Normal update - just update character data if provided
+        if (playerData.character) {
+          existingPlayer.character = playerData.character;
+        }
       }
       
       try {
