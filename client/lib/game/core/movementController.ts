@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PlayerAnimationData, CharacterData } from '../types';
+import { PlayerAnimationData, CharacterData, SpellActionData } from '../types';
 import { CollisionSystem } from './collisionSystem';
 import { GameHUD } from '../ui/gameHUD';
 import { AnimationTest } from '../utils/animationTest';
@@ -42,7 +42,8 @@ export class MovementController {
     private isConnected: () => boolean,
     private sendMovementUpdate: (data: any) => void,
     private selectedCharacter: CharacterData,
-    private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void
+    private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private sendPlayerAction?: (action: string, data?: any, target?: string) => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -607,7 +608,44 @@ export class MovementController {
       direction: direction
     });
 
-    // Call the spell cast callback
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      // Calculate potential hit area for server-side collision detection
+      const spellRadius = 1.0; // Radius around the spell path for hit detection
+      const currentPlayerPosition = this.localPlayerRef.current!.position;
+      
+      const spellActionData: SpellActionData = {
+        fromPosition: {
+          x: spellStartPosition.x,
+          y: spellStartPosition.y,
+          z: spellStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: spellRange,
+        timestamp: Date.now(),
+        // Additional data for server-side hit detection
+        casterPosition: {
+          x: currentPlayerPosition.x,
+          y: currentPlayerPosition.y,
+          z: currentPlayerPosition.z
+        },
+        spellRadius: spellRadius
+      };
+
+      console.log('📡 Sending spell action to other players:', spellActionData);
+      this.sendPlayerAction('spell_cast', spellActionData);
+    }
+
+    // Call the spell cast callback for local visual effect
     this.onSpellCast(spellStartPosition, targetPosition);
   }
 

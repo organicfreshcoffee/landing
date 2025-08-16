@@ -62,6 +62,28 @@ export class ParticleSystem {
       particleSystemInScene: this.scene.children.includes(this.particleSystem)
     });
     
+    this.createSpellEffect(fromPosition, toPosition, false); // false = local player
+  }
+
+  public castSpellFromNetwork(fromPosition: THREE.Vector3, toPosition: THREE.Vector3): void {
+    console.log('🌐 ParticleSystem.castSpellFromNetwork called!', {
+      from: fromPosition,
+      to: toPosition,
+      currentParticleCount: this.particles.length,
+      particleSystemInScene: this.scene.children.includes(this.particleSystem)
+    });
+    
+    this.createSpellEffect(fromPosition, toPosition, true); // true = from other player
+  }
+
+  private createSpellEffect(fromPosition: THREE.Vector3, toPosition: THREE.Vector3, isFromOtherPlayer: boolean): void {
+    console.log('🔮 createSpellEffect called!', {
+      from: fromPosition,
+      to: toPosition,
+      isFromOtherPlayer,
+      particleSystemInScene: this.scene.children.includes(this.particleSystem)
+    });
+    
     // Ensure particle system is in the scene
     if (!this.scene.children.includes(this.particleSystem)) {
       console.log('⚠️ Particle system not in scene, re-adding...');
@@ -73,7 +95,11 @@ export class ParticleSystem {
     
     // Create multiple particles for the spell effect
     const particleCount = Math.min(40, Math.floor(distance * 3) + 15);
-    console.log('🌟 Creating', particleCount, 'particles');
+    console.log('🌟 Creating', particleCount, 'particles for', isFromOtherPlayer ? 'other player' : 'local player');
+    
+    // Different colors for local vs other players
+    const baseHue = isFromOtherPlayer ? 0.05 : 0.55; // Orange for others, blue for local
+    const hueRange = isFromOtherPlayer ? 0.15 : 0.3; // Narrower range for others
     
     for (let i = 0; i < particleCount; i++) {
       // Create particles along the path with some spread
@@ -107,7 +133,7 @@ export class ParticleSystem {
         (Math.random() - 0.5) * 3
       ));
 
-      // Create particle with more vibrant colors
+      // Create particle with dynamic colors based on source
       const particle: Particle = {
         position: basePosition.clone(),
         velocity: velocity,
@@ -115,7 +141,7 @@ export class ParticleSystem {
         maxLife: 1.2 + Math.random() * 0.8, // Longer lifetime
         size: 0.08 + Math.random() * 0.15,
         color: new THREE.Color().setHSL(
-          0.55 + Math.random() * 0.3, // Blue to purple hue range
+          baseHue + Math.random() * hueRange, // Different colors for local vs other players
           0.9 + Math.random() * 0.1, // Very high saturation
           0.6 + Math.random() * 0.4   // Bright lightness
         )
@@ -125,10 +151,10 @@ export class ParticleSystem {
     }
 
     // Enhanced burst effect at the origin
-    this.createBurstEffect(fromPosition);
+    this.createBurstEffect(fromPosition, isFromOtherPlayer);
     
     // Enhanced impact effect at the target
-    this.createImpactEffect(toPosition);
+    this.createImpactEffect(toPosition, isFromOtherPlayer);
 
     // Remove old particles if we exceed the limit
     while (this.particles.length > this.maxParticles) {
@@ -136,7 +162,7 @@ export class ParticleSystem {
     }
   }
 
-  private createBurstEffect(position: THREE.Vector3): void {
+  private createBurstEffect(position: THREE.Vector3, isFromOtherPlayer: boolean = false): void {
     const burstCount = 25;
     for (let i = 0; i < burstCount; i++) {
       const angle = (i / burstCount) * Math.PI * 2;
@@ -155,7 +181,7 @@ export class ParticleSystem {
         maxLife: 1.0,
         size: 0.12 + Math.random() * 0.08,
         color: new THREE.Color().setHSL(
-          0.7 + Math.random() * 0.1, // Bright blue
+          isFromOtherPlayer ? 0.05 + Math.random() * 0.1 : 0.7 + Math.random() * 0.1, // Orange for others, blue for local
           0.95,
           0.7 + Math.random() * 0.3
         )
@@ -165,7 +191,7 @@ export class ParticleSystem {
     }
   }
 
-  private createImpactEffect(position: THREE.Vector3): void {
+  private createImpactEffect(position: THREE.Vector3, isFromOtherPlayer: boolean = false): void {
     const impactCount = 30;
     for (let i = 0; i < impactCount; i++) {
       const velocity = new THREE.Vector3(
@@ -185,7 +211,7 @@ export class ParticleSystem {
         maxLife: 1.5,
         size: 0.08 + Math.random() * 0.12,
         color: new THREE.Color().setHSL(
-          0.05 + Math.random() * 0.15, // Orange to yellow-orange hue for impact
+          isFromOtherPlayer ? 0.02 + Math.random() * 0.08 : 0.05 + Math.random() * 0.15, // Redder for others, orange for local
           0.95,
           0.7 + Math.random() * 0.3
         )
@@ -200,6 +226,15 @@ export class ParticleSystem {
     
     // Clamp delta to prevent huge jumps
     const clampedDelta = Math.min(delta, 1/30); // Max 30fps to prevent big jumps
+    
+    // Log particle count occasionally for debugging
+    if (this.particles.length > 0 && Math.random() < 0.01) { // 1% chance to log
+      console.log('🌟 Particle system update:', {
+        particleCount: this.particles.length,
+        delta: clampedDelta,
+        particleSystemInScene: this.scene.children.includes(this.particleSystem)
+      });
+    }
     
     // Ensure particle system is still in scene
     if (!this.scene.children.includes(this.particleSystem)) {

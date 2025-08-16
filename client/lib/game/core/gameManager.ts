@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData } from '../types';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData, PlayerActionData, SpellActionData } from '../types';
 import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
@@ -56,7 +56,8 @@ export class GameManager {
       () => this.webSocketManager.isConnected,
       (message) => this.webSocketManager.send(JSON.stringify(message)),
       this.selectedCharacter,
-      (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos)
+      (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos),
+      (action, data, target) => this.sendPlayerAction(action, data, target)
     );
 
     this.initializeGame();
@@ -193,6 +194,8 @@ export class GameManager {
   }
 
   private handleGameMessage(message: GameMessage): void {
+    console.log('📥 RECEIVED MESSAGE:', message.type, message.data);
+    
     switch (message.type) {
       case 'player_joined':
         // Handle new player joining with full player data
@@ -256,6 +259,15 @@ export class GameManager {
       case 'player_left_floor':
         if (message.data.playerId) {
           this.removePlayer(message.data.playerId);
+        }
+        break;
+
+      case 'player_action':
+        if (message.data.playerId && message.data.action) {
+          console.log('⚡ Received player action:', message.data.action, 'from player:', message.data.playerId, 'raw data:', message.data);
+          this.handlePlayerAction(message.data);
+        } else {
+          console.warn('⚠️ Invalid player_action message data:', message.data);
         }
         break;
 
@@ -432,6 +444,104 @@ export class GameManager {
         this.playersAnimations.delete(playerData.id);
       }
     }
+  }
+
+  private sendPlayerAction(action: string, data?: any, target?: string): void {
+    if (!this.webSocketManager.isConnected) {
+      console.warn('⚠️ Cannot send player action - not connected to server');
+      return;
+    }
+
+    const actionMessage = {
+      type: 'player_action',
+      data: {
+        playerId: this.currentPlayerId,
+        action: action,
+        target: target,
+        data: data
+      }
+    };
+
+    console.log('📤 Sending player action:', actionMessage);
+    this.webSocketManager.send(JSON.stringify(actionMessage));
+  }
+
+  private handlePlayerAction(actionData: any): void {
+    console.log('🎭 Raw actionData received:', actionData);
+    
+    // Handle potential nested structure from server
+    let playerId, action, data;
+    
+    if (actionData.action && typeof actionData.action === 'object') {
+      // Server wrapped our action data in another layer
+      console.log('🔄 Detected wrapped message structure');
+      playerId = actionData.action.playerId;
+      action = actionData.action.action;
+      data = actionData.action.data;
+    } else {
+      // Direct structure as expected
+      playerId = actionData.playerId;
+      action = actionData.action;
+      data = actionData.data;
+    }
+    
+    console.log('🎬 Parsed action data:', { playerId, action, data });
+    
+    // Skip if this is the local player (we don't need to visualize our own actions)
+    if (playerId === this.currentPlayerId) {
+      console.log('⏭️ Skipping action from local player:', playerId);
+      return;
+    }
+
+    console.log('🎬 Handling player action:', action, 'from player:', playerId, 'with data:', data);
+
+    switch (action) {
+      case 'spell_cast':
+        this.handleSpellCastAction(playerId, data);
+        break;
+      default:
+        console.log('❓ Unknown player action:', action);
+        break;
+    }
+  }
+
+  private handleSpellCastAction(playerId: string, spellData: any): void {
+    console.log('🎪 handleSpellCastAction called with:', {
+      playerId,
+      spellData,
+      hasFromPosition: !!spellData?.fromPosition,
+      hasToPosition: !!spellData?.toPosition,
+      currentPlayerId: this.currentPlayerId,
+      isLocalPlayer: playerId === this.currentPlayerId
+    });
+
+    if (!spellData || !spellData.fromPosition || !spellData.toPosition) {
+      console.warn('⚠️ Invalid spell cast data:', spellData);
+      return;
+    }
+
+    console.log('✨ Rendering spell cast from player:', playerId, spellData);
+
+    // Convert positions from the message data to THREE.Vector3
+    const fromPosition = new THREE.Vector3(
+      spellData.fromPosition.x,
+      spellData.fromPosition.y,
+      spellData.fromPosition.z
+    );
+    
+    const toPosition = new THREE.Vector3(
+      spellData.toPosition.x,
+      spellData.toPosition.y,
+      spellData.toPosition.z
+    );
+
+    console.log('🚀 About to call particleSystem.castSpellFromNetwork with:', {
+      fromPosition: fromPosition.toArray(),
+      toPosition: toPosition.toArray()
+    });
+
+    // Render the spell effect using our particle system
+    this.particleSystem.castSpellFromNetwork(fromPosition, toPosition);
   }
 
   private removePlayer(playerId: string): void {
