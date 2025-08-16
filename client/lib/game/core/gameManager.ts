@@ -89,6 +89,9 @@ export class GameManager {
       
       // Periodically verify floor integrity
       this.checkFloorIntegrity();
+      
+      // Periodically verify player state integrity
+      this.checkPlayerStateIntegrity();
     });
 
     // Set up visibility change handler
@@ -187,6 +190,24 @@ export class GameManager {
 
   private handleGameMessage(message: GameMessage): void {
     switch (message.type) {
+      case 'player_joined':
+        // Handle new player joining with full player data
+        if (message.data.id && message.data.position && message.data.character) {
+          console.log('👥 Player joined:', message.data.character.name, 'at position:', message.data.position);
+          
+          this.updatePlayer({
+            id: message.data.id,
+            position: message.data.position,
+            rotation: message.data.rotation || { x: 0, y: 0, z: 0 },
+            isMoving: false, // New players start stationary
+            movementDirection: 'none',
+            character: message.data.character
+          }).catch(console.error);
+        } else {
+          console.warn('⚠️ Invalid player_joined message data:', message.data);
+        }
+        break;
+
       case 'player_moved':
         // Handle both new players joining and existing players moving
         // Character data is included in all movement messages
@@ -194,8 +215,16 @@ export class GameManager {
           // Only log character data for new players
           const isNewPlayer = !this.players.has(message.data.playerId);
           if (isNewPlayer && message.data.character) {
-            console.log('👥 New player joined:', message.data.character.name);
+            console.log('👥 New player joined via player_moved:', message.data.character.name);
           }
+          
+          console.log('📨 Received player_moved for:', message.data.playerId, {
+            isNewPlayer,
+            hasCharacter: !!message.data.character,
+            characterName: message.data.character?.name,
+            position: message.data.position,
+            currentPlayerCount: this.players.size
+          });
           
           this.updatePlayer({
             id: message.data.playerId,
@@ -205,6 +234,12 @@ export class GameManager {
             movementDirection: message.data.movementDirection || 'none',
             character: message.data.character
           }).catch(console.error);
+        } else {
+          console.warn('⚠️ Invalid player_moved message - missing playerId or position:', {
+            hasPlayerId: !!message.data.playerId,
+            hasPosition: !!message.data.position,
+            data: message.data
+          });
         }
         break;
       
@@ -222,71 +257,129 @@ export class GameManager {
 
       case 'players_list':
         if (message.data.players && Array.isArray(message.data.players)) {
+          console.log(`📋 Received players list with ${message.data.players.length} players`);
+          
           message.data.players.forEach((playerData: PlayerUpdate) => {
+            // Skip local player
             if (playerData.id !== this.user?.uid) {
-              this.updatePlayer(playerData).catch(console.error);
+              console.log('📝 Processing player from list:', playerData.id, 'character:', playerData.character?.name || 'unknown');
+              this.updatePlayer(playerData).catch((error) => {
+                console.error('❌ Error updating player from list:', playerData.id, error);
+              });
             }
           });
+        } else {
+          console.warn('⚠️ Invalid players_list message data:', message.data);
         }
         break;
     }
   }
 
   private async updatePlayer(playerData: PlayerUpdate): Promise<void> {
+    // Skip if this is the local player
+    if (playerData.id === this.user?.uid) {
+      console.log('⏭️ Skipping update for local player:', playerData.id);
+      return;
+    }
+
     const existingPlayer = this.players.get(playerData.id);
 
     if (existingPlayer) {
+      // Update existing player
+      console.log('🔄 Updating existing player:', playerData.id, 'at position:', playerData.position);
+      
       // Update character data if provided
       if (playerData.character) {
         existingPlayer.character = playerData.character;
       }
-      PlayerManager.updatePlayerPosition(existingPlayer, playerData);
-      PlayerManager.updatePlayerAnimation(playerData.id, playerData, this.playersAnimations);
+      
+      try {
+        PlayerManager.updatePlayerPosition(existingPlayer, playerData);
+        PlayerManager.updatePlayerAnimation(playerData.id, playerData, this.playersAnimations);
+      } catch (error) {
+        console.error('❌ Error updating existing player:', playerData.id, error);
+      }
     } else {
       // Create new player
-      const newPlayer: Player = {
-        id: playerData.id,
-        position: playerData.position,
-        rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
-        color: PlayerManager.generatePlayerColor(playerData.id),
-        isMoving: playerData.isMoving || false,
-        movementDirection: playerData.movementDirection || 'none',
-        character: playerData.character
-      };
+      console.log('✨ Creating new player:', playerData.id, 'with character:', playerData.character?.name || 'unknown');
       
-      const playerResult = await PlayerManager.createPlayerModel(newPlayer, false); // false = not local player
-      newPlayer.mesh = playerResult.model;
-      
-      // Mark as other player for scene preservation during floor changes
-      playerResult.model.userData.isOtherPlayer = true;
-      
-      this.sceneManager.addToScene(playerResult.model);
-      
-      if (playerResult.mixer && playerResult.actions) {
-        this.playersAnimations.set(playerData.id, {
-          mixer: playerResult.mixer,
-          actions: playerResult.actions
-        });
+      if (!playerData.character) {
+        console.warn('⚠️ Cannot create player without character data:', playerData.id);
+        return;
       }
-      
-      this.players.set(playerData.id, newPlayer);
+
+      try {
+        const newPlayer: Player = {
+          id: playerData.id,
+          position: playerData.position,
+          rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
+          color: PlayerManager.generatePlayerColor(playerData.id),
+          isMoving: playerData.isMoving || false,
+          movementDirection: playerData.movementDirection || 'none',
+          character: playerData.character
+        };
+        
+        const playerResult = PlayerManager.createSpritePlayerModel(newPlayer, false); // false = not local player
+        if (!playerResult || !playerResult.model) {
+          console.error('❌ Failed to create sprite player model for:', playerData.id);
+          return;
+        }
+
+        newPlayer.mesh = playerResult.model;
+        
+        // Mark as other player for scene preservation during floor changes
+        playerResult.model.userData.isOtherPlayer = true;
+        
+        this.sceneManager.addToScene(playerResult.model);
+        
+        console.log('✅ Successfully created and added new sprite player:', playerData.id, {
+          meshId: playerResult.model.uuid,
+          position: playerResult.model.position,
+          visible: playerResult.model.visible
+        });
+        
+        this.players.set(playerData.id, newPlayer);
+        console.log('✅ Successfully created and added new player:', playerData.id);
+        
+      } catch (error) {
+        console.error('❌ Error creating new player:', playerData.id, error);
+        // Clean up any partial state
+        this.players.delete(playerData.id);
+        this.playersAnimations.delete(playerData.id);
+      }
     }
   }
 
   private removePlayer(playerId: string): void {
+    console.log('🗑️ Removing player:', playerId);
+    
     const player = this.players.get(playerId);
     
     if (player && player.mesh) {
-      this.sceneManager.removeFromScene(player.mesh);
-      
-      const animData = this.playersAnimations.get(playerId);
-      if (animData) {
-        animData.mixer.stopAllAction();
+      try {
+        this.sceneManager.removeFromScene(player.mesh);
+        
+        const animData = this.playersAnimations.get(playerId);
+        if (animData) {
+          animData.mixer.stopAllAction();
+          this.playersAnimations.delete(playerId);
+        }
+        
+        PlayerManager.disposePlayerMesh(player.mesh);
+        this.players.delete(playerId);
+        
+        console.log('✅ Successfully removed player:', playerId);
+      } catch (error) {
+        console.error('❌ Error removing player:', playerId, error);
+        // Force cleanup even if error occurs
+        this.players.delete(playerId);
         this.playersAnimations.delete(playerId);
       }
-      
-      PlayerManager.disposePlayerMesh(player.mesh);
+    } else {
+      // Clean up any orphaned data
       this.players.delete(playerId);
+      this.playersAnimations.delete(playerId);
+      console.log('🧹 Cleaned up orphaned player data for:', playerId);
     }
   }
 
@@ -734,6 +827,46 @@ export class GameManager {
     }
   }
 
+  /**
+   * Periodically check player state integrity and fix any issues
+   */
+  private checkPlayerStateIntegrity(): void {
+    // Only check every 10 seconds to avoid performance impact
+    if (Math.random() > 0.99) { // Roughly every 10 seconds at 60fps
+      let issuesFound = 0;
+      
+      this.players.forEach((player, id) => {
+        // Check if player has mesh but mesh is not in scene
+        if (player.mesh && !this.sceneManager.scene.getObjectByProperty('uuid', player.mesh.uuid)) {
+          console.warn(`⚠️ Player ${id} has mesh but mesh not in scene - re-adding`);
+          this.sceneManager.addToScene(player.mesh);
+          issuesFound++;
+        }
+        
+        // Check if player has animation tracking but no mesh
+        if (this.playersAnimations.has(id) && !player.mesh) {
+          console.warn(`⚠️ Player ${id} has animation but no mesh - cleaning up animation`);
+          const animData = this.playersAnimations.get(id);
+          if (animData) {
+            animData.mixer.stopAllAction();
+          }
+          this.playersAnimations.delete(id);
+          issuesFound++;
+        }
+        
+        // Check if player mesh exists but no animation tracking for sprite players
+        if (player.mesh && player.character && !this.playersAnimations.has(id)) {
+          console.warn(`⚠️ Player ${id} has sprite character but no animation tracking`);
+          issuesFound++;
+        }
+      });
+      
+      if (issuesFound > 0) {
+        console.log(`🔧 Fixed ${issuesFound} player state integrity issues`);
+      }
+    }
+  }
+
   async loadFloor(floorName?: string): Promise<void> {
     try {
       await this.sceneManager.loadScenery(floorName);
@@ -769,6 +902,21 @@ export class GameManager {
     this.webSocketManager.manualReconnect(serverAddress, this.user, this.selectedCharacter);
   }
 
+  /**
+   * Update the selected character data and propagate to all relevant components
+   */
+  updateSelectedCharacter(character: CharacterData): void {
+    console.log('🔄 GameManager: Updating character from:', this.selectedCharacter.name, 'to:', character.name);
+    this.selectedCharacter = character;
+    
+    // Update MovementController with new character data
+    this.movementController.updateSelectedCharacter(character);
+    
+    // If we have a local player, we should recreate it with the new character
+    // This is more complex and might require reconnection for real-time sync
+    console.log('⚠️ Character updated - consider reconnecting to sync with other players');
+  }
+
   get playersCount(): number {
     return this.players.size + 1; // +1 for local player
   }
@@ -792,12 +940,16 @@ export class GameManager {
       players: Array.from(this.players.entries()).map(([id, player]) => ({
         id,
         position: player.position,
-        character: player.character
+        character: player.character,
+        hasMesh: !!player.mesh,
+        meshInScene: player.mesh ? this.sceneManager.scene.getObjectByProperty('uuid', player.mesh.uuid) !== undefined : false
       })),
       localPlayer: this.localPlayerRef.current?.position,
       localCharacter: this.selectedCharacter,
       animations: Array.from(this.playersAnimations.keys()),
-      testRunner: AnimationTest.getDebugInfo()
+      testRunner: AnimationTest.getDebugInfo(),
+      totalPlayersInMap: this.players.size,
+      totalAnimationsTracked: this.playersAnimations.size
     };
   }
 
@@ -808,6 +960,29 @@ export class GameManager {
 
   removeTestRunner(): void {
     AnimationTest.removeTestRunner(this.sceneManager.scene);
+  }
+
+  // Debug method for player state (can be called from browser console)
+  debugPlayers(): void {
+    console.log('🐛 === PLAYER DEBUG INFO ===');
+    console.log(`Total players in map: ${this.players.size}`);
+    console.log(`Total animations tracked: ${this.playersAnimations.size}`);
+    
+    this.players.forEach((player, id) => {
+      const hasAnimation = this.playersAnimations.has(id);
+      const meshInScene = player.mesh ? this.sceneManager.scene.getObjectByProperty('uuid', player.mesh.uuid) !== undefined : false;
+      
+      console.log(`Player ${id}:`, {
+        character: player.character?.name || 'unknown',
+        position: player.position,
+        hasMesh: !!player.mesh,
+        meshInScene,
+        hasAnimation,
+        isMoving: player.isMoving
+      });
+    });
+    
+    console.log('🐛 === END DEBUG INFO ===');
   }
 
   cleanup(): void {

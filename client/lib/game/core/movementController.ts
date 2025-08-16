@@ -536,7 +536,7 @@ export class MovementController {
         }
       };
       
-      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name);
+      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name, 'Full character data:', this.selectedCharacter);
       this.sendMovementUpdate(moveMessage);
     }
   }
@@ -553,6 +553,14 @@ export class MovementController {
         }
       });
     }
+  }
+
+  /**
+   * Update the selected character data (useful when character changes after game start)
+   */
+  updateSelectedCharacter(character: CharacterData): void {
+    console.log('🔄 Updating MovementController character from:', this.selectedCharacter.name, 'to:', character.name);
+    this.selectedCharacter = character;
   }
 
   private castSpell(): void {
