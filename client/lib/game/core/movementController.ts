@@ -378,7 +378,7 @@ export class MovementController {
   }
 
   private updateCamera(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3): void {
-    const cameraHeight = 1.0;
+    const cameraHeight = 1.5;
     const cameraDistance = 0.75;
     
     // Calculate camera position based on player's Y rotation

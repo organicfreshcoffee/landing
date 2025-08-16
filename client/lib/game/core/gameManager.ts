@@ -74,6 +74,9 @@ export class GameManager {
         if (this.localPlayerRef.current) {
           const stairManager = StairInteractionManager.getInstance();
           stairManager.updatePlayerPosition(this.localPlayerRef.current.position);
+          
+          // Make other players face the local player
+          PlayerManager.updateAllOtherPlayersFacing(this.localPlayerRef.current.position);
         }
       }
       

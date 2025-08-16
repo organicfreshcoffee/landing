@@ -12,6 +12,9 @@ export class PlayerManager {
     direction: 'fr' | 'bk' | 'lf' | 'rt';
   }>();
 
+  // Sprite mesh references for texture updates
+  private static spriteMeshReferences = new Map<string, THREE.Mesh>();
+
   static generatePlayerColor(playerId: string): string {
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
@@ -100,6 +103,9 @@ export class PlayerManager {
       isMoving: false,
       direction: direction
     });
+
+    // Store sprite mesh reference for texture updates
+    this.spriteMeshReferences.set(player.id, spriteMesh);
     
     console.log(`🎮 Created sprite player: ${character.name} (${character.type}${character.style}) for ${isLocalPlayer ? 'local' : 'other'} player`);
     
@@ -358,6 +364,12 @@ export class PlayerManager {
 
       // Update the sprite texture
       this.updateSpriteTexture(playerId);
+    } else if (!isMoving) {
+      // Reset to frame 1 when not moving
+      if (animData.currentFrame !== 1) {
+        animData.currentFrame = 1;
+        this.updateSpriteTexture(playerId);
+      }
     }
   }
 
@@ -368,13 +380,67 @@ export class PlayerManager {
     const animData = this.spriteAnimations.get(playerId);
     if (!animData) return;
 
-    // Find the player mesh in the scene (this could be optimized by storing references)
-    // For now, we'll handle this in the position update method
+    // Find the sprite mesh reference
+    const spriteMeshRef = this.spriteMeshReferences.get(playerId);
+    if (!spriteMeshRef) return;
+
+    const character = spriteMeshRef.userData.character;
+    if (!character) return;
+
+    // Generate the new sprite path
+    const spritePath = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${animData.direction}${animData.currentFrame}.gif`;
+    
+    // Update texture
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(spritePath, (newTexture) => {
+      newTexture.magFilter = THREE.NearestFilter;
+      newTexture.minFilter = THREE.NearestFilter;
+      
+      // Dispose of old texture
+      const material = spriteMeshRef.material as THREE.MeshBasicMaterial;
+      if (material.map) {
+        material.map.dispose();
+      }
+      
+      // Apply new texture
+      material.map = newTexture;
+      material.needsUpdate = true;
+    });
   }
 
   /**
-   * Update sprite player position and texture
+   * Make other player sprites face the local player
    */
+  static updateOtherPlayerFacing(otherPlayerId: string, localPlayerPosition: THREE.Vector3): void {
+    const spriteMeshRef = this.spriteMeshReferences.get(otherPlayerId);
+    if (!spriteMeshRef) return;
+
+    // Get the player group (parent of sprite mesh)
+    const playerGroup = spriteMeshRef.parent;
+    if (!playerGroup) return;
+
+    // Calculate direction from other player to local player
+    const otherPlayerPosition = playerGroup.position;
+    const direction = new THREE.Vector3()
+      .subVectors(localPlayerPosition, otherPlayerPosition)
+      .normalize();
+
+    // Calculate angle and make sprite face the local player
+    const angle = Math.atan2(direction.x, direction.z);
+    spriteMeshRef.rotation.y = angle;
+  }
+
+  /**
+   * Update all other players to face the local player
+   */
+  static updateAllOtherPlayersFacing(localPlayerPosition: THREE.Vector3): void {
+    this.spriteMeshReferences.forEach((spriteMesh, playerId) => {
+      // Skip if this is the local player
+      if (spriteMesh.parent && !spriteMesh.parent.userData.isLocalPlayer) {
+        this.updateOtherPlayerFacing(playerId, localPlayerPosition);
+      }
+    });
+  }
   static updateSpritePlayerPosition(player: Player, playerData: PlayerUpdate): void {
     // Update basic position data
     player.position = playerData.position;
@@ -397,27 +463,6 @@ export class PlayerManager {
       // Update sprite animation if this is a sprite-based player
       if (player.mesh.userData.spriteMesh) {
         this.updateSpriteAnimation(player.id, playerData.isMoving || false);
-        
-        // Update the sprite texture if moving
-        const animData = this.spriteAnimations.get(player.id);
-        if (animData && player.mesh.userData.character) {
-          const character = player.mesh.userData.character;
-          const spriteMesh = player.mesh.userData.spriteMesh;
-          
-          const spritePath = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${animData.direction}${animData.currentFrame}.gif`;
-          
-          // Update texture
-          const textureLoader = new THREE.TextureLoader();
-          const newTexture = textureLoader.load(spritePath);
-          newTexture.magFilter = THREE.NearestFilter;
-          newTexture.minFilter = THREE.NearestFilter;
-          
-          if (spriteMesh.material.map) {
-            spriteMesh.material.map.dispose(); // Clean up old texture
-          }
-          spriteMesh.material.map = newTexture;
-          spriteMesh.material.needsUpdate = true;
-        }
       }
       
       // Force a render update
@@ -467,6 +512,12 @@ export class PlayerManager {
   }
 
   static disposePlayerMesh(mesh: THREE.Object3D): void {
+    // Clean up sprite references if this is a sprite player
+    if (mesh.userData.playerId) {
+      this.spriteMeshReferences.delete(mesh.userData.playerId);
+      this.spriteAnimations.delete(mesh.userData.playerId);
+    }
+
     if (mesh instanceof THREE.Mesh) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
@@ -475,7 +526,11 @@ export class PlayerManager {
       mesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh) {
           child.geometry.dispose();
-          (child.material as THREE.Material).dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(mat => mat.dispose());
+          } else {
+            (child.material as THREE.Material).dispose();
+          }
         }
       });
     }
