@@ -39,7 +39,8 @@ export class MovementController {
     private localPlayerActions: { current: { [key: string]: THREE.AnimationAction } },
     private playersAnimations: Map<string, PlayerAnimationData>,
     private isConnected: () => boolean,
-    private sendMovementUpdate: (data: any) => void
+    private sendMovementUpdate: (data: any) => void,
+    private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -94,12 +95,33 @@ export class MovementController {
       }
     };
 
+    const handleMouseClick = (event: MouseEvent) => {
+      console.log('🖱️ Mouse click detected:', {
+        button: event.button,
+        pointerLocked: isPointerLocked,
+        connected: this.isConnected()
+      });
+      
+      if (!isPointerLocked || !this.isConnected()) return;
+      
+      // Only handle left clicks for spell casting
+      if (event.button === 0) {
+        event.preventDefault(); // Prevent other handlers
+        console.log('✨ Left click - casting spell!');
+        this.castSpell();
+      }
+    };
+
     const handlePointerLockChange = () => {
       isPointerLocked = document.pointerLockElement !== null;
+      console.log('🔒 Pointer lock changed:', isPointerLocked);
     };
 
     const handleCanvasClick = (canvas: HTMLCanvasElement) => {
-      canvas.requestPointerLock();
+      if (!isPointerLocked) {
+        console.log('🖱️ Canvas clicked - requesting pointer lock');
+        canvas.requestPointerLock();
+      }
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -107,6 +129,7 @@ export class MovementController {
 
     // Store the click handler for external setup
     (this as any).handleCanvasClick = handleCanvasClick;
+    (this as any).handleMouseClick = handleMouseClick; // Store the mouse click handler too
   }
 
   updateMovement(userId: string): void {
@@ -505,9 +528,48 @@ export class MovementController {
   }
 
   setupCanvasClickHandler(canvas: HTMLCanvasElement): void {
-    if ((this as any).handleCanvasClick) {
-      canvas.addEventListener('click', () => (this as any).handleCanvasClick(canvas));
+    if ((this as any).handleCanvasClick && (this as any).handleMouseClick) {
+      canvas.addEventListener('click', (event) => {
+        // Only handle canvas click for pointer lock if pointer is not already locked
+        if (document.pointerLockElement === null) {
+          (this as any).handleCanvasClick(canvas);
+        } else {
+          // If pointer is locked, handle spell casting
+          (this as any).handleMouseClick(event);
+        }
+      });
     }
+  }
+
+  private castSpell(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onSpellCast) {
+      console.log('❌ Spell cast failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onSpellCast
+      });
+      return;
+    }
+
+    console.log('✨ Casting spell!');
+
+    // Get player position (slightly elevated to cast from hands)
+    const playerPosition = this.localPlayerRef.current.position.clone();
+    playerPosition.y += 1.5; // Raise to hand level
+
+    // Calculate spell direction based on camera/player rotation
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.localPlayerRotation.y);
+    direction.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.localPlayerRotation.x);
+
+    // Calculate target position (cast spell forward from player)
+    const spellRange = 10; // Range of the spell
+    const targetPosition = playerPosition.clone().add(direction.multiplyScalar(spellRange));
+
+    console.log('🎯 Spell cast from:', playerPosition, 'to:', targetPosition);
+
+    // Call the spell cast callback
+    this.onSpellCast(playerPosition, targetPosition);
   }
 
   cleanup(): void {

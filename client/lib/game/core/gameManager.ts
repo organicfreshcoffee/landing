@@ -4,7 +4,7 @@ import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
-import { SceneManager } from '../rendering';
+import { SceneManager, ParticleSystem } from '../rendering';
 import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
 import { DungeonApi } from '../network/dungeonApi';
 import { StairInfo } from '../types/api';
@@ -14,6 +14,7 @@ export class GameManager {
   private sceneManager: SceneManager;
   private webSocketManager: WebSocketManager;
   private movementController: MovementController;
+  private particleSystem!: ParticleSystem;
   
   private localPlayerRef = { current: null as THREE.Object3D | null };
   private localPlayerMixer = { current: null as THREE.AnimationMixer | null };
@@ -40,6 +41,7 @@ export class GameManager {
   ) {
     this.sceneManager = new SceneManager(canvas);
     this.webSocketManager = new WebSocketManager(onStateChange, this.handleGameMessage.bind(this));
+    this.particleSystem = new ParticleSystem(this.sceneManager.scene);
     this.movementController = new MovementController(
       this.localPlayerRef,
       { current: this.sceneManager.camera },
@@ -47,7 +49,8 @@ export class GameManager {
       this.localPlayerActions,
       this.playersAnimations,
       () => this.webSocketManager.isConnected,
-      (message) => this.webSocketManager.send(JSON.stringify(message))
+      (message) => this.webSocketManager.send(JSON.stringify(message)),
+      (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos)
     );
 
     this.initializeGame();
@@ -71,6 +74,9 @@ export class GameManager {
           stairManager.updatePlayerPosition(this.localPlayerRef.current.position);
         }
       }
+      
+      // Update particle system
+      this.particleSystem.update();
       
       // Periodically verify floor integrity
       this.checkFloorIntegrity();
@@ -827,6 +833,9 @@ export class GameManager {
     this.webSocketManager.close();
     this.movementController.cleanup();
     this.sceneManager.cleanup();
+
+    // Clean up particle system
+    this.particleSystem.dispose();
 
     // Clean up stair interactions
     StairInteractionManager.getInstance().dispose();
