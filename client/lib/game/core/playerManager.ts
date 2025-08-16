@@ -58,8 +58,8 @@ export class PlayerManager {
     
     // Pre-load both frame textures for animation
     const textureLoader = new THREE.TextureLoader();
-    const frame1Path = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${direction}1.gif`;
-    const frame2Path = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${direction}2.gif`;
+    const frame1Path = `/assets/sprites/last-guardian-sprites/png/${character.type}${character.style}_${direction}1.png`;
+    const frame2Path = `/assets/sprites/last-guardian-sprites/png/${character.type}${character.style}_${direction}2.png`;
     
     const frame1Texture = textureLoader.load(frame1Path, 
       () => console.log(`✅ Loaded frame 1: ${frame1Path}`),
@@ -369,10 +369,7 @@ export class PlayerManager {
    */
   static updateSpriteAnimation(playerId: string, isMoving: boolean): void {
     const animData = this.spriteAnimations.get(playerId);
-    if (!animData) {
-      console.log(`❌ No animation data found for player: ${playerId}`);
-      return;
-    }
+    if (!animData) return;
 
     const now = Date.now();
     const FRAME_DURATION = 500; // ms per frame (slower than UI preview)
@@ -380,23 +377,17 @@ export class PlayerManager {
     // Update moving state
     animData.isMoving = isMoving;
 
-    console.log(`🎬 Sprite animation update - Player: ${playerId}, Moving: ${isMoving}, Current Frame: ${animData.currentFrame}, Last Frame Time: ${now - animData.lastFrameTime}ms ago`);
-
     // Only animate frames if moving
     if (isMoving && (now - animData.lastFrameTime) > FRAME_DURATION) {
       // Toggle between frame 1 and 2
-      const oldFrame = animData.currentFrame;
       animData.currentFrame = animData.currentFrame === 1 ? 2 : 1;
       animData.lastFrameTime = now;
-
-      console.log(`🔄 Frame change - Player: ${playerId}, ${oldFrame} → ${animData.currentFrame}`);
 
       // Update the sprite texture
       this.updateSpriteTexture(playerId);
     } else if (!isMoving) {
       // Reset to frame 1 when not moving
       if (animData.currentFrame !== 1) {
-        console.log(`⏹️ Resetting to frame 1 - Player: ${playerId}`);
         animData.currentFrame = 1;
         this.updateSpriteTexture(playerId);
       }
@@ -408,24 +399,15 @@ export class PlayerManager {
    */
   private static updateSpriteTexture(playerId: string): void {
     const animData = this.spriteAnimations.get(playerId);
-    if (!animData) {
-      console.log(`❌ No animation data for texture update: ${playerId}`);
-      return;
-    }
+    if (!animData) return;
 
     // Find the sprite mesh reference
     const spriteMeshRef = this.spriteMeshReferences.get(playerId);
-    if (!spriteMeshRef) {
-      console.log(`❌ No sprite mesh reference found: ${playerId}`);
-      return;
-    }
+    if (!spriteMeshRef) return;
 
     // Get pre-loaded textures
     const textures = this.spriteTextures.get(playerId);
-    if (!textures) {
-      console.log(`❌ No pre-loaded textures found: ${playerId}`);
-      return;
-    }
+    if (!textures) return;
 
     // Get the material
     const material = spriteMeshRef.material as THREE.MeshBasicMaterial;
@@ -433,13 +415,9 @@ export class PlayerManager {
     // Switch to the appropriate frame texture
     const newTexture = animData.currentFrame === 1 ? textures.frame1 : textures.frame2;
     
-    console.log(`🔄 Switching to frame ${animData.currentFrame} for player: ${playerId}`);
-    
     // Apply new texture (no loading needed since it's pre-loaded)
     material.map = newTexture;
     material.needsUpdate = true;
-    
-    console.log(`✅ Texture switched successfully to frame ${animData.currentFrame}`);
   }
 
   /**
