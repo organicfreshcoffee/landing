@@ -1,8 +1,17 @@
 import * as THREE from 'three';
-import { Player, PlayerUpdate, ModelData, PlayerAnimationData } from '../types';
+import { Player, PlayerUpdate, ModelData, PlayerAnimationData, CharacterData } from '../types';
 import { ModelLoader } from '../utils';
 
 export class PlayerManager {
+  // Sprite animation state tracking
+  private static spriteAnimations = new Map<string, {
+    mixer: THREE.AnimationMixer;
+    currentFrame: number;
+    lastFrameTime: number;
+    isMoving: boolean;
+    direction: 'fr' | 'bk' | 'lf' | 'rt';
+  }>();
+
   static generatePlayerColor(playerId: string): string {
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
@@ -15,7 +24,110 @@ export class PlayerManager {
     return colors[Math.abs(hash) % colors.length];
   }
 
-  static async createPlayerModel(player: Player): Promise<{ 
+  /**
+   * Create sprite-based player model using character data
+   */
+  static createSpritePlayerModel(player: Player, isLocalPlayer: boolean = false): { 
+    model: THREE.Object3D; 
+    mixer?: THREE.AnimationMixer; 
+    actions?: { [key: string]: THREE.AnimationAction } 
+  } {
+    const character = player.character;
+    if (!character) {
+      throw new Error('Player must have character data for sprite rendering');
+    }
+
+    // Create a group to hold the sprite
+    const playerGroup = new THREE.Group();
+    
+    // Create the sprite geometry and material
+    const spriteGeometry = new THREE.PlaneGeometry(1, 1.5); // Slightly taller than wide
+    
+    // Determine initial direction and frame
+    const direction = isLocalPlayer ? 'bk' : 'fr'; // Local player shows back, others show front
+    const frame = 1;
+    
+    // Load the texture for the sprite
+    const spritePath = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${direction}${frame}.gif`;
+    const textureLoader = new THREE.TextureLoader();
+    const spriteTexture = textureLoader.load(spritePath, 
+      () => console.log(`✅ Loaded sprite: ${spritePath}`),
+      undefined,
+      (error) => {
+        console.error(`❌ Failed to load sprite: ${spritePath}`, error);
+        // Fallback to a default texture or color
+      }
+    );
+    
+    // Configure texture
+    spriteTexture.magFilter = THREE.NearestFilter; // Pixelated look for retro sprites
+    spriteTexture.minFilter = THREE.NearestFilter;
+    
+    // Create material with transparency
+    const spriteMaterial = new THREE.MeshBasicMaterial({
+      map: spriteTexture,
+      transparent: true,
+      alphaTest: 0.1, // Remove pixels with alpha below 0.1
+      side: THREE.DoubleSide // Make sprite visible from both sides
+    });
+    
+    // Create the sprite mesh
+    const spriteMesh = new THREE.Mesh(spriteGeometry, spriteMaterial);
+    spriteMesh.position.set(0, 0.75, 0); // Raise sprite to appear standing on ground
+    
+    // For other players, make them always face the camera/local player
+    if (!isLocalPlayer) {
+      spriteMesh.rotation.y = Math.PI; // Face towards camera initially
+    }
+    
+    playerGroup.add(spriteMesh);
+    
+    // Set player position
+    playerGroup.position.set(player.position.x, player.position.y, player.position.z);
+    
+    // Mark as player object
+    playerGroup.userData.isPlayer = true;
+    playerGroup.userData.playerId = player.id;
+    playerGroup.userData.isLocalPlayer = isLocalPlayer;
+    playerGroup.userData.spriteMesh = spriteMesh;
+    playerGroup.userData.character = character;
+    
+    // Initialize sprite animation state
+    this.spriteAnimations.set(player.id, {
+      mixer: new THREE.AnimationMixer(playerGroup), // Create mixer for consistency
+      currentFrame: frame,
+      lastFrameTime: Date.now(),
+      isMoving: false,
+      direction: direction
+    });
+    
+    console.log(`🎮 Created sprite player: ${character.name} (${character.type}${character.style}) for ${isLocalPlayer ? 'local' : 'other'} player`);
+    
+    return {
+      model: playerGroup,
+      mixer: this.spriteAnimations.get(player.id)?.mixer,
+      actions: {} // No THREE.js actions for sprites, we'll handle animation manually
+    };
+  }
+
+  static async createPlayerModel(player: Player, isLocalPlayer: boolean = false): Promise<{ 
+    model: THREE.Object3D; 
+    mixer?: THREE.AnimationMixer; 
+    actions?: { [key: string]: THREE.AnimationAction } 
+  }> {
+    // Use sprite-based rendering if character data is available
+    if (player.character) {
+      return this.createSpritePlayerModel(player, isLocalPlayer);
+    }
+    
+    // Fallback to 3D model for backwards compatibility
+    return this.create3DPlayerModel(player);
+  }
+
+  /**
+   * Original 3D model creation method (renamed for clarity)
+   */
+  static async create3DPlayerModel(player: Player): Promise<{ 
     model: THREE.Object3D; 
     mixer?: THREE.AnimationMixer; 
     actions?: { [key: string]: THREE.AnimationAction } 
@@ -195,8 +307,134 @@ export class PlayerManager {
     });
   }
 
+  static updatePlayerAnimation(
+    playerId: string, 
+    playerData: PlayerUpdate, 
+    playersAnimations: Map<string, PlayerAnimationData>
+  ): void {
+    const animData = playersAnimations.get(playerId);
+    if (animData && animData.actions.StickMan_Run) {
+      const walkAction = animData.actions.StickMan_Run;
+      
+      // Use the RECEIVED playerData.isMoving directly
+      if (playerData.isMoving) {
+        if (!walkAction.isRunning()) {
+          walkAction.play();
+        }
+        walkAction.paused = false;
+        walkAction.enabled = true;
+        
+        // Set animation direction based on movement with 300x speed
+        if (playerData.movementDirection === 'backward') {
+          walkAction.timeScale = -300; // Speed up by factor of 300
+        } else {
+          walkAction.timeScale = 300; // Speed up by factor of 300
+        }
+      } else {
+        // Pause instead of stop to maintain smooth transitions
+        walkAction.paused = true;
+      }
+    }
+  }
+
+  /**
+   * Update sprite animation for a player
+   */
+  static updateSpriteAnimation(playerId: string, isMoving: boolean): void {
+    const animData = this.spriteAnimations.get(playerId);
+    if (!animData) return;
+
+    const now = Date.now();
+    const FRAME_DURATION = 500; // ms per frame (slower than UI preview)
+
+    // Update moving state
+    animData.isMoving = isMoving;
+
+    // Only animate frames if moving
+    if (isMoving && (now - animData.lastFrameTime) > FRAME_DURATION) {
+      // Toggle between frame 1 and 2
+      animData.currentFrame = animData.currentFrame === 1 ? 2 : 1;
+      animData.lastFrameTime = now;
+
+      // Update the sprite texture
+      this.updateSpriteTexture(playerId);
+    }
+  }
+
+  /**
+   * Update the texture of a sprite player
+   */
+  private static updateSpriteTexture(playerId: string): void {
+    const animData = this.spriteAnimations.get(playerId);
+    if (!animData) return;
+
+    // Find the player mesh in the scene (this could be optimized by storing references)
+    // For now, we'll handle this in the position update method
+  }
+
+  /**
+   * Update sprite player position and texture
+   */
+  static updateSpritePlayerPosition(player: Player, playerData: PlayerUpdate): void {
+    // Update basic position data
+    player.position = playerData.position;
+    if (playerData.rotation) {
+      player.rotation = playerData.rotation;
+    }
+    
+    // Update movement state for animation
+    player.isMoving = playerData.isMoving;
+    player.movementDirection = playerData.movementDirection;
+    
+    if (player.mesh) {
+      // Update position
+      player.mesh.position.set(
+        playerData.position.x,
+        playerData.position.y,
+        playerData.position.z
+      );
+
+      // Update sprite animation if this is a sprite-based player
+      if (player.mesh.userData.spriteMesh) {
+        this.updateSpriteAnimation(player.id, playerData.isMoving || false);
+        
+        // Update the sprite texture if moving
+        const animData = this.spriteAnimations.get(player.id);
+        if (animData && player.mesh.userData.character) {
+          const character = player.mesh.userData.character;
+          const spriteMesh = player.mesh.userData.spriteMesh;
+          
+          const spritePath = `/assets/sprites/last-guardian-sprites/${character.type}${character.style}_${animData.direction}${animData.currentFrame}.gif`;
+          
+          // Update texture
+          const textureLoader = new THREE.TextureLoader();
+          const newTexture = textureLoader.load(spritePath);
+          newTexture.magFilter = THREE.NearestFilter;
+          newTexture.minFilter = THREE.NearestFilter;
+          
+          if (spriteMesh.material.map) {
+            spriteMesh.material.map.dispose(); // Clean up old texture
+          }
+          spriteMesh.material.map = newTexture;
+          spriteMesh.material.needsUpdate = true;
+        }
+      }
+      
+      // Force a render update
+      if (player.mesh.parent) {
+        player.mesh.updateMatrixWorld(true);
+      }
+    }
+  }
+
   static updatePlayerPosition(player: Player, playerData: PlayerUpdate): void {
-    // Update existing player position
+    // Check if this is a sprite-based player
+    if (player.mesh && player.mesh.userData.spriteMesh) {
+      this.updateSpritePlayerPosition(player, playerData);
+      return;
+    }
+    
+    // Handle 3D model players (original implementation)
     player.position = playerData.position;
     if (playerData.rotation) {
       player.rotation = playerData.rotation;
@@ -224,36 +462,6 @@ export class PlayerManager {
       // Force a render update
       if (player.mesh.parent) {
         player.mesh.updateMatrixWorld(true);
-      }
-    }
-  }
-
-  static updatePlayerAnimation(
-    playerId: string, 
-    playerData: PlayerUpdate, 
-    playersAnimations: Map<string, PlayerAnimationData>
-  ): void {
-    const animData = playersAnimations.get(playerId);
-    if (animData && animData.actions.StickMan_Run) {
-      const walkAction = animData.actions.StickMan_Run;
-      
-      // Use the RECEIVED playerData.isMoving directly
-      if (playerData.isMoving) {
-        if (!walkAction.isRunning()) {
-          walkAction.play();
-        }
-        walkAction.paused = false;
-        walkAction.enabled = true;
-        
-        // Set animation direction based on movement with 300x speed
-        if (playerData.movementDirection === 'backward') {
-          walkAction.timeScale = -300; // Speed up by factor of 300
-        } else {
-          walkAction.timeScale = 300; // Speed up by factor of 300
-        }
-      } else {
-        // Pause instead of stop to maintain smooth transitions
-        walkAction.paused = true;
       }
     }
   }

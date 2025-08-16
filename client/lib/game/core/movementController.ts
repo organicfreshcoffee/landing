@@ -3,6 +3,7 @@ import { PlayerAnimationData, CharacterData } from '../types';
 import { CollisionSystem } from './collisionSystem';
 import { GameHUD } from '../ui/gameHUD';
 import { AnimationTest } from '../utils/animationTest';
+import { PlayerManager } from './playerManager';
 
 export class MovementController {
   private keysPressed = new Set<string>();
@@ -411,6 +412,16 @@ export class MovementController {
     const wasMoving = this.isMoving;
     this.isMoving = moved;
     
+    // Handle sprite animation for local player
+    if (this.localPlayerRef.current && this.localPlayerRef.current.userData.spriteMesh) {
+      // This is a sprite-based player
+      const userId = this.localPlayerRef.current.userData.playerId;
+      if (userId) {
+        PlayerManager.updateSpriteAnimation(userId, this.isMoving);
+      }
+      return; // Skip 3D animation for sprite players
+    }
+    
     // Use a separate clock for animations to ensure consistent timing
     // regardless of collision detection performance
     const rawDelta = this.animationClock.getDelta();
@@ -430,7 +441,7 @@ export class MovementController {
     
     this.lastAnimationTime = now;
     
-    // Control local player animation
+    // Control local player animation (3D models only)
     if (this.localPlayerMixer.current && this.localPlayerActions.current.StickMan_Run) {
       const walkAction = this.localPlayerActions.current.StickMan_Run;
       

@@ -99,93 +99,52 @@ export class GameManager {
   }
 
   private async createLocalPlayer(): Promise<void> {
-    console.log('🏃 Creating local player...');
-    const localPlayerData = await ModelLoader.loadPlayerModel();
-    const localPlayerScene = localPlayerData.scene;
+    console.log('🏃 Creating local sprite player...');
     
-    console.log('📊 Local player data:', {
-      hasAnimations: localPlayerData.animations.length > 0,
-      animationCount: localPlayerData.animations.length,
+    // Create local player object with character data
+    const localPlayer: Player = {
+      id: this.user?.uid || 'local',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      color: '#00ff00', // Green for local player
+      character: this.selectedCharacter,
+      isMoving: false,
+      movementDirection: 'none'
+    };
+    
+    // Create sprite-based player model
+    const playerResult = await PlayerManager.createPlayerModel(localPlayer, true); // true = isLocalPlayer
+    const localPlayerScene = playerResult.model;
+    
+    console.log('📊 Local sprite player created:', {
+      character: this.selectedCharacter.name,
+      type: this.selectedCharacter.type,
+      style: this.selectedCharacter.style,
       sceneUUID: localPlayerScene.uuid
     });
     
-    // Set up animations for local player
-    if (localPlayerData.animations.length > 0) {
-      this.localPlayerMixer.current = new THREE.AnimationMixer(localPlayerScene);
-      
-      localPlayerData.animations.forEach((clip) => {
-        const action = this.localPlayerMixer.current!.clipAction(clip);
-        this.localPlayerActions.current[clip.name] = action;
-        
-        // Set default properties for walk animation
-        if (clip.name === 'StickMan_Run') {
-          action.setLoop(THREE.LoopRepeat, Infinity);
-          action.clampWhenFinished = true;
-          action.weight = 1.0;
-          // Prepare the action but don't play it yet
-          action.reset();
-          
-          console.log('✅ Local player StickMan_Run action configured');
-        }
-      });
-      
-      // Start the walk animation in paused state so it's ready
-      if (this.localPlayerActions.current.StickMan_Run) {
-        const walkAction = this.localPlayerActions.current.StickMan_Run;
-        walkAction.reset();
-        walkAction.play();
-        walkAction.paused = true;
-        walkAction.enabled = true;
-        
-        console.log('🎭 Local player animation initialized:', {
-          isRunning: walkAction.isRunning(),
-          paused: walkAction.paused,
-          enabled: walkAction.enabled,
-          timeScale: walkAction.timeScale
-        });
-      } else {
-        console.error('❌ StickMan_Run action was not created properly!');
-      }
+    // Set up animation mixer if available
+    if (playerResult.mixer) {
+      this.localPlayerMixer.current = playerResult.mixer;
     }
     
-    // Make the local player green to distinguish from others  
-    localPlayerScene.traverse((child: THREE.Object3D) => {
-      if (child instanceof THREE.Mesh) {
-        // Clone the material to avoid affecting the template
-        if (Array.isArray(child.material)) {
-          child.material = child.material.map(mat => {
-            const clonedMat = mat.clone();
-            clonedMat.color.setHex(0x00ff00); // Green for local player
-            return clonedMat;
-          });
-        } else {
-          const clonedMaterial = child.material.clone();
-          clonedMaterial.color.setHex(0x00ff00); // Green for local player
-          child.material = clonedMaterial;
-        }
-      }
-    });
+    if (playerResult.actions) {
+      this.localPlayerActions.current = playerResult.actions;
+    }
     
-    // Apply ground offset to position local player correctly
-    const initialY = localPlayerData.groundOffset?.y || 0;
-    localPlayerScene.position.set(
-      localPlayerData.groundOffset?.x || 0,
-      initialY,
-      localPlayerData.groundOffset?.z || 0
-    );
-    
-    // Set initial rotation (only Y rotation for character)
-    localPlayerScene.rotation.y = Math.PI; // Face away from camera initially
-    localPlayerScene.rotation.x = 0; // Keep character upright
-    localPlayerScene.rotation.z = 0; // Keep character upright
+    // Position the local player at spawn
+    localPlayerScene.position.set(0, 0, 0);
     localPlayerScene.castShadow = true;
     
     // Mark as player object to prevent it from being cleared by scenery loading
     localPlayerScene.userData.isPlayer = true;
     localPlayerScene.userData.playerId = this.user?.uid || 'local';
+    localPlayerScene.userData.isLocalPlayer = true;
     
     this.sceneManager.addToScene(localPlayerScene);
     this.localPlayerRef.current = localPlayerScene;
+    
+    console.log('✅ Local sprite player added to scene');
   }
 
   async connectToServer(serverAddress: string): Promise<void> {
@@ -292,7 +251,7 @@ export class GameManager {
         character: playerData.character
       };
       
-      const playerResult = await PlayerManager.createPlayerModel(newPlayer);
+      const playerResult = await PlayerManager.createPlayerModel(newPlayer, false); // false = not local player
       newPlayer.mesh = playerResult.model;
       
       // Mark as other player for scene preservation during floor changes
