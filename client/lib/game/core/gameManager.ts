@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from '../types';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData } from '../types';
 import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
@@ -31,6 +31,7 @@ export class GameManager {
     canvas: HTMLCanvasElement,
     private onStateChange: (state: GameState) => void,
     private user: any,
+    private selectedCharacter: CharacterData,
     private onFloorTransition?: (transition: {
       isLoading: boolean;
       direction: 'upstairs' | 'downstairs';
@@ -50,6 +51,7 @@ export class GameManager {
       this.playersAnimations,
       () => this.webSocketManager.isConnected,
       (message) => this.webSocketManager.send(JSON.stringify(message)),
+      this.selectedCharacter,
       (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos)
     );
 
@@ -72,10 +74,17 @@ export class GameManager {
         if (this.localPlayerRef.current) {
           const stairManager = StairInteractionManager.getInstance();
           stairManager.updatePlayerPosition(this.localPlayerRef.current.position);
+          
+          // Make other players face the local player
+          PlayerManager.updateAllOtherPlayersFacing(this.localPlayerRef.current.position);
         }
       }
       
-      // Update particle system
+      // Ensure particle system is initialized and update it
+      if (!this.particleSystem.isInitialized()) {
+        console.log('⚠️ Particle system not initialized in render loop, reinitializing...');
+        this.particleSystem.reinitialize();
+      }
       this.particleSystem.update();
       
       // Periodically verify floor integrity
@@ -93,93 +102,52 @@ export class GameManager {
   }
 
   private async createLocalPlayer(): Promise<void> {
-    console.log('🏃 Creating local player...');
-    const localPlayerData = await ModelLoader.loadPlayerModel();
-    const localPlayerScene = localPlayerData.scene;
+    console.log('🏃 Creating local sprite player...');
     
-    console.log('📊 Local player data:', {
-      hasAnimations: localPlayerData.animations.length > 0,
-      animationCount: localPlayerData.animations.length,
+    // Create local player object with character data
+    const localPlayer: Player = {
+      id: this.user?.uid || 'local',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      color: '#00ff00', // Green for local player
+      character: this.selectedCharacter,
+      isMoving: false,
+      movementDirection: 'none'
+    };
+    
+    // Create sprite-based player model
+    const playerResult = await PlayerManager.createPlayerModel(localPlayer, true); // true = isLocalPlayer
+    const localPlayerScene = playerResult.model;
+    
+    console.log('📊 Local sprite player created:', {
+      character: this.selectedCharacter.name,
+      type: this.selectedCharacter.type,
+      style: this.selectedCharacter.style,
       sceneUUID: localPlayerScene.uuid
     });
     
-    // Set up animations for local player
-    if (localPlayerData.animations.length > 0) {
-      this.localPlayerMixer.current = new THREE.AnimationMixer(localPlayerScene);
-      
-      localPlayerData.animations.forEach((clip) => {
-        const action = this.localPlayerMixer.current!.clipAction(clip);
-        this.localPlayerActions.current[clip.name] = action;
-        
-        // Set default properties for walk animation
-        if (clip.name === 'StickMan_Run') {
-          action.setLoop(THREE.LoopRepeat, Infinity);
-          action.clampWhenFinished = true;
-          action.weight = 1.0;
-          // Prepare the action but don't play it yet
-          action.reset();
-          
-          console.log('✅ Local player StickMan_Run action configured');
-        }
-      });
-      
-      // Start the walk animation in paused state so it's ready
-      if (this.localPlayerActions.current.StickMan_Run) {
-        const walkAction = this.localPlayerActions.current.StickMan_Run;
-        walkAction.reset();
-        walkAction.play();
-        walkAction.paused = true;
-        walkAction.enabled = true;
-        
-        console.log('🎭 Local player animation initialized:', {
-          isRunning: walkAction.isRunning(),
-          paused: walkAction.paused,
-          enabled: walkAction.enabled,
-          timeScale: walkAction.timeScale
-        });
-      } else {
-        console.error('❌ StickMan_Run action was not created properly!');
-      }
+    // Set up animation mixer if available
+    if (playerResult.mixer) {
+      this.localPlayerMixer.current = playerResult.mixer;
     }
     
-    // Make the local player green to distinguish from others  
-    localPlayerScene.traverse((child: THREE.Object3D) => {
-      if (child instanceof THREE.Mesh) {
-        // Clone the material to avoid affecting the template
-        if (Array.isArray(child.material)) {
-          child.material = child.material.map(mat => {
-            const clonedMat = mat.clone();
-            clonedMat.color.setHex(0x00ff00); // Green for local player
-            return clonedMat;
-          });
-        } else {
-          const clonedMaterial = child.material.clone();
-          clonedMaterial.color.setHex(0x00ff00); // Green for local player
-          child.material = clonedMaterial;
-        }
-      }
-    });
+    if (playerResult.actions) {
+      this.localPlayerActions.current = playerResult.actions;
+    }
     
-    // Apply ground offset to position local player correctly
-    const initialY = localPlayerData.groundOffset?.y || 0;
-    localPlayerScene.position.set(
-      localPlayerData.groundOffset?.x || 0,
-      initialY,
-      localPlayerData.groundOffset?.z || 0
-    );
-    
-    // Set initial rotation (only Y rotation for character)
-    localPlayerScene.rotation.y = Math.PI; // Face away from camera initially
-    localPlayerScene.rotation.x = 0; // Keep character upright
-    localPlayerScene.rotation.z = 0; // Keep character upright
+    // Position the local player at spawn
+    localPlayerScene.position.set(0, 0, 0);
     localPlayerScene.castShadow = true;
     
     // Mark as player object to prevent it from being cleared by scenery loading
     localPlayerScene.userData.isPlayer = true;
     localPlayerScene.userData.playerId = this.user?.uid || 'local';
+    localPlayerScene.userData.isLocalPlayer = true;
     
     this.sceneManager.addToScene(localPlayerScene);
     this.localPlayerRef.current = localPlayerScene;
+    
+    console.log('✅ Local sprite player added to scene');
   }
 
   async connectToServer(serverAddress: string): Promise<void> {
@@ -213,32 +181,29 @@ export class GameManager {
     
     // Connect to WebSocket
     console.log(`🔌 GameManager: Connecting to WebSocket...`);
-    await this.webSocketManager.connect(serverAddress, this.user);
+    await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
     console.log(`✅ GameManager: WebSocket connected`);
   }
 
   private handleGameMessage(message: GameMessage): void {
     switch (message.type) {
-      case 'player_joined':
-        if (message.data.playerId && message.data.position) {
-          this.updatePlayer({
-            id: message.data.playerId,
-            position: message.data.position,
-            rotation: message.data.rotation,
-            isMoving: message.data.isMoving || false,
-            movementDirection: message.data.movementDirection || 'none'
-          }).catch(console.error);
-        }
-        break;
-      
       case 'player_moved':
+        // Handle both new players joining and existing players moving
+        // Character data is included in all movement messages
         if (message.data.playerId && message.data.position) {
+          // Only log character data for new players
+          const isNewPlayer = !this.players.has(message.data.playerId);
+          if (isNewPlayer && message.data.character) {
+            console.log('👥 New player joined:', message.data.character.name);
+          }
+          
           this.updatePlayer({
             id: message.data.playerId,
             position: message.data.position,
             rotation: message.data.rotation,
             isMoving: message.data.isMoving || false,
-            movementDirection: message.data.movementDirection || 'none'
+            movementDirection: message.data.movementDirection || 'none',
+            character: message.data.character
           }).catch(console.error);
         }
         break;
@@ -271,6 +236,10 @@ export class GameManager {
     const existingPlayer = this.players.get(playerData.id);
 
     if (existingPlayer) {
+      // Update character data if provided
+      if (playerData.character) {
+        existingPlayer.character = playerData.character;
+      }
       PlayerManager.updatePlayerPosition(existingPlayer, playerData);
       PlayerManager.updatePlayerAnimation(playerData.id, playerData, this.playersAnimations);
     } else {
@@ -281,10 +250,11 @@ export class GameManager {
         rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
         color: PlayerManager.generatePlayerColor(playerData.id),
         isMoving: playerData.isMoving || false,
-        movementDirection: playerData.movementDirection || 'none'
+        movementDirection: playerData.movementDirection || 'none',
+        character: playerData.character
       };
       
-      const playerResult = await PlayerManager.createPlayerModel(newPlayer);
+      const playerResult = await PlayerManager.createPlayerModel(newPlayer, false); // false = not local player
       newPlayer.mesh = playerResult.model;
       
       // Mark as other player for scene preservation during floor changes
@@ -772,6 +742,12 @@ export class GameManager {
       // Position player on ground
       this.positionPlayerOnGround();
       
+      // Reinitialize particle system after floor change
+      if (!this.particleSystem.isInitialized()) {
+        console.log('🎆 Reinitializing particle system after floor change...');
+        this.particleSystem.reinitialize();
+      }
+      
       // Notify about floor change
       const currentFloor = this.sceneManager.getCurrentFloor();
       if (this.onFloorChange && currentFloor) {
@@ -790,7 +766,7 @@ export class GameManager {
   }
 
   manualReconnect(serverAddress: string): void {
-    this.webSocketManager.manualReconnect(serverAddress, this.user);
+    this.webSocketManager.manualReconnect(serverAddress, this.user, this.selectedCharacter);
   }
 
   get playersCount(): number {
@@ -813,8 +789,13 @@ export class GameManager {
   get debugInfo() {
     return {
       movement: this.movementController.debugInfo,
-      players: Array.from(this.players.keys()),
+      players: Array.from(this.players.entries()).map(([id, player]) => ({
+        id,
+        position: player.position,
+        character: player.character
+      })),
       localPlayer: this.localPlayerRef.current?.position,
+      localCharacter: this.selectedCharacter,
       animations: Array.from(this.playersAnimations.keys()),
       testRunner: AnimationTest.getDebugInfo()
     };

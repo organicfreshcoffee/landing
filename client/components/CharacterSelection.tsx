@@ -85,7 +85,7 @@ function SpriteAnimation({ characterType, style, size = 'small' }: SpriteAnimati
   }, []);
 
   const direction = ANIMATION_DIRECTIONS[currentDirection];
-  const spritePath = `/assets/sprites/last-guardian-sprites/${characterType}${style}_${direction}${currentFrame}.gif`;
+  const spritePath = `/assets/sprites/last-guardian-sprites/png/${characterType}${style}_${direction}${currentFrame}.png`;
   
   return (
     <div className={size === 'large' ? styles.spriteContainerLarge : styles.spriteContainer}>
@@ -95,7 +95,7 @@ function SpriteAnimation({ characterType, style, size = 'small' }: SpriteAnimati
         className={size === 'large' ? styles.spriteLarge : styles.sprite}
         onError={(e) => {
           // Fallback to first frame if animation frame doesn't exist
-          (e.target as HTMLImageElement).src = `/assets/sprites/last-guardian-sprites/${characterType}${style}_fr1.gif`;
+          (e.target as HTMLImageElement).src = `/assets/sprites/last-guardian-sprites/png/${characterType}${style}_fr1.png`;
         }}
       />
     </div>
@@ -122,7 +122,7 @@ export default function CharacterSelection({ onCharacterSelected, onBack }: Char
           setAvailableStyles([...styles]);
         }
       };
-      testImg.src = `/assets/sprites/last-guardian-sprites/${selectedClass}${i}_fr1.gif`;
+      testImg.src = `/assets/sprites/last-guardian-sprites/png/${selectedClass}${i}_fr1.png`;
     }
   }, [selectedClass]);
 
@@ -138,11 +138,13 @@ export default function CharacterSelection({ onCharacterSelected, onBack }: Char
 
   const handleStartGame = () => {
     if (selectedClass && selectedStyle) {
-      onCharacterSelected({
+      const characterData = {
         type: selectedClass,
         style: selectedStyle,
         name: CHARACTER_CLASSES[selectedClass as keyof typeof CHARACTER_CLASSES]
-      });
+      };
+      console.log('🎮 Character selected:', characterData);
+      onCharacterSelected(characterData);
     }
   };
 

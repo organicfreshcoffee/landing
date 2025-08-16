@@ -1,4 +1,4 @@
-import { GameMessage, GameState } from '../types';
+import { GameMessage, GameState, CharacterData } from '../types';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -17,7 +17,9 @@ export class WebSocketManager {
     private onMessage: (message: GameMessage) => void
   ) {}
 
-  async connect(serverAddress: string, user: any): Promise<void> {
+  async connect(serverAddress: string, user: any, characterData?: CharacterData): Promise<void> {
+    // Note: characterData is passed but not used here anymore.
+    // Character data is now sent with player movement messages instead of a separate join message.
     try {
       // Get the Firebase auth token
       let authToken = null;
@@ -83,7 +85,7 @@ export class WebSocketManager {
         this.startHeartbeat();
         this.startConnectionHealthCheck();
         
-        // Send any queued messages
+        // Send any queued messages (character data will be sent with first movement update)
         setTimeout(() => this.sendQueuedMessages(), 100);
       };
 
@@ -130,7 +132,7 @@ export class WebSocketManager {
 
         // Attempt reconnection unless it was a manual close or auth failure
         if (event.code !== 1000 && event.code !== 1008 && !this.isReconnecting) {
-          this.attemptReconnection(serverAddress, user);
+          this.attemptReconnection(serverAddress, user, characterData);
         }
       };
 
@@ -186,7 +188,7 @@ export class WebSocketManager {
     }
   }
 
-  private attemptReconnection(serverAddress: string, user: any): void {
+  private attemptReconnection(serverAddress: string, user: any, characterData?: CharacterData): void {
     if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         console.log('Max reconnection attempts reached');
@@ -212,11 +214,11 @@ export class WebSocketManager {
     });
 
     this.reconnectTimeout = setTimeout(() => {
-      this.connect(serverAddress, user);
+      this.connect(serverAddress, user, characterData);
     }, delay);
   }
 
-  manualReconnect(serverAddress: string, user: any): void {
+  manualReconnect(serverAddress: string, user: any, characterData?: CharacterData): void {
     this.reconnectAttempts = 0;
     this.isReconnecting = false;
     
@@ -231,7 +233,7 @@ export class WebSocketManager {
       loading: true
     });
     
-    this.connect(serverAddress, user);
+    this.connect(serverAddress, user, characterData);
   }
 
   private startHeartbeat(): void {

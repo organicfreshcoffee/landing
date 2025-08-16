@@ -11,6 +11,12 @@ export interface GameMessage {
   data: any;
 }
 
+export interface CharacterData {
+  type: string;
+  style: number;
+  name: string;
+}
+
 export interface Player {
   id: string;
   position: { x: number; y: number; z: number };
@@ -19,6 +25,7 @@ export interface Player {
   mesh?: THREE.Object3D;
   isMoving?: boolean;
   movementDirection?: 'forward' | 'backward' | 'none';
+  character?: CharacterData;
 }
 
 export interface PlayerUpdate {
@@ -27,6 +34,7 @@ export interface PlayerUpdate {
   rotation?: { x: number; y: number; z: number };
   isMoving?: boolean;
   movementDirection?: 'forward' | 'backward' | 'none';
+  character?: CharacterData;
 }
 
 export interface PlayerAnimationData {

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { PlayerAnimationData } from '../types';
+import { PlayerAnimationData, CharacterData } from '../types';
 import { CollisionSystem } from './collisionSystem';
 import { GameHUD } from '../ui/gameHUD';
 import { AnimationTest } from '../utils/animationTest';
+import { PlayerManager } from './playerManager';
 
 export class MovementController {
   private keysPressed = new Set<string>();
@@ -40,6 +41,7 @@ export class MovementController {
     private playersAnimations: Map<string, PlayerAnimationData>,
     private isConnected: () => boolean,
     private sendMovementUpdate: (data: any) => void,
+    private selectedCharacter: CharacterData,
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void
   ) {
     this.setupKeyboardListeners();
@@ -376,7 +378,7 @@ export class MovementController {
   }
 
   private updateCamera(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3): void {
-    const cameraHeight = 1.0;
+    const cameraHeight = 1.5;
     const cameraDistance = 0.75;
     
     // Calculate camera position based on player's Y rotation
@@ -410,6 +412,16 @@ export class MovementController {
     const wasMoving = this.isMoving;
     this.isMoving = moved;
     
+    // Handle sprite animation for local player
+    if (this.localPlayerRef.current && this.localPlayerRef.current.userData.spriteMesh) {
+      // This is a sprite-based player
+      const userId = this.localPlayerRef.current.userData.playerId;
+      if (userId) {
+        PlayerManager.updateSpriteAnimation(userId, this.isMoving);
+      }
+      return; // Skip 3D animation for sprite players
+    }
+    
     // Use a separate clock for animations to ensure consistent timing
     // regardless of collision detection performance
     const rawDelta = this.animationClock.getDelta();
@@ -429,7 +441,7 @@ export class MovementController {
     
     this.lastAnimationTime = now;
     
-    // Control local player animation
+    // Control local player animation (3D models only)
     if (this.localPlayerMixer.current && this.localPlayerActions.current.StickMan_Run) {
       const walkAction = this.localPlayerActions.current.StickMan_Run;
       
@@ -519,10 +531,12 @@ export class MovementController {
             z: 0
           },
           isMoving: this.isMoving,
-          movementDirection: this.movementDirection
+          movementDirection: this.movementDirection,
+          character: this.selectedCharacter
         }
       };
       
+      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name);
       this.sendMovementUpdate(moveMessage);
     }
   }
@@ -553,23 +567,40 @@ export class MovementController {
 
     console.log('✨ Casting spell!');
 
-    // Get player position (slightly elevated to cast from hands)
-    const playerPosition = this.localPlayerRef.current.position.clone();
-    playerPosition.y += 1.5; // Raise to hand level
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start spell from player's chest/hand level
+    const spellStartPosition = playerWorldPosition.clone();
+    spellStartPosition.y += 1.2;
 
-    // Calculate spell direction based on camera/player rotation
-    const direction = new THREE.Vector3(0, 0, -1);
-    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.localPlayerRotation.y);
-    direction.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.localPlayerRotation.x);
+    // Use the player's movement rotation (which should match facing direction)
+    // The localPlayerRotation.y represents where the player is facing
+    const playerFacingDirection = this.localPlayerRotation.y;
+    
+    // Calculate spell direction - try both directions to see which works
+    const direction = new THREE.Vector3(0, 0, -1); // Try negative Z (which is typically "forward" in Three.js)
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the spell start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.8);
+    spellStartPosition.add(forwardOffset);
 
-    // Calculate target position (cast spell forward from player)
-    const spellRange = 10; // Range of the spell
-    const targetPosition = playerPosition.clone().add(direction.multiplyScalar(spellRange));
+    // Calculate target position
+    const spellRange = 10;
+    const targetPosition = spellStartPosition.clone().add(direction.clone().multiplyScalar(spellRange));
 
-    console.log('🎯 Spell cast from:', playerPosition, 'to:', targetPosition);
+    console.log('🎯 Spell cast debug:', {
+      playerWorldPos: playerWorldPosition,
+      spellStart: spellStartPosition,
+      target: targetPosition,
+      playerRotation: playerFacingDirection,
+      direction: direction
+    });
 
     // Call the spell cast callback
-    this.onSpellCast(playerPosition, targetPosition);
+    this.onSpellCast(spellStartPosition, targetPosition);
   }
 
   cleanup(): void {
