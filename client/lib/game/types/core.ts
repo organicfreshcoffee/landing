@@ -47,3 +47,19 @@ export interface ModelData {
   animations: THREE.AnimationClip[];
   groundOffset?: { x: number; y: number; z: number };
 }
+
+export interface PlayerActionData {
+  action: string;
+  target?: string;
+  data?: any;
+}
+
+export interface SpellActionData {
+  fromPosition: { x: number; y: number; z: number };
+  toPosition: { x: number; y: number; z: number };
+  direction: { x: number; y: number; z: number };
+  range: number;
+  timestamp: number;
+  casterPosition?: { x: number; y: number; z: number };
+  spellRadius?: number;
+}
