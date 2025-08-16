@@ -75,7 +75,11 @@ export class GameManager {
         }
       }
       
-      // Update particle system
+      // Ensure particle system is initialized and update it
+      if (!this.particleSystem.isInitialized()) {
+        console.log('⚠️ Particle system not initialized in render loop, reinitializing...');
+        this.particleSystem.reinitialize();
+      }
       this.particleSystem.update();
       
       // Periodically verify floor integrity
@@ -771,6 +775,12 @@ export class GameManager {
       this.movementController.updateCollisionData(this.sceneManager.scene);
       // Position player on ground
       this.positionPlayerOnGround();
+      
+      // Reinitialize particle system after floor change
+      if (!this.particleSystem.isInitialized()) {
+        console.log('🎆 Reinitializing particle system after floor change...');
+        this.particleSystem.reinitialize();
+      }
       
       // Notify about floor change
       const currentFloor = this.sceneManager.getCurrentFloor();

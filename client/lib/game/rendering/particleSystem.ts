@@ -36,14 +36,20 @@ export class ParticleSystem {
       blending: THREE.AdditiveBlending,
       vertexColors: true,
       sizeAttenuation: true,
-      alphaTest: 0.1
+      alphaTest: 0.1,
+      depthWrite: false, // Prevent depth buffer issues
+      depthTest: true
     });
 
     // Create particle system
     this.particleSystem = new THREE.Points(this.particleGeometry, this.particleMaterial);
+    this.particleSystem.frustumCulled = false; // Prevent culling issues
+    this.particleSystem.renderOrder = 999; // Render after most other objects
     this.scene.add(this.particleSystem);
 
-    // Initialize buffers
+    console.log('✅ Particle system initialized and added to scene');
+
+    // Initialize buffers with empty data
     this.updateParticleBuffers();
   }
 
@@ -51,8 +57,16 @@ export class ParticleSystem {
     console.log('🎆 ParticleSystem.castSpell called!', {
       from: fromPosition,
       to: toPosition,
-      currentParticleCount: this.particles.length
+      currentParticleCount: this.particles.length,
+      sceneChildren: this.scene.children.length,
+      particleSystemInScene: this.scene.children.includes(this.particleSystem)
     });
+    
+    // Ensure particle system is in the scene
+    if (!this.scene.children.includes(this.particleSystem)) {
+      console.log('⚠️ Particle system not in scene, re-adding...');
+      this.scene.add(this.particleSystem);
+    }
     
     const direction = new THREE.Vector3().subVectors(toPosition, fromPosition).normalize();
     const distance = fromPosition.distanceTo(toPosition);
@@ -184,8 +198,13 @@ export class ParticleSystem {
   public update(): void {
     const delta = this.clock.getDelta();
     
-    if (this.particles.length > 0) {
-      console.log('🌟 Updating', this.particles.length, 'particles');
+    // Clamp delta to prevent huge jumps
+    const clampedDelta = Math.min(delta, 1/30); // Max 30fps to prevent big jumps
+    
+    // Ensure particle system is still in scene
+    if (!this.scene.children.includes(this.particleSystem)) {
+      console.log('⚠️ Particle system missing from scene during update, re-adding...');
+      this.scene.add(this.particleSystem);
     }
     
     // Update all particles
@@ -193,10 +212,10 @@ export class ParticleSystem {
       const particle = this.particles[i];
       
       // Update position
-      particle.position.add(particle.velocity.clone().multiplyScalar(delta));
+      particle.position.add(particle.velocity.clone().multiplyScalar(clampedDelta));
       
       // Apply gravity (lighter for magical effect)
-      particle.velocity.y -= 6.0 * delta;
+      particle.velocity.y -= 6.0 * clampedDelta;
       
       // Apply air resistance
       particle.velocity.multiplyScalar(0.99);
@@ -208,10 +227,10 @@ export class ParticleSystem {
         Math.cos(time + particle.position.y * 0.5) * 0.3,
         Math.sin(time + particle.position.z * 0.5) * 0.5
       );
-      particle.velocity.add(turbulence.multiplyScalar(delta));
+      particle.velocity.add(turbulence.multiplyScalar(clampedDelta));
       
       // Update life
-      particle.life -= delta;
+      particle.life -= clampedDelta;
       
       // Remove dead particles
       if (particle.life <= 0) {
@@ -219,16 +238,28 @@ export class ParticleSystem {
       }
     }
 
-    // Update the particle system buffers
+    // Always update the particle system buffers, even if no particles
     this.updateParticleBuffers();
   }
 
   private updateParticleBuffers(): void {
-    const positions = new Float32Array(this.particles.length * 3);
-    const colors = new Float32Array(this.particles.length * 3);
-    const sizes = new Float32Array(this.particles.length);
+    const particleCount = this.particles.length;
+    
+    // Handle empty particle array
+    if (particleCount === 0) {
+      // Set empty buffers to avoid rendering issues
+      this.particleGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      this.particleGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(0), 3));
+      this.particleGeometry.setAttribute('size', new THREE.BufferAttribute(new Float32Array(0), 1));
+      this.particleGeometry.setDrawRange(0, 0);
+      return;
+    }
 
-    for (let i = 0; i < this.particles.length; i++) {
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+
+    for (let i = 0; i < particleCount; i++) {
       const particle = this.particles[i];
       const i3 = i * 3;
 
@@ -257,7 +288,7 @@ export class ParticleSystem {
     this.particleGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
     // Update the particle count
-    this.particleGeometry.setDrawRange(0, this.particles.length);
+    this.particleGeometry.setDrawRange(0, particleCount);
     
     // Mark attributes as needing update
     if (this.particleGeometry.attributes.position) {
@@ -275,5 +306,17 @@ export class ParticleSystem {
     this.scene.remove(this.particleSystem);
     this.particleGeometry.dispose();
     this.particleMaterial.dispose();
+  }
+
+  // Method to reinitialize if needed (for floor changes, etc.)
+  public reinitialize(): void {
+    console.log('🔄 Reinitializing particle system...');
+    this.dispose();
+    this.initializeParticleSystem();
+  }
+
+  // Method to check if particle system is properly set up
+  public isInitialized(): boolean {
+    return this.scene.children.includes(this.particleSystem);
   }
 }
