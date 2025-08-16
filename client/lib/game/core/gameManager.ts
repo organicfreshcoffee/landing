@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData } from '../types';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData } from '../types';
 import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
@@ -31,6 +31,7 @@ export class GameManager {
     canvas: HTMLCanvasElement,
     private onStateChange: (state: GameState) => void,
     private user: any,
+    private selectedCharacter: CharacterData,
     private onFloorTransition?: (transition: {
       isLoading: boolean;
       direction: 'upstairs' | 'downstairs';
@@ -50,6 +51,7 @@ export class GameManager {
       this.playersAnimations,
       () => this.webSocketManager.isConnected,
       (message) => this.webSocketManager.send(JSON.stringify(message)),
+      this.selectedCharacter,
       (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos)
     );
 
@@ -217,32 +219,29 @@ export class GameManager {
     
     // Connect to WebSocket
     console.log(`🔌 GameManager: Connecting to WebSocket...`);
-    await this.webSocketManager.connect(serverAddress, this.user);
+    await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
     console.log(`✅ GameManager: WebSocket connected`);
   }
 
   private handleGameMessage(message: GameMessage): void {
     switch (message.type) {
-      case 'player_joined':
-        if (message.data.playerId && message.data.position) {
-          this.updatePlayer({
-            id: message.data.playerId,
-            position: message.data.position,
-            rotation: message.data.rotation,
-            isMoving: message.data.isMoving || false,
-            movementDirection: message.data.movementDirection || 'none'
-          }).catch(console.error);
-        }
-        break;
-      
       case 'player_moved':
+        // Handle both new players joining and existing players moving
+        // Character data is included in all movement messages
         if (message.data.playerId && message.data.position) {
+          // Only log character data for new players
+          const isNewPlayer = !this.players.has(message.data.playerId);
+          if (isNewPlayer && message.data.character) {
+            console.log('👥 New player joined:', message.data.character.name);
+          }
+          
           this.updatePlayer({
             id: message.data.playerId,
             position: message.data.position,
             rotation: message.data.rotation,
             isMoving: message.data.isMoving || false,
-            movementDirection: message.data.movementDirection || 'none'
+            movementDirection: message.data.movementDirection || 'none',
+            character: message.data.character
           }).catch(console.error);
         }
         break;
@@ -275,6 +274,10 @@ export class GameManager {
     const existingPlayer = this.players.get(playerData.id);
 
     if (existingPlayer) {
+      // Update character data if provided
+      if (playerData.character) {
+        existingPlayer.character = playerData.character;
+      }
       PlayerManager.updatePlayerPosition(existingPlayer, playerData);
       PlayerManager.updatePlayerAnimation(playerData.id, playerData, this.playersAnimations);
     } else {
@@ -285,7 +288,8 @@ export class GameManager {
         rotation: playerData.rotation || { x: 0, y: 0, z: 0 },
         color: PlayerManager.generatePlayerColor(playerData.id),
         isMoving: playerData.isMoving || false,
-        movementDirection: playerData.movementDirection || 'none'
+        movementDirection: playerData.movementDirection || 'none',
+        character: playerData.character
       };
       
       const playerResult = await PlayerManager.createPlayerModel(newPlayer);
@@ -800,7 +804,7 @@ export class GameManager {
   }
 
   manualReconnect(serverAddress: string): void {
-    this.webSocketManager.manualReconnect(serverAddress, this.user);
+    this.webSocketManager.manualReconnect(serverAddress, this.user, this.selectedCharacter);
   }
 
   get playersCount(): number {
@@ -823,8 +827,13 @@ export class GameManager {
   get debugInfo() {
     return {
       movement: this.movementController.debugInfo,
-      players: Array.from(this.players.keys()),
+      players: Array.from(this.players.entries()).map(([id, player]) => ({
+        id,
+        position: player.position,
+        character: player.character
+      })),
       localPlayer: this.localPlayerRef.current?.position,
+      localCharacter: this.selectedCharacter,
       animations: Array.from(this.playersAnimations.keys()),
       testRunner: AnimationTest.getDebugInfo()
     };

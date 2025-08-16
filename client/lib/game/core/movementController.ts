@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PlayerAnimationData } from '../types';
+import { PlayerAnimationData, CharacterData } from '../types';
 import { CollisionSystem } from './collisionSystem';
 import { GameHUD } from '../ui/gameHUD';
 import { AnimationTest } from '../utils/animationTest';
@@ -40,6 +40,7 @@ export class MovementController {
     private playersAnimations: Map<string, PlayerAnimationData>,
     private isConnected: () => boolean,
     private sendMovementUpdate: (data: any) => void,
+    private selectedCharacter: CharacterData,
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void
   ) {
     this.setupKeyboardListeners();
@@ -519,10 +520,12 @@ export class MovementController {
             z: 0
           },
           isMoving: this.isMoving,
-          movementDirection: this.movementDirection
+          movementDirection: this.movementDirection,
+          character: this.selectedCharacter
         }
       };
       
+      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name);
       this.sendMovementUpdate(moveMessage);
     }
   }

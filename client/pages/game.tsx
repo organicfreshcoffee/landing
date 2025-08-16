@@ -54,6 +54,7 @@ export default function Game() {
         canvasRef.current!, 
         setGameState, 
         user,
+        selectedCharacter,
         setFloorTransition, // Pass floor transition state setter
         setCurrentFloor // Pass current floor state setter
       );

@@ -138,11 +138,13 @@ export default function CharacterSelection({ onCharacterSelected, onBack }: Char
 
   const handleStartGame = () => {
     if (selectedClass && selectedStyle) {
-      onCharacterSelected({
+      const characterData = {
         type: selectedClass,
         style: selectedStyle,
         name: CHARACTER_CLASSES[selectedClass as keyof typeof CHARACTER_CLASSES]
-      });
+      };
+      console.log('🎮 Character selected:', characterData);
+      onCharacterSelected(characterData);
     }
   };
 
