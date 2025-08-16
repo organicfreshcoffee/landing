@@ -547,23 +547,39 @@ export class PlayerManager {
   }
 
   /**
-   * Legacy method - no longer needed with directional sprites
-   * Sprites now use texture direction instead of mesh rotation
+   * Make other player sprites face the local player (visual rotation)
+   * This is separate from sprite texture direction which is based on actual player rotation
    */
   static updateOtherPlayerFacing(otherPlayerId: string, localPlayerPosition: THREE.Vector3): void {
-    // No longer needed - directional sprites handle facing via texture selection
-    // The updateSpriteDirection method handles this functionality now
-    return;
+    const spriteMeshRef = this.spriteMeshReferences.get(otherPlayerId);
+    if (!spriteMeshRef) return;
+
+    // Get the player group (parent of sprite mesh)
+    const playerGroup = spriteMeshRef.parent;
+    if (!playerGroup) return;
+
+    // Calculate direction from other player to local player
+    const otherPlayerPosition = playerGroup.position;
+    const direction = new THREE.Vector3()
+      .subVectors(localPlayerPosition, otherPlayerPosition)
+      .normalize();
+
+    // Calculate angle and make sprite face the local player
+    const angle = Math.atan2(direction.x, direction.z);
+    spriteMeshRef.rotation.y = angle;
   }
 
   /**
-   * Legacy method - no longer needed with directional sprites
-   * Sprites now use texture direction instead of mesh rotation
+   * Update all other players to face the local player (visual rotation)
+   * This is separate from sprite texture direction which is based on actual player rotation
    */
   static updateAllOtherPlayersFacing(localPlayerPosition: THREE.Vector3): void {
-    // No longer needed - directional sprites handle facing via texture selection
-    // The updateSpriteDirection method in player updates handles this functionality now
-    return;
+    this.spriteMeshReferences.forEach((spriteMesh, playerId) => {
+      // Skip if this is the local player
+      if (spriteMesh.parent && !spriteMesh.parent.userData.isLocalPlayer) {
+        this.updateOtherPlayerFacing(playerId, localPlayerPosition);
+      }
+    });
   }
   static updateSpritePlayerPosition(player: Player, playerData: PlayerUpdate): void {
     // Update basic position data
