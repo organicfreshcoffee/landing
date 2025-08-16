@@ -68,8 +68,11 @@ export default function Game() {
         (window as any).gameDebug = {
           gameManager,
           debugInfo: () => gameManager.debugInfo,
+          debugPlayers: () => gameManager.debugPlayers(),
           selectedCharacter
         };
+        // Also expose gameManager directly for easier access
+        (window as any).gameManager = gameManager;
       }
     };
     
@@ -95,7 +98,16 @@ export default function Game() {
 
   // Handle character selection
   const handleCharacterSelected = (character: CharacterData) => {
+    console.log('🎮 Character selected:', character);
+    
+    // Update the character state
     setSelectedCharacter(character);
+    
+    // If we already have a running GameManager, update its character data
+    if (gameManagerRef.current) {
+      console.log('🔄 Updating existing GameManager with new character');
+      gameManagerRef.current.updateSelectedCharacter(character);
+    }
   };
 
   // Handle back from character selection

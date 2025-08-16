@@ -21,6 +21,9 @@ export class PlayerManager {
     frame2: THREE.Texture;
   }>();
 
+  // Store current sprite direction for each player
+  private static spriteDirections = new Map<string, 'fr' | 'bk' | 'lf' | 'rt'>();
+
   static generatePlayerColor(playerId: string): string {
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
@@ -86,6 +89,9 @@ export class PlayerManager {
       frame1: frame1Texture,
       frame2: frame2Texture
     });
+
+    // Store initial direction
+    this.spriteDirections.set(player.id, direction);
     
     // Create material with transparency using frame 1 initially
     const spriteMaterial = new THREE.MeshBasicMaterial({
@@ -99,10 +105,7 @@ export class PlayerManager {
     const spriteMesh = new THREE.Mesh(spriteGeometry, spriteMaterial);
     spriteMesh.position.set(0, 0.75, 0); // Raise sprite to appear standing on ground
     
-    // For other players, make them always face the camera/local player
-    if (!isLocalPlayer) {
-      spriteMesh.rotation.y = Math.PI; // Face towards camera initially
-    }
+    // No initial rotation needed - sprite direction system will handle facing
     
     playerGroup.add(spriteMesh);
     
@@ -365,7 +368,7 @@ export class PlayerManager {
   }
 
   /**
-   * Update sprite animation for a player
+   * Update sprite animation for a player with improved direction handling
    */
   static updateSpriteAnimation(playerId: string, isMoving: boolean): void {
     const animData = this.spriteAnimations.get(playerId);
@@ -386,12 +389,90 @@ export class PlayerManager {
       // Update the sprite texture
       this.updateSpriteTexture(playerId);
     } else if (!isMoving) {
-      // Reset to frame 1 when not moving
+      // Reset to frame 1 when not moving (idle pose)
       if (animData.currentFrame !== 1) {
         animData.currentFrame = 1;
         this.updateSpriteTexture(playerId);
       }
     }
+  }
+
+  /**
+   * Update sprite direction and textures based on rotation and local player position
+   */
+  static updateSpriteDirection(
+    playerId: string, 
+    playerPosition: THREE.Vector3, 
+    playerRotation: { x: number; y: number; z: number }, 
+    localPlayerPosition: THREE.Vector3
+  ): void {
+    const spriteMeshRef = this.spriteMeshReferences.get(playerId);
+    const animData = this.spriteAnimations.get(playerId);
+    if (!spriteMeshRef || !animData) return;
+
+    // Calculate the correct sprite direction
+    const newDirection = this.calculateSpriteDirection(playerPosition, playerRotation, localPlayerPosition);
+    const currentDirection = this.spriteDirections.get(playerId) || 'fr';
+
+    // Only update if direction changed
+    if (newDirection !== currentDirection) {
+      console.log(`🔄 Updating sprite direction for player ${playerId}: ${currentDirection} → ${newDirection}`);
+      
+      // Update stored direction
+      this.spriteDirections.set(playerId, newDirection);
+      animData.direction = newDirection;
+
+      // Load new textures for this direction
+      this.loadDirectionTextures(playerId, newDirection);
+    }
+  }
+
+  /**
+   * Load textures for a specific direction
+   */
+  private static loadDirectionTextures(playerId: string, direction: 'fr' | 'bk' | 'lf' | 'rt'): void {
+    const animData = this.spriteAnimations.get(playerId);
+    const spriteMeshRef = this.spriteMeshReferences.get(playerId);
+    if (!animData || !spriteMeshRef) return;
+
+    // Get character data from the player group
+    const playerGroup = spriteMeshRef.parent;
+    if (!playerGroup || !playerGroup.userData.character) return;
+
+    const character = playerGroup.userData.character;
+    const textureLoader = new THREE.TextureLoader();
+
+    // Load both frames for the new direction
+    const frame1Path = `/assets/sprites/last-guardian-sprites/png/${character.type}${character.style}_${direction}1.png`;
+    const frame2Path = `/assets/sprites/last-guardian-sprites/png/${character.type}${character.style}_${direction}2.png`;
+
+    const frame1Texture = textureLoader.load(frame1Path, () => {
+      // Update current texture if this is frame 1
+      if (animData.currentFrame === 1) {
+        this.updateSpriteTexture(playerId);
+      }
+    });
+    
+    const frame2Texture = textureLoader.load(frame2Path, () => {
+      // Update current texture if this is frame 2
+      if (animData.currentFrame === 2) {
+        this.updateSpriteTexture(playerId);
+      }
+    });
+
+    // Configure textures
+    [frame1Texture, frame2Texture].forEach(texture => {
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+    });
+
+    // Update stored textures
+    this.spriteTextures.set(playerId, {
+      frame1: frame1Texture,
+      frame2: frame2Texture
+    });
   }
 
   /**
@@ -421,7 +502,53 @@ export class PlayerManager {
   }
 
   /**
-   * Make other player sprites face the local player
+   * Determine sprite direction based on player rotation and local player position
+   */
+  static calculateSpriteDirection(
+    playerPosition: THREE.Vector3, 
+    playerRotation: { x: number; y: number; z: number }, 
+    localPlayerPosition: THREE.Vector3
+  ): 'fr' | 'bk' | 'lf' | 'rt' {
+    // Get the player's facing direction from their Y rotation
+    const playerFacingAngle = playerRotation.y;
+    
+    // Calculate direction from player to local player
+    const toLocalPlayer = new THREE.Vector3()
+      .subVectors(localPlayerPosition, playerPosition)
+      .normalize();
+    
+    // Convert to angle
+    const toLocalPlayerAngle = Math.atan2(toLocalPlayer.x, toLocalPlayer.z);
+    
+    // Calculate the relative angle between where the player is facing and where the local player is
+    let relativeAngle = toLocalPlayerAngle - playerFacingAngle;
+    
+    // Normalize angle to [-π, π]
+    while (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
+    while (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
+    
+    // Determine sprite direction based on relative angle
+    // Front: player is facing away from local player (3π/4 to π and -π to -3π/4)
+    // Right: local player is to the right of where player is facing (π/4 to 3π/4)  
+    // Back: player is facing towards local player (-π/4 to π/4)
+    // Left: local player is to the left of where player is facing (-3π/4 to -π/4)
+    
+    const absAngle = Math.abs(relativeAngle);
+    
+    if (absAngle <= Math.PI / 4) {
+      return 'bk'; // Player facing towards local player (back view)
+    } else if (relativeAngle > Math.PI / 4 && relativeAngle <= 3 * Math.PI / 4) {
+      return 'rt'; // Local player is to the right
+    } else if (absAngle > 3 * Math.PI / 4) {
+      return 'fr'; // Player facing away from local player (front view)
+    } else {
+      return 'lf'; // Local player is to the left
+    }
+  }
+
+  /**
+   * Make other player sprites face the local player (visual rotation)
+   * This is separate from sprite texture direction which is based on actual player rotation
    */
   static updateOtherPlayerFacing(otherPlayerId: string, localPlayerPosition: THREE.Vector3): void {
     const spriteMeshRef = this.spriteMeshReferences.get(otherPlayerId);
@@ -443,7 +570,8 @@ export class PlayerManager {
   }
 
   /**
-   * Update all other players to face the local player
+   * Update all other players to face the local player (visual rotation)
+   * This is separate from sprite texture direction which is based on actual player rotation
    */
   static updateAllOtherPlayersFacing(localPlayerPosition: THREE.Vector3): void {
     this.spriteMeshReferences.forEach((spriteMesh, playerId) => {

@@ -378,8 +378,8 @@ export class MovementController {
   }
 
   private updateCamera(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3): void {
-    const cameraHeight = 1.5;
-    const cameraDistance = 0.75;
+    const cameraHeight = 3;
+    const cameraDistance = 1.5;
     
     // Calculate camera position based on player's Y rotation
     const cameraX = playerPos.x + Math.sin(this.localPlayerRotation.y) * cameraDistance;
@@ -536,7 +536,7 @@ export class MovementController {
         }
       };
       
-      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name);
+      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name, 'Full character data:', this.selectedCharacter);
       this.sendMovementUpdate(moveMessage);
     }
   }
@@ -553,6 +553,14 @@ export class MovementController {
         }
       });
     }
+  }
+
+  /**
+   * Update the selected character data (useful when character changes after game start)
+   */
+  updateSelectedCharacter(character: CharacterData): void {
+    console.log('🔄 Updating MovementController character from:', this.selectedCharacter.name, 'to:', character.name);
+    this.selectedCharacter = character;
   }
 
   private castSpell(): void {

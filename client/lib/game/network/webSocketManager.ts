@@ -153,6 +153,16 @@ export class WebSocketManager {
     }
 
     try {
+      // Log character data if it's a player_move message
+      try {
+        const parsedMessage = JSON.parse(message);
+        if (parsedMessage.type === 'player_move' && parsedMessage.data?.character) {
+          console.log('📡 Sending player_move with character:', parsedMessage.data.character);
+        }
+      } catch (parseError) {
+        // Ignore parse errors, just send the message
+      }
+
       this.ws.send(message);
       return true;
     } catch (error) {
