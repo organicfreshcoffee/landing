@@ -23,6 +23,9 @@ export class GameManager {
   private players = new Map<string, Player>();
   private playersAnimations = new Map<string, PlayerAnimationData>();
   
+  // Store current player ID to avoid inconsistencies
+  private currentPlayerId: string;
+  
   // Floor verification tracking
   private lastFloorVerificationTime = 0;
   private floorVerificationInterval = 30000; // Check every 30 seconds
@@ -40,6 +43,7 @@ export class GameManager {
     }) => void,
     private onFloorChange?: (floorName: string) => void
   ) {
+    this.currentPlayerId = user?.uid || 'local';
     this.sceneManager = new SceneManager(canvas);
     this.webSocketManager = new WebSocketManager(onStateChange, this.handleGameMessage.bind(this));
     this.particleSystem = new ParticleSystem(this.sceneManager.scene);
@@ -68,7 +72,7 @@ export class GameManager {
     // Start render loop
     this.sceneManager.startRenderLoop(() => {
       if (this.user?.uid) {
-        this.movementController.updateMovement(this.user.uid);
+        this.movementController.updateMovement(this.currentPlayerId);
         
         // Update stair interactions with current player position
         if (this.localPlayerRef.current) {
@@ -109,7 +113,7 @@ export class GameManager {
     
     // Create local player object with character data
     const localPlayer: Player = {
-      id: this.user?.uid || 'local',
+      id: this.currentPlayerId,
       position: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       color: '#00ff00', // Green for local player
@@ -144,7 +148,7 @@ export class GameManager {
     
     // Mark as player object to prevent it from being cleared by scenery loading
     localPlayerScene.userData.isPlayer = true;
-    localPlayerScene.userData.playerId = this.user?.uid || 'local';
+    localPlayerScene.userData.playerId = this.currentPlayerId;
     localPlayerScene.userData.isLocalPlayer = true;
     
     this.sceneManager.addToScene(localPlayerScene);
@@ -277,10 +281,12 @@ export class GameManager {
 
   private async updatePlayer(playerData: PlayerUpdate): Promise<void> {
     // Skip if this is the local player
-    if (playerData.id === this.user?.uid) {
-      console.log('⏭️ Skipping update for local player:', playerData.id);
+    if (playerData.id === this.currentPlayerId) {
+      console.log('⏭️ Skipping update for local player:', playerData.id, '(local ID:', this.currentPlayerId, ')');
       return;
     }
+
+    console.log('🔍 Processing player update for:', playerData.id, '(local ID:', this.currentPlayerId, ')');
 
     const existingPlayer = this.players.get(playerData.id);
 
@@ -893,6 +899,26 @@ export class GameManager {
     if (Math.random() > 0.99) { // Roughly every 10 seconds at 60fps
       let issuesFound = 0;
       
+      // Check for duplicate local players in scene
+      let localPlayerCount = 0;
+      this.sceneManager.scene.traverse((object) => {
+        if (object.userData.isLocalPlayer) {
+          localPlayerCount++;
+        }
+      });
+      
+      if (localPlayerCount > 1) {
+        console.error(`🚨 DUPLICATE LOCAL PLAYERS DETECTED: ${localPlayerCount} local players found in scene!`);
+        issuesFound++;
+      }
+      
+      // Check for players with same ID as local player in players map
+      if (this.players.has(this.currentPlayerId)) {
+        console.error(`🚨 LOCAL PLAYER ID IN REMOTE PLAYERS MAP: ${this.currentPlayerId}`);
+        this.players.delete(this.currentPlayerId);
+        issuesFound++;
+      }
+      
       this.players.forEach((player, id) => {
         // Check if player has mesh but mesh is not in scene
         if (player.mesh && !this.sceneManager.scene.getObjectByProperty('uuid', player.mesh.uuid)) {
@@ -995,6 +1021,8 @@ export class GameManager {
   get debugInfo() {
     return {
       movement: this.movementController.debugInfo,
+      currentPlayerId: this.currentPlayerId,
+      userUid: this.user?.uid,
       players: Array.from(this.players.entries()).map(([id, player]) => ({
         id,
         position: player.position,
