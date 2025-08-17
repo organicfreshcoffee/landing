@@ -124,6 +124,37 @@ export default function Game() {
     gameManagerRef.current.manualReconnect(serverAddress);
   };
 
+  // Render connection status with quality information
+  const renderConnectionStatus = () => {
+    if (gameState.loading) {
+      return 'Status: Connecting...';
+    }
+    
+    if (!gameState.connected) {
+      const reconnectInfo = gameManagerRef.current && gameManagerRef.current.reconnectAttempts > 0 
+        ? ` (Attempt ${gameManagerRef.current.reconnectAttempts}/${gameManagerRef.current.maxReconnectAttempts})`
+        : '';
+      return `Status: Disconnected${reconnectInfo}`;
+    }
+
+    // Connected - show quality if available
+    if (gameState.connectionQuality) {
+      const { pingMs, status } = gameState.connectionQuality;
+      const statusEmoji = {
+        excellent: '🟢',
+        good: '🟡',
+        fair: '🟠',
+        poor: '🔴',
+        unknown: '⚪'
+      }[status];
+      
+      const pingText = pingMs !== null ? ` (${pingMs}ms)` : '';
+      return `Status: Connected ${statusEmoji}${pingText}`;
+    }
+
+    return 'Status: Connected';
+  };
+
   if (authLoading || !user) {
     return <div className={styles.loading}>Loading...</div>;
   }
@@ -170,10 +201,7 @@ export default function Game() {
         
         <div className={styles.topRight}>
           <div className={styles.connectionStatus}>
-            Status: {gameState.connected ? 'Connected' : gameState.loading ? 'Connecting...' : 'Disconnected'}
-            {gameManagerRef.current && gameManagerRef.current.reconnectAttempts > 0 && (
-              <span> (Attempt {gameManagerRef.current.reconnectAttempts}/{gameManagerRef.current.maxReconnectAttempts})</span>
-            )}
+            {renderConnectionStatus()}
           </div>
         </div>
 

@@ -9,6 +9,8 @@ export class WebSocketManager {
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPongTime = Date.now();
+  private lastPingTime = Date.now();
+  private currentPingMs: number | null = null;
   private connectionCheckInterval: NodeJS.Timeout | null = null;
   private isReconnecting = false;
 
@@ -79,7 +81,12 @@ export class WebSocketManager {
         this.onStateChange({
           connected: true,
           error: null,
-          loading: false
+          loading: false,
+          connectionQuality: {
+            pingMs: null,
+            lastPongTime: this.lastPongTime,
+            status: 'unknown'
+          }
         });
 
         this.startHeartbeat();
@@ -95,7 +102,12 @@ export class WebSocketManager {
           
           // Handle pong messages for heartbeat
           if (message.type === 'pong') {
-            this.lastPongTime = Date.now();
+            const now = Date.now();
+            this.lastPongTime = now;
+            this.currentPingMs = now - this.lastPingTime;
+            
+            // Update connection quality in state
+            this.updateConnectionQuality();
             return;
           }
           
@@ -252,6 +264,7 @@ export class WebSocketManager {
     this.pingInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         try {
+          this.lastPingTime = Date.now();
           this.ws.send(JSON.stringify({ type: 'ping' }));
         } catch (error) {
           console.error('Error sending ping:', error);
@@ -309,6 +322,29 @@ export class WebSocketManager {
       // Page is visible - restore normal ping frequency
       this.startHeartbeat();
     }
+  }
+
+  private updateConnectionQuality(): void {
+    if (!this.isConnected) return;
+
+    const getConnectionStatus = (pingMs: number | null): 'excellent' | 'good' | 'fair' | 'poor' | 'unknown' => {
+      if (pingMs === null) return 'unknown';
+      if (pingMs <= 50) return 'excellent';
+      if (pingMs <= 100) return 'good';
+      if (pingMs <= 200) return 'fair';
+      return 'poor';
+    };
+
+    this.onStateChange({
+      connected: true,
+      error: null,
+      loading: false,
+      connectionQuality: {
+        pingMs: this.currentPingMs,
+        lastPongTime: this.lastPongTime,
+        status: getConnectionStatus(this.currentPingMs)
+      }
+    });
   }
 
   close(): void {
