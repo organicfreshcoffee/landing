@@ -171,8 +171,41 @@ export class GameManager {
     // Update collision data after loading scenery
     this.movementController.updateCollisionData(this.sceneManager.scene);
     
-    // Position player on ground level
-    this.positionPlayerOnGround();
+    // Check for stored player position and rotation from existing character
+    const storedPosition = sessionStorage.getItem('playerPosition');
+    const storedRotation = sessionStorage.getItem('playerRotation');
+    
+    if (storedPosition && storedRotation && this.localPlayerRef.current) {
+      try {
+        const position = JSON.parse(storedPosition);
+        const rotation = JSON.parse(storedRotation);
+        
+        console.log('🔄 Restoring player position from server:', position);
+        console.log('🔄 Restoring player rotation from server:', rotation);
+        
+        // Set position
+        this.localPlayerRef.current.position.set(position.x, position.y, position.z);
+        
+        // Set rotation (convert degrees to radians)
+        this.localPlayerRef.current.rotation.set(
+          rotation.x * Math.PI / 180,
+          rotation.y * Math.PI / 180,
+          rotation.z * Math.PI / 180
+        );
+        
+        // Clear stored data after using it
+        sessionStorage.removeItem('playerPosition');
+        sessionStorage.removeItem('playerRotation');
+        
+        console.log('✅ Player positioned at stored location');
+      } catch (error) {
+        console.error('❌ Error parsing stored position/rotation, falling back to ground positioning:', error);
+        this.positionPlayerOnGround();
+      }
+    } else {
+      // Position player on ground level if no stored position
+      this.positionPlayerOnGround();
+    }
     
     // Notify about initial floor
     const initialFloor = this.sceneManager.getCurrentFloor();

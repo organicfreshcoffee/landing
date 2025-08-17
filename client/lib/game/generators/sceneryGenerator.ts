@@ -103,18 +103,22 @@ export class ServerSceneryGenerator {
   static async getSpawnLocation(serverAddress: string): Promise<string> {
     console.log(`🎯 ServerSceneryGenerator: Getting current floor from ${serverAddress}`);
     try {
-      // Get the player's current floor from the API
-      const currentFloorResponse = await DungeonApi.getCurrentFloor(serverAddress);
+      // Get the player's current status from the API
+      const currentStatusResponse = await DungeonApi.getCurrentStatus(serverAddress);
       
-      if (currentFloorResponse.success && currentFloorResponse.data.currentFloor) {
-        console.log(`✅ Using player's current floor: ${currentFloorResponse.data.currentFloor}`);
-        return currentFloorResponse.data.currentFloor;
+      if (currentStatusResponse.success && currentStatusResponse.data.currentFloor) {
+        console.log(`✅ Using player's current floor: ${currentStatusResponse.data.currentFloor}`);
+        return currentStatusResponse.data.currentFloor;
       } else {
         console.warn(`⚠️ Failed to get current floor from API, using default spawn location`);
         return "A"; // Default to root node
       }
     } catch (error) {
-      console.error(`❌ Error getting current floor from API:`, error);
+      if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
+        console.log(`🎯 Player not alive, using default spawn location`);
+        return "A"; // Default to root node for new players
+      }
+      console.error(`❌ Error getting current status from API:`, error);
       console.log(`🎯 Falling back to default spawn location`);
       return "A"; // Default to root node as fallback
     }

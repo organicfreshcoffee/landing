@@ -59,3 +59,35 @@ export interface CurrentFloorResponse {
     playerName: string;
   };
 }
+
+export interface Position {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface Rotation {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface Character {
+  type: string;
+  style: number;
+  name: string;
+}
+
+export interface CurrentStatusResponse {
+  success: boolean;
+  data: {
+    currentFloor: string;
+    playerId: string;
+    playerName: string;
+    position: Position;
+    rotation: Rotation;
+    health: number;
+    character: Character;
+    isAlive: boolean;
+  };
+}

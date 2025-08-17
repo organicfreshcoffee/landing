@@ -5,6 +5,7 @@ import { GameManager, GameState } from '../lib/game';
 import { ensureProtocol } from '../lib/urlUtils';
 import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
+import { DungeonApi } from '../lib/game/network/dungeonApi';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -15,6 +16,7 @@ export default function Game() {
   const gameManagerRef = useRef<GameManager | null>(null);
   
   const [selectedCharacter, setSelectedCharacter] = useState<CharacterData | null>(null);
+  const [checkingExistingCharacter, setCheckingExistingCharacter] = useState<boolean>(true);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
@@ -39,6 +41,54 @@ export default function Game() {
       router.push('/');
     }
   }, [user, authLoading, router]);
+
+  // Check for existing character on mount
+  useEffect(() => {
+    if (!server || !user || authLoading) return;
+
+    const checkExistingCharacter = async () => {
+      try {
+        setCheckingExistingCharacter(true);
+        const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+        console.log('🔍 Checking for existing character on server:', serverAddress);
+        
+        const statusResponse = await DungeonApi.getCurrentStatus(serverAddress);
+        
+        if (statusResponse.success && statusResponse.data.isAlive) {
+          console.log('✅ Found existing character:', statusResponse.data.character);
+          
+          // Set the character from server response
+          setSelectedCharacter({
+            type: statusResponse.data.character.type,
+            style: statusResponse.data.character.style,
+            name: statusResponse.data.character.name
+          });
+
+          // Store the player position and rotation for later use
+          const playerPosition = statusResponse.data.position;
+          const playerRotation = statusResponse.data.rotation;
+          console.log('📍 Player position:', playerPosition);
+          console.log('🔄 Player rotation:', playerRotation);
+
+          // Store these in sessionStorage so GameManager can use them
+          sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
+          sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
+        } else {
+          console.log('🚫 No existing character found or character not alive');
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
+          console.log('🚫 Player is not alive, showing character selection');
+        } else {
+          console.error('❌ Error checking for existing character:', error);
+        }
+      } finally {
+        setCheckingExistingCharacter(false);
+      }
+    };
+
+    checkExistingCharacter();
+  }, [server, user, authLoading, router]);
 
   // Initialize game when component mounts and server is available
   useEffect(() => {
@@ -172,6 +222,15 @@ export default function Game() {
 
   // Show character selection if no character is selected yet
   if (!selectedCharacter) {
+    if (checkingExistingCharacter) {
+      return (
+        <div className={styles.loading}>
+          <h2>Checking for existing character...</h2>
+          <p>Please wait while we check if you already have a character on this server.</p>
+        </div>
+      );
+    }
+    
     return (
       <CharacterSelection 
         onCharacterSelected={handleCharacterSelected}
