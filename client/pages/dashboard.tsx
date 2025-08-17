@@ -43,6 +43,7 @@ interface PlayerCountResponse {
 interface ServerStatus {
   isOnline: boolean;
   playerCount: number;
+  pingTime: number | null; // in milliseconds, null if offline or error
   lastChecked: string;
 }
 
@@ -72,12 +73,12 @@ export default function Dashboard() {
       logApiConfig();
       fetchServers();
       
-      // Set up periodic refresh every 30 seconds
+      // Set up periodic refresh every 5 seconds
       const interval = setInterval(() => {
         if (servers.length > 0) {
           checkAllServerStatuses(servers);
         }
-      }, 30000);
+      }, 2500);
       
       return () => clearInterval(interval);
     }
@@ -140,16 +141,26 @@ export default function Dashboard() {
     return `${protocol}://${serverAddress}`;
   };
 
-  const checkServerHealth = async (serverAddress: string): Promise<boolean> => {
+  const checkServerHealth = async (serverAddress: string): Promise<{ isOnline: boolean; pingTime: number | null }> => {
     try {
       const formattedUrl = formatServerUrl(serverAddress);
+      const startTime = Date.now();
       const response = await axios.get(`${formattedUrl}/health`, {
         timeout: 5000 // 5 second timeout
       });
-      return response.data.status === 'ok';
+      const endTime = Date.now();
+      const pingTime = endTime - startTime;
+      
+      return {
+        isOnline: response.data.status === 'ok',
+        pingTime: response.data.status === 'ok' ? pingTime : null
+      };
     } catch (error) {
       console.warn(`Health check failed for ${serverAddress}:`, error);
-      return false;
+      return {
+        isOnline: false,
+        pingTime: null
+      };
     }
   };
 
@@ -173,14 +184,13 @@ export default function Dashboard() {
   };
 
   const checkServerStatus = async (server: Server): Promise<ServerStatus> => {
-    const [isOnline, playerCount] = await Promise.all([
-      checkServerHealth(server.server_address),
-      getPlayerCount(server.server_address)
-    ]);
+    const healthResult = await checkServerHealth(server.server_address);
+    const playerCount = healthResult.isOnline ? await getPlayerCount(server.server_address) : 0;
 
     return {
-      isOnline,
-      playerCount: isOnline ? playerCount : 0,
+      isOnline: healthResult.isOnline,
+      playerCount: healthResult.isOnline ? playerCount : 0,
+      pingTime: healthResult.pingTime,
       lastChecked: new Date().toISOString()
     };
   };
@@ -637,7 +647,7 @@ export default function Dashboard() {
   };
 
   const getServerStatus = (serverId: string) => {
-    return serverStatuses[serverId] || { isOnline: false, playerCount: 0, lastChecked: '' };
+    return serverStatuses[serverId] || { isOnline: false, playerCount: 0, pingTime: null, lastChecked: '' };
   };
 
   const renderServerStatus = (serverId: string) => {
@@ -653,10 +663,6 @@ export default function Dashboard() {
     );
   };
 
-  const handleRefreshStatuses = async () => {
-    await checkAllServerStatuses(servers);
-  };
-
   const renderPlayerCount = (serverId: string) => {
     const status = getServerStatus(serverId);
     if (!status.lastChecked) {
@@ -666,6 +672,32 @@ export default function Dashboard() {
     return (
       <span className={styles.playerCount}>
         {status.isOnline ? status.playerCount : '-'}
+      </span>
+    );
+  };
+
+  const renderPingTime = (serverId: string) => {
+    const status = getServerStatus(serverId);
+    if (!status.lastChecked) {
+      return <span className={styles.pingTimeLoading}>-</span>;
+    }
+    
+    if (!status.isOnline || status.pingTime === null) {
+      return <span className={styles.pingTimeOffline}>-</span>;
+    }
+    
+    const pingTime = status.pingTime;
+    let pingClass = styles.pingTimeGood;
+    
+    if (pingTime > 200) {
+      pingClass = styles.pingTimeHigh;
+    } else if (pingTime > 100) {
+      pingClass = styles.pingTimeMedium;
+    }
+    
+    return (
+      <span className={pingClass}>
+        {pingTime}ms
       </span>
     );
   };
@@ -897,48 +929,42 @@ export default function Dashboard() {
       <div className={styles.content}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Game Servers</h2>
-          <button 
-            onClick={handleRefreshStatuses} 
-            className={styles.refreshButton}
-            disabled={loadingServers || servers.length === 0}
-          >
-            🔄 Refresh Status
-          </button>
         </div>
-        {loadingServers ? (
-          <div className={styles.loading}>Loading servers...</div>
-        ) : (
-          <div className={styles.serversList}>
-            {/* Custom Server Section */}
-            <div className={styles.serverSection}>
-                <h3 className={styles.subsectionTitle}>Custom Server</h3>
-                <div className={styles.customServerInput}>
-                <input
-                    type="text"
-                    placeholder="Enter custom server address"
-                    value={customServerAddress}
-                    onChange={(e) => setCustomServerAddress(e.target.value)}
-                    className={styles.serverInput}
-                />
-                <button 
-                    className={styles.connectButton}
-                    disabled={!customServerAddress.trim()}
-                    onClick={handleCustomConnect}
-                >
-                    Connect
-                </button>
-                </div>
-            </div>
+        <div className={styles.serversList}>
+          {/* Custom Server Section */}
+          <div className={styles.serverSection}>
+              <h3 className={styles.subsectionTitle}>Custom Server</h3>
+              <div className={styles.customServerInput}>
+              <input
+                  type="text"
+                  placeholder="Enter custom server address"
+                  value={customServerAddress}
+                  onChange={(e) => setCustomServerAddress(e.target.value)}
+                  className={styles.serverInput}
+              />
+              <button 
+                  className={styles.connectButton}
+                  disabled={!customServerAddress.trim()}
+                  onClick={handleCustomConnect}
+              >
+                  Connect
+              </button>
+              </div>
+          </div>
 
-            {/* Official Servers Section */}
-            <div className={styles.serverSection}>
-              <h3 className={styles.subsectionTitle}>Official Servers</h3>
+          {/* Official Servers Section */}
+          <div className={styles.serverSection}>
+            <h3 className={styles.subsectionTitle}>Official Servers</h3>
+            {loadingServers ? (
+              <div className={styles.loading}>Loading servers...</div>
+            ) : (
               <div className={styles.table}>
                 <div className={styles.tableHeader}>
                   <div className={styles.tableCell}>Server Name</div>
                   <div className={styles.tableCell}>Server Address</div>
                   <div className={styles.tableCell}>Status</div>
                   <div className={styles.tableCell}>Players</div>
+                  <div className={styles.tableCell}>Ping</div>
                   <div className={styles.tableCell}>Action</div>
                 </div>
                 {servers.filter(server => server.is_official).map((server) => (
@@ -947,6 +973,7 @@ export default function Dashboard() {
                     <div className={styles.tableCell}>{server.server_address}</div>
                     <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
                     <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
+                    <div className={styles.tableCell}>{renderPingTime(server._id)}</div>
                     <div className={styles.tableCell}>
                       <button 
                         className={styles.tableConnectButton}
@@ -962,17 +989,22 @@ export default function Dashboard() {
                   <p className={styles.emptyState}>No official servers available.</p>
                 )}
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Third Party Servers Section */}
-            <div className={styles.serverSection}>
-              <h3 className={styles.subsectionTitle}>Third Party Servers</h3>
+          {/* Third Party Servers Section */}
+          <div className={styles.serverSection}>
+            <h3 className={styles.subsectionTitle}>Third Party Servers</h3>
+            {loadingServers ? (
+              <div className={styles.loading}>Loading servers...</div>
+            ) : (
               <div className={styles.table}>
                 <div className={styles.tableHeader}>
                   <div className={styles.tableCell}>Server Name</div>
                   <div className={styles.tableCell}>Server Address</div>
                   <div className={styles.tableCell}>Status</div>
                   <div className={styles.tableCell}>Players</div>
+                  <div className={styles.tableCell}>Ping</div>
                   <div className={styles.tableCell}>Action</div>
                 </div>
                 {servers.filter(server => server.is_third_party).map((server) => (
@@ -981,6 +1013,7 @@ export default function Dashboard() {
                     <div className={styles.tableCell}>{server.server_address}</div>
                     <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
                     <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
+                    <div className={styles.tableCell}>{renderPingTime(server._id)}</div>
                     <div className={styles.tableCell}>
                       <button 
                         className={styles.tableConnectButton}
@@ -996,9 +1029,9 @@ export default function Dashboard() {
                   <p className={styles.emptyState}>No third party servers available.</p>
                 )}
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
       
       <PrivacyPolicy />

@@ -4,6 +4,11 @@ export interface GameState {
   connected: boolean;
   error: string | null;
   loading: boolean;
+  connectionQuality?: {
+    pingMs: number | null;
+    lastPongTime: number;
+    status: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
+  };
 }
 
 export interface GameMessage {
