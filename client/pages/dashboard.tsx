@@ -62,12 +62,13 @@ export default function Dashboard() {
   const [isLoadingAccountData, setIsLoadingAccountData] = useState(false);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<'none' | 'initial' | 'final' | 'email' | 'complete' | 'error'>('none');
   const [emailConfirmationInput, setEmailConfirmationInput] = useState('');
+  const [deletionResults, setDeletionResults] = useState<any>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && deleteConfirmationStep !== 'complete' && deleteConfirmationStep !== 'error') {
       router.push('/');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, deleteConfirmationStep]);
 
   useEffect(() => {
     if (user) {
@@ -480,6 +481,7 @@ export default function Dashboard() {
   const handleDeleteConfirmationCancel = () => {
     setDeleteConfirmationStep('none');
     setEmailConfirmationInput('');
+    setDeletionResults(null);
   };
 
   const handleDeleteConfirmationNext = () => {
@@ -602,15 +604,20 @@ export default function Dashboard() {
         firebase: deleteResults.firebase?.success ? 'success' : 'failed'
       });
       
-      // 4. Logout and redirect
-      console.log('Logging out user...');
-      await logout();
+      // Store results for display BEFORE logout
+      setDeletionResults(deleteResults);
       
-      // Show completion message
+      // Show completion message BEFORE logout
       setDeleteConfirmationStep('complete');
+      
+      // Note: Logout will be handled by the "Go to Home Page" button in the completion modal
       
     } catch (error) {
       console.error('Error during account deletion:', error);
+      setDeletionResults({
+        error: true,
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
       setDeleteConfirmationStep('error');
     } finally {
       setIsDeleting(false);
@@ -677,7 +684,7 @@ export default function Dashboard() {
     return <div className={styles.loading}>Loading...</div>;
   }
 
-  if (!user) {
+  if (!user && deleteConfirmationStep !== 'complete' && deleteConfirmationStep !== 'error') {
     return null;
   }
 
@@ -808,7 +815,7 @@ export default function Dashboard() {
                   <div className={styles.emailConfirmation}>
                     <p>Please type your email address to confirm account deletion:</p>
                     <div className={styles.emailDisplay}>
-                      Expected: <strong>{user.email}</strong>
+                      Expected: <strong>{user?.email}</strong>
                     </div>
                     <input
                       type="email"
@@ -818,7 +825,7 @@ export default function Dashboard() {
                       className={styles.emailInput}
                       autoFocus
                     />
-                    {emailConfirmationInput && emailConfirmationInput !== user.email && (
+                    {emailConfirmationInput && emailConfirmationInput !== user?.email && (
                       <div className={styles.emailMismatch}>
                         Email does not match. Please try again.
                       </div>
@@ -834,7 +841,7 @@ export default function Dashboard() {
                   </button>
                   <button 
                     onClick={executeAccountDeletion}
-                    disabled={emailConfirmationInput !== user.email}
+                    disabled={emailConfirmationInput !== user?.email}
                     className={styles.deleteButton}
                   >
                     Delete Account
@@ -843,29 +850,138 @@ export default function Dashboard() {
               </>
             )}
 
-            {deleteConfirmationStep === 'complete' && (
+            {deleteConfirmationStep === 'complete' && deletionResults && (
               <>
                 <div className={styles.deleteModalHeader}>
                   <div className={styles.successIcon}>✅</div>
-                  <h3>Account Deleted</h3>
+                  <h3>Account Deletion Complete</h3>
                 </div>
                 <div className={styles.deleteModalContent}>
                   <div className={styles.completionMessage}>
-                    <p><strong>Account deletion completed!</strong></p>
-                    <div className={styles.deletionSummary}>
-                      <p>Summary:</p>
-                      <ul>
-                        <li>Game servers: Data deletion attempted</li>
-                        <li>Landing page data: Deleted</li>
-                        <li>Firebase account: Deleted</li>
-                      </ul>
+                    <p><strong>Account deletion process completed!</strong></p>
+                    
+                    <div className={styles.deletionResultsContainer}>
+                      {/* Game Servers Results */}
+                      <div className={styles.deletionResultSection}>
+                        <h4>🎮 Game Servers</h4>
+                        {deletionResults.gameServers && deletionResults.gameServers.length > 0 ? (
+                          <div className={styles.serverResults}>
+                            {deletionResults.gameServers.map((server: any, index: number) => (
+                              <div key={index} className={`${styles.serverResult} ${server.success ? styles.success : styles.failure}`}>
+                                <div className={styles.serverResultHeader}>
+                                  <span className={styles.serverResultIcon}>
+                                    {server.success ? '✅' : '❌'}
+                                  </span>
+                                  <span className={styles.serverResultName}>
+                                    {server.serverName}
+                                  </span>
+                                  <span className={styles.serverResultStatus}>
+                                    {server.success ? 'Success' : 'Failed'}
+                                  </span>
+                                </div>
+                                <div className={styles.serverResultDetails}>
+                                  <small>{server.serverAddress}</small>
+                                  {!server.success && server.error && (
+                                    <div className={styles.errorDetails}>
+                                      Error: {server.error}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.noServers}>No game servers were processed.</div>
+                        )}
+                      </div>
+
+                      {/* Landing Page Results */}
+                      <div className={styles.deletionResultSection}>
+                        <h4>📝 Landing Page Data</h4>
+                        <div className={`${styles.landingResult} ${deletionResults.landingPage?.success ? styles.success : styles.failure}`}>
+                          <span className={styles.resultIcon}>
+                            {deletionResults.landingPage?.success ? '✅' : '❌'}
+                          </span>
+                          <span className={styles.resultText}>
+                            {deletionResults.landingPage?.success ? 'Successfully deleted' : 'Failed to delete'}
+                          </span>
+                          {!deletionResults.landingPage?.success && deletionResults.landingPage?.error && (
+                            <div className={styles.errorDetails}>
+                              Error: {deletionResults.landingPage.error}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Firebase Results */}
+                      <div className={styles.deletionResultSection}>
+                        <h4>🔐 Firebase Account</h4>
+                        <div className={`${styles.firebaseResult} ${deletionResults.firebase?.success ? styles.success : styles.failure}`}>
+                          <span className={styles.resultIcon}>
+                            {deletionResults.firebase?.success ? '✅' : '❌'}
+                          </span>
+                          <span className={styles.resultText}>
+                            {deletionResults.firebase?.success ? 'Successfully deleted' : 'Failed to delete'}
+                          </span>
+                          {!deletionResults.firebase?.success && deletionResults.firebase?.error && (
+                            <div className={styles.errorDetails}>
+                              Error: {deletionResults.firebase.error}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Summary */}
+                      <div className={styles.deletionSummarySection}>
+                        <h4>📊 Summary</h4>
+                        <div className={styles.summaryStats}>
+                          {deletionResults.gameServers && (
+                            <div className={styles.summaryItem}>
+                              <span>Game Servers:</span>
+                              <span>
+                                {deletionResults.gameServers.filter((s: any) => s.success).length} successful, {' '}
+                                {deletionResults.gameServers.filter((s: any) => !s.success).length} failed
+                              </span>
+                            </div>
+                          )}
+                          <div className={styles.summaryItem}>
+                            <span>Landing Page:</span>
+                            <span>{deletionResults.landingPage?.success ? 'Deleted' : 'Failed'}</span>
+                          </div>
+                          <div className={styles.summaryItem}>
+                            <span>Firebase Account:</span>
+                            <span>{deletionResults.firebase?.success ? 'Deleted' : 'Failed'}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+
+                    {!deletionResults.firebase?.success && (
+                      <div className={styles.supportMessage}>
+                        <p><strong>⚠️ Important:</strong> Since Firebase account deletion failed, please contact support for manual account removal:</p>
+                        <p>
+                          <a href="https://github.com/organicfreshcoffee/landing/issues" target="_blank" rel="noopener noreferrer">
+                            GitHub Issues
+                          </a>
+                        </p>
+                      </div>
+                    )}
+
                     <p>You will now be redirected to the home page.</p>
                   </div>
                 </div>
                 <div className={styles.deleteModalActions}>
                   <button 
-                    onClick={() => router.push('/')}
+                    onClick={async () => {
+                      try {
+                        console.log('Logging out user...');
+                        await logout();
+                        router.push('/');
+                      } catch (logoutError) {
+                        console.error('Failed to logout after account deletion:', logoutError);
+                        window.location.href = '/';
+                      }
+                    }}
                     className={styles.primaryButton}
                   >
                     Go to Home Page
@@ -883,6 +999,14 @@ export default function Dashboard() {
                 <div className={styles.deleteModalContent}>
                   <div className={styles.errorMessage}>
                     <p><strong>An unexpected error occurred during account deletion.</strong></p>
+                    
+                    {deletionResults?.error && (
+                      <div className={styles.errorDetailsBox}>
+                        <h4>Error Details:</h4>
+                        <p>{deletionResults.message}</p>
+                      </div>
+                    )}
+                    
                     <p>Some data may have been deleted, but the process was not completed.</p>
                     <p>Please contact support for assistance: 
                       <a href="https://github.com/organicfreshcoffee/landing/issues" target="_blank" rel="noopener noreferrer">
@@ -1034,180 +1158,184 @@ export default function Dashboard() {
       
       <div className={styles.header}>
         <h1 className={styles.title}>Organic Fresh Coffee</h1>
-        <div className={styles.userInfo}>
-          <span>Welcome, {user.email}</span>
-          <button onClick={handleLogout} className={styles.logoutButton}>
-            Logout
-          </button>
-          <div className={styles.accountMenuContainer}>
-            <button 
-              onClick={toggleAccountMenu} 
-              className={styles.hamburgerButton}
-              aria-label="Account menu"
-            >
-              <div className={styles.hamburgerIcon}>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
+        {user && (
+          <div className={styles.userInfo}>
+            <span>Welcome, {user.email}</span>
+            <button onClick={handleLogout} className={styles.logoutButton}>
+              Logout
             </button>
-            {isAccountMenuOpen && (
-              <div className={styles.accountPopup}>
-                <button 
-                  onClick={handleViewAccountData}
-                  className={styles.accountMenuItem}
-                  disabled={isExporting || isDeleting || isLoadingAccountData}
-                >
-                  {isLoadingAccountData ? (
-                    <>
-                      <span className={styles.spinner}></span>
-                      Loading...
-                    </>
-                  ) : (
-                    <>👁️ View Account Data</>
-                  )}
-                </button>
-                <button 
-                  onClick={handleExportAccountData}
-                  className={styles.accountMenuItem}
-                  disabled={isExporting || isDeleting || isLoadingAccountData}
-                >
-                  {isExporting ? (
-                    <>
-                      <span className={styles.spinner}></span>
-                      Exporting...
-                    </>
-                  ) : (
-                    <>📁 Export Account Data</>
-                  )}
-                </button>
-                <button 
-                  onClick={handleDeleteAccount}
-                  className={`${styles.accountMenuItem} ${styles.dangerButton}`}
-                  disabled={isExporting || isDeleting || isLoadingAccountData}
-                >
-                  {isDeleting ? (
-                    <>
-                      <span className={styles.spinner}></span>
-                      Deleting...
-                    </>
-                  ) : (
-                    <>🗑️ Delete Account</>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.content}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Game Servers</h2>
-        </div>
-        <div className={styles.serversList}>
-          {/* Custom Server Section */}
-          <div className={styles.serverSection}>
-              <h3 className={styles.subsectionTitle}>Custom Server</h3>
-              <div className={styles.customServerInput}>
-              <input
-                  type="text"
-                  placeholder="Enter custom server address"
-                  value={customServerAddress}
-                  onChange={(e) => setCustomServerAddress(e.target.value)}
-                  className={styles.serverInput}
-              />
+            <div className={styles.accountMenuContainer}>
               <button 
-                  className={styles.connectButton}
-                  disabled={!customServerAddress.trim()}
-                  onClick={handleCustomConnect}
+                onClick={toggleAccountMenu} 
+                className={styles.hamburgerButton}
+                aria-label="Account menu"
               >
-                  Connect
+                <div className={styles.hamburgerIcon}>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
               </button>
-              </div>
-          </div>
-
-          {/* Official Servers Section */}
-          <div className={styles.serverSection}>
-            <h3 className={styles.subsectionTitle}>Official Servers</h3>
-            {loadingServers ? (
-              <div className={styles.loading}>Loading servers...</div>
-            ) : (
-              <div className={styles.table}>
-                <div className={styles.tableHeader}>
-                  <div className={styles.tableCell}>Server Name</div>
-                  <div className={styles.tableCell}>Server Address</div>
-                  <div className={styles.tableCell}>Status</div>
-                  <div className={styles.tableCell}>Players</div>
-                  <div className={styles.tableCell}>Ping</div>
-                  <div className={styles.tableCell}>Action</div>
+              {isAccountMenuOpen && (
+                <div className={styles.accountPopup}>
+                  <button 
+                    onClick={handleViewAccountData}
+                    className={styles.accountMenuItem}
+                    disabled={isExporting || isDeleting || isLoadingAccountData}
+                  >
+                    {isLoadingAccountData ? (
+                      <>
+                        <span className={styles.spinner}></span>
+                        Loading...
+                      </>
+                    ) : (
+                      <>👁️ View Account Data</>
+                    )}
+                  </button>
+                  <button 
+                    onClick={handleExportAccountData}
+                    className={styles.accountMenuItem}
+                    disabled={isExporting || isDeleting || isLoadingAccountData}
+                  >
+                    {isExporting ? (
+                      <>
+                        <span className={styles.spinner}></span>
+                        Exporting...
+                      </>
+                    ) : (
+                      <>📁 Export Account Data</>
+                    )}
+                  </button>
+                  <button 
+                    onClick={handleDeleteAccount}
+                    className={`${styles.accountMenuItem} ${styles.dangerButton}`}
+                    disabled={isExporting || isDeleting || isLoadingAccountData}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <span className={styles.spinner}></span>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>🗑️ Delete Account</>
+                    )}
+                  </button>
                 </div>
-                {servers.filter(server => server.is_official).map((server) => (
-                  <div key={server._id} className={styles.tableRow}>
-                    <div className={styles.tableCell}>{server.server_name}</div>
-                    <div className={styles.tableCell}>{server.server_address}</div>
-                    <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
-                    <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
-                    <div className={styles.tableCell}>{renderPingTime(server._id)}</div>
-                    <div className={styles.tableCell}>
-                      <button 
-                        className={styles.tableConnectButton}
-                        onClick={() => handleConnect(server.server_address)}
-                        disabled={!getServerStatus(server._id).isOnline}
-                      >
-                        Connect
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {servers.filter(server => server.is_official).length === 0 && (
-                  <p className={styles.emptyState}>No official servers available.</p>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Third Party Servers Section */}
-          <div className={styles.serverSection}>
-            <h3 className={styles.subsectionTitle}>Third Party Servers</h3>
-            {loadingServers ? (
-              <div className={styles.loading}>Loading servers...</div>
-            ) : (
-              <div className={styles.table}>
-                <div className={styles.tableHeader}>
-                  <div className={styles.tableCell}>Server Name</div>
-                  <div className={styles.tableCell}>Server Address</div>
-                  <div className={styles.tableCell}>Status</div>
-                  <div className={styles.tableCell}>Players</div>
-                  <div className={styles.tableCell}>Ping</div>
-                  <div className={styles.tableCell}>Action</div>
+      {user && (
+        <div className={styles.content}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Game Servers</h2>
+          </div>
+          <div className={styles.serversList}>
+            {/* Custom Server Section */}
+            <div className={styles.serverSection}>
+                <h3 className={styles.subsectionTitle}>Custom Server</h3>
+                <div className={styles.customServerInput}>
+                <input
+                    type="text"
+                    placeholder="Enter custom server address"
+                    value={customServerAddress}
+                    onChange={(e) => setCustomServerAddress(e.target.value)}
+                    className={styles.serverInput}
+                />
+                <button 
+                    className={styles.connectButton}
+                    disabled={!customServerAddress.trim()}
+                    onClick={handleCustomConnect}
+                >
+                    Connect
+                </button>
                 </div>
-                {servers.filter(server => server.is_third_party).map((server) => (
-                  <div key={server._id} className={styles.tableRow}>
-                    <div className={styles.tableCell}>{server.server_name}</div>
-                    <div className={styles.tableCell}>{server.server_address}</div>
-                    <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
-                    <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
-                    <div className={styles.tableCell}>{renderPingTime(server._id)}</div>
-                    <div className={styles.tableCell}>
-                      <button 
-                        className={styles.tableConnectButton}
-                        onClick={() => handleConnect(server.server_address)}
-                        disabled={!getServerStatus(server._id).isOnline}
-                      >
-                        Connect
-                      </button>
-                    </div>
+            </div>
+
+            {/* Official Servers Section */}
+            <div className={styles.serverSection}>
+              <h3 className={styles.subsectionTitle}>Official Servers</h3>
+              {loadingServers ? (
+                <div className={styles.loading}>Loading servers...</div>
+              ) : (
+                <div className={styles.table}>
+                  <div className={styles.tableHeader}>
+                    <div className={styles.tableCell}>Server Name</div>
+                    <div className={styles.tableCell}>Server Address</div>
+                    <div className={styles.tableCell}>Status</div>
+                    <div className={styles.tableCell}>Players</div>
+                    <div className={styles.tableCell}>Ping</div>
+                    <div className={styles.tableCell}>Action</div>
                   </div>
-                ))}
-                {servers.filter(server => server.is_third_party).length === 0 && (
-                  <p className={styles.emptyState}>No third party servers available.</p>
-                )}
-              </div>
-            )}
+                  {servers.filter(server => server.is_official).map((server) => (
+                    <div key={server._id} className={styles.tableRow}>
+                      <div className={styles.tableCell}>{server.server_name}</div>
+                      <div className={styles.tableCell}>{server.server_address}</div>
+                      <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
+                      <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
+                      <div className={styles.tableCell}>{renderPingTime(server._id)}</div>
+                      <div className={styles.tableCell}>
+                        <button 
+                          className={styles.tableConnectButton}
+                          onClick={() => handleConnect(server.server_address)}
+                          disabled={!getServerStatus(server._id).isOnline}
+                        >
+                          Connect
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {servers.filter(server => server.is_official).length === 0 && (
+                    <p className={styles.emptyState}>No official servers available.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Third Party Servers Section */}
+            <div className={styles.serverSection}>
+              <h3 className={styles.subsectionTitle}>Third Party Servers</h3>
+              {loadingServers ? (
+                <div className={styles.loading}>Loading servers...</div>
+              ) : (
+                <div className={styles.table}>
+                  <div className={styles.tableHeader}>
+                    <div className={styles.tableCell}>Server Name</div>
+                    <div className={styles.tableCell}>Server Address</div>
+                    <div className={styles.tableCell}>Status</div>
+                    <div className={styles.tableCell}>Players</div>
+                    <div className={styles.tableCell}>Ping</div>
+                    <div className={styles.tableCell}>Action</div>
+                  </div>
+                  {servers.filter(server => server.is_third_party).map((server) => (
+                    <div key={server._id} className={styles.tableRow}>
+                      <div className={styles.tableCell}>{server.server_name}</div>
+                      <div className={styles.tableCell}>{server.server_address}</div>
+                      <div className={styles.tableCell}>{renderServerStatus(server._id)}</div>
+                      <div className={styles.tableCell}>{renderPlayerCount(server._id)}</div>
+                      <div className={styles.tableCell}>{renderPingTime(server._id)}</div>
+                      <div className={styles.tableCell}>
+                        <button 
+                          className={styles.tableConnectButton}
+                          onClick={() => handleConnect(server.server_address)}
+                          disabled={!getServerStatus(server._id).isOnline}
+                        >
+                          Connect
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {servers.filter(server => server.is_third_party).length === 0 && (
+                    <p className={styles.emptyState}>No third party servers available.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
       
       <PrivacyPolicy />
     </div>
