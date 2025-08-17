@@ -6,7 +6,8 @@ import {
   RoomStairsResponse,
   SpawnLocationResponse,
   PlayerMovedFloorResponse,
-  CurrentFloorResponse
+  CurrentFloorResponse,
+  CurrentStatusResponse
 } from '../types/api';
 
 /**
@@ -25,7 +26,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getFloorLayout: (dungeonDagNodeName: string) => `${baseUrl}/api/dungeon/floor/${dungeonDagNodeName}`,
     getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
-    getCurrentFloor: () => `${baseUrl}/api/dungeon/current-floor`,
+    getCurrentStatus: () => `${baseUrl}/api/dungeon/current-status`,
   };
 };
 
@@ -138,20 +139,47 @@ export class DungeonApi {
   }
 
   /**
-   * Get current floor for the player
+   * Get current status for the player (includes position, rotation, character, etc.)
    */
-  static async getCurrentFloor(serverAddress: string): Promise<CurrentFloorResponse> {
+  static async getCurrentStatus(serverAddress: string): Promise<CurrentStatusResponse> {
     try {
       const config = await getAuthConfig();
       const endpoints = buildDungeonEndpoints(serverAddress);
-      const url = endpoints.getCurrentFloor();
+      const url = endpoints.getCurrentStatus();
       
-      console.log(`🏠 DungeonApi: Getting current floor from ${url}`);
+      console.log(`🏠 DungeonApi: Getting current status from ${url}`);
       
       const response = await axios.get(url, config);
       
-      console.log(`✅ DungeonApi: Current floor response:`, response.data);
+      console.log(`✅ DungeonApi: Current status response:`, response.data);
       return response.data;
+    } catch (error) {
+      // If 404, player is not alive - this is expected behavior
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        console.log(`🚫 DungeonApi: Player not alive (404), need to show character selection`);
+        throw new Error('PLAYER_NOT_ALIVE');
+      }
+      console.error('❌ Error getting current status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current floor for the player (legacy method - use getCurrentStatus instead)
+   * @deprecated Use getCurrentStatus instead
+   */
+  static async getCurrentFloor(serverAddress: string): Promise<CurrentFloorResponse> {
+    try {
+      const statusResponse = await this.getCurrentStatus(serverAddress);
+      // Convert CurrentStatusResponse to CurrentFloorResponse for backward compatibility
+      return {
+        success: statusResponse.success,
+        data: {
+          currentFloor: statusResponse.data.currentFloor,
+          playerId: statusResponse.data.playerId,
+          playerName: statusResponse.data.playerName,
+        }
+      };
     } catch (error) {
       console.error('❌ Error getting current floor:', error);
       throw error;
