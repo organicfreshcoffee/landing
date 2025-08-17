@@ -41,6 +41,20 @@ The game uses WebSocket connections for real-time communication between players.
   }
   ```
 
+##### `player_respawn` *(NEW)*
+- **Purpose**: Request character respawn after death
+- **Data**:
+  ```typescript
+  {
+    characterData: {
+      name: string,
+      style: number,
+      type: string
+    }
+  }
+  }
+  ```
+
 #### Received by Client
 
 ##### `pong`
@@ -72,6 +86,35 @@ The game uses WebSocket connections for real-time communication between players.
 - **Data**: Same as sent format
 - **Handling**: Renders visual effects (spells, etc.)
 
+##### `health_update` *(NEW)*
+- **Purpose**: Player health and status updates
+- **Data**:
+  ```typescript
+  {
+    health: number,
+    maxHealth: number,
+    damage?: number,
+    damageCause?: 'spell' | 'combat' | 'environment',
+    casterPlayerId?: string,
+    isAlive: boolean
+  }
+  ```
+
+##### `respawn_success` *(NEW)*
+- **Purpose**: Confirmation of successful respawn
+- **Data**:
+  ```typescript
+  {
+    player: {
+      health: number,
+      maxHealth: number,
+      isAlive: boolean,
+      character: CharacterData,
+      // ... other player data
+    }
+  }
+  ```
+
 ### Spell System
 
 When a player casts a spell:
@@ -100,6 +143,25 @@ interface SpellActionData {
 - **Other Player Spells**: Orange/red particles
 
 This helps players distinguish their own actions from others' actions in the game world.
+
+### Death and Respawn System
+
+When a player's health reaches 0:
+
+1. **Health Update**: Server sends `health_update` with `isAlive: false`
+2. **Client Response**: 
+   - Shows death indicator in Health HUD
+   - Moves player to floor A at position (0,0,0)
+   - Notifies server via `playerMovedFloor` API
+   - Shows character selection screen
+3. **Respawn**: Player selects character and sends `player_respawn` message
+4. **Confirmation**: Server responds with `respawn_success` containing new player data
+
+#### Health HUD Features
+
+- **Visual Health Bar**: Color-coded (green → yellow → red)
+- **Death Indicator**: Blinking skull emoji when dead
+- **Real-time Updates**: Instant feedback from server health updates
 
 ### Connection Features
 

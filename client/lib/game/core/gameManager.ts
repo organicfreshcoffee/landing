@@ -41,7 +41,9 @@ export class GameManager {
       fromFloor: string;
       toFloor: string;
     }) => void,
-    private onFloorChange?: (floorName: string) => void
+    private onFloorChange?: (floorName: string) => void,
+    private onHealthUpdate?: (health: { health: number; maxHealth: number; isAlive: boolean }) => void,
+    private onPlayerDeath?: () => void
   ) {
     this.currentPlayerId = user?.uid || 'local';
     this.sceneManager = new SceneManager(canvas);
@@ -321,6 +323,24 @@ export class GameManager {
           console.warn('⚠️ Invalid players_list message data:', message.data);
         }
         break;
+
+      case 'health_update':
+        if (message.data.health !== undefined && message.data.maxHealth !== undefined) {
+          console.log('❤️ Received health update:', message.data);
+          this.handleHealthUpdate(message.data);
+        } else {
+          console.warn('⚠️ Invalid health_update message data:', message.data);
+        }
+        break;
+
+      case 'respawn_success':
+        if (message.data.player) {
+          console.log('🔄 Received respawn success:', message.data);
+          this.handleRespawnSuccess(message.data.player);
+        } else {
+          console.warn('⚠️ Invalid respawn_success message data:', message.data);
+        }
+        break;
     }
   }
 
@@ -575,6 +595,94 @@ export class GameManager {
 
     // Render the spell effect using our particle system
     this.particleSystem.castSpellFromNetwork(fromPosition, toPosition);
+  }
+
+  private handleHealthUpdate(healthData: any): void {
+    console.log('❤️ Processing health update:', healthData);
+    
+    if (this.onHealthUpdate) {
+      this.onHealthUpdate({
+        health: healthData.health,
+        maxHealth: healthData.maxHealth,
+        isAlive: healthData.isAlive
+      });
+    }
+
+    // If player died, handle death
+    if (!healthData.isAlive || healthData.health <= 0) {
+      console.log('💀 Player died, initiating death sequence');
+      this.handlePlayerDeath();
+    }
+  }
+
+  private async handlePlayerDeath(): Promise<void> {
+    console.log('💀 Handling player death');
+    
+    try {
+      // Notify the UI about death
+      if (this.onPlayerDeath) {
+        this.onPlayerDeath();
+      }
+
+      // Move player back to floor A (spawn area)
+      if (this.localPlayerRef.current) {
+        this.localPlayerRef.current.position.set(0, 0, 0);
+        this.positionPlayerOnGround();
+      }
+
+      // Notify server about floor change to A
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (serverAddress) {
+        await DungeonApi.notifyPlayerMovedFloor(serverAddress, 'A');
+        console.log('✅ Notified server of respawn floor change to A');
+        
+        // Load floor A
+        await this.loadFloor('A');
+        console.log('✅ Loaded respawn floor A');
+      }
+    } catch (error) {
+      console.error('❌ Error handling player death:', error);
+    }
+  }
+
+  private handleRespawnSuccess(playerData: any): void {
+    console.log('🔄 Processing respawn success:', playerData);
+    
+    // Update health from respawn data
+    if (this.onHealthUpdate) {
+      this.onHealthUpdate({
+        health: playerData.health || 100,
+        maxHealth: playerData.maxHealth || 100,
+        isAlive: playerData.isAlive !== false
+      });
+    }
+
+    // Update character data if provided
+    if (playerData.character) {
+      this.selectedCharacter = playerData.character;
+      console.log('🎭 Updated character after respawn:', this.selectedCharacter);
+    }
+  }
+
+  sendRespawnRequest(characterData: CharacterData): void {
+    if (!this.webSocketManager.isConnected) {
+      console.warn('⚠️ Cannot send respawn request - not connected to server');
+      return;
+    }
+
+    const respawnMessage = {
+      type: 'player_respawn',
+      data: {
+        characterData: {
+          name: characterData.name,
+          style: characterData.style,
+          type: characterData.type
+        }
+      }
+    };
+
+    console.log('🔄 Sending respawn request:', respawnMessage);
+    this.webSocketManager.send(JSON.stringify(respawnMessage));
   }
 
   private removePlayer(playerId: string): void {

@@ -5,6 +5,7 @@ import { GameManager, GameState } from '../lib/game';
 import { ensureProtocol } from '../lib/urlUtils';
 import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
+import HealthHUD from '../components/HealthHUD';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
 import styles from '../styles/Game.module.css';
 
@@ -17,6 +18,12 @@ export default function Game() {
   
   const [selectedCharacter, setSelectedCharacter] = useState<CharacterData | null>(null);
   const [checkingExistingCharacter, setCheckingExistingCharacter] = useState<boolean>(true);
+  const [playerHealth, setPlayerHealth] = useState<{ health: number; maxHealth: number; isAlive: boolean }>({
+    health: 100,
+    maxHealth: 100,
+    isAlive: true
+  });
+  const [isRespawning, setIsRespawning] = useState<boolean>(false);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
@@ -64,6 +71,13 @@ export default function Game() {
             name: statusResponse.data.character.name
           });
 
+          // Set the health from server response
+          setPlayerHealth({
+            health: statusResponse.data.health,
+            maxHealth: 100, // Assuming max health is 100, but this could come from server too
+            isAlive: statusResponse.data.isAlive
+          });
+
           // Store the player position and rotation for later use
           const playerPosition = statusResponse.data.position;
           const playerRotation = statusResponse.data.rotation;
@@ -106,7 +120,9 @@ export default function Game() {
         user,
         selectedCharacter,
         setFloorTransition, // Pass floor transition state setter
-        setCurrentFloor // Pass current floor state setter
+        setCurrentFloor, // Pass current floor state setter
+        setPlayerHealth, // Pass health update callback
+        () => setIsRespawning(true) // Pass death callback
       );
       gameManagerRef.current = gameManager;
       
@@ -153,8 +169,22 @@ export default function Game() {
     // Update the character state
     setSelectedCharacter(character);
     
+    // If we're respawning, send respawn request
+    if (isRespawning && gameManagerRef.current) {
+      console.log('🔄 Sending respawn request for character:', character);
+      gameManagerRef.current.sendRespawnRequest(character);
+      setIsRespawning(false);
+      
+      // Reset health to alive state (will be updated by server response)
+      setPlayerHealth({
+        health: 100,
+        maxHealth: 100,
+        isAlive: true
+      });
+    }
+    
     // If we already have a running GameManager, update its character data
-    if (gameManagerRef.current) {
+    if (gameManagerRef.current && !isRespawning) {
       console.log('🔄 Updating existing GameManager with new character');
       gameManagerRef.current.updateSelectedCharacter(character);
     }
@@ -220,9 +250,9 @@ export default function Game() {
     );
   }
 
-  // Show character selection if no character is selected yet
-  if (!selectedCharacter) {
-    if (checkingExistingCharacter) {
+  // Show character selection if no character is selected yet or if respawning
+  if (!selectedCharacter || isRespawning) {
+    if (checkingExistingCharacter && !isRespawning) {
       return (
         <div className={styles.loading}>
           <h2>Checking for existing character...</h2>
@@ -256,6 +286,11 @@ export default function Game() {
           <div className={styles.floorInfo}>
             Floor: {currentFloor}
           </div>
+          <HealthHUD 
+            health={playerHealth.health} 
+            maxHealth={playerHealth.maxHealth} 
+            isAlive={playerHealth.isAlive}
+          />
         </div>
         
         <div className={styles.topRight}>
