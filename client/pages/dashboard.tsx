@@ -60,6 +60,8 @@ export default function Dashboard() {
   const [isViewingAccountData, setIsViewingAccountData] = useState(false);
   const [accountData, setAccountData] = useState<AccountData | null>(null);
   const [isLoadingAccountData, setIsLoadingAccountData] = useState(false);
+  const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<'none' | 'initial' | 'final' | 'email' | 'complete' | 'error'>('none');
+  const [emailConfirmationInput, setEmailConfirmationInput] = useState('');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -97,6 +99,8 @@ export default function Dashboard() {
       if (event.key === 'Escape') {
         if (isViewingAccountData) {
           setIsViewingAccountData(false);
+        } else if (deleteConfirmationStep !== 'none') {
+          handleDeleteConfirmationCancel();
         }
       }
     };
@@ -107,7 +111,7 @@ export default function Dashboard() {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAccountMenuOpen, isViewingAccountData]);
+  }, [isAccountMenuOpen, isViewingAccountData, deleteConfirmationStep]);
 
   const fetchServers = async () => {
     if (!user) return;
@@ -469,38 +473,38 @@ export default function Dashboard() {
   const handleDeleteAccount = async () => {
     if (!user) return;
     
-    // Confirm deletion with user
-    const userConfirmation = window.confirm(
-      "⚠️ WARNING: This action is IRREVERSIBLE!\n\n" +
-      "This will permanently delete:\n" +
-      "• All your game data from all listed servers\n" +
-      "• Your login history\n" +
-      "• Your account from Firebase\n\n" +
-      "Are you absolutely sure you want to delete your account?"
-    );
-    
-    if (!userConfirmation) return;
-    
-    // Second confirmation
-    const finalConfirmation = window.confirm(
-      "This is your final warning!\n\n" +
-      "Once deleted, your account and all associated data cannot be recovered.\n\n" +
-      "Type your email address in the next prompt to confirm deletion."
-    );
-    
-    if (!finalConfirmation) return;
-    
-    // Email confirmation
-    const emailConfirmation = window.prompt(
-      `Please type your email address (${user.email}) to confirm account deletion:`
-    );
-    
-    if (emailConfirmation !== user.email) {
-      alert("Email confirmation did not match. Account deletion cancelled.");
+    // Start the confirmation flow
+    setDeleteConfirmationStep('initial');
+  };
+
+  const handleDeleteConfirmationCancel = () => {
+    setDeleteConfirmationStep('none');
+    setEmailConfirmationInput('');
+  };
+
+  const handleDeleteConfirmationNext = () => {
+    if (deleteConfirmationStep === 'initial') {
+      setDeleteConfirmationStep('final');
+    } else if (deleteConfirmationStep === 'final') {
+      setDeleteConfirmationStep('email');
+    }
+  };
+
+  const handleDeleteConfirmationBack = () => {
+    if (deleteConfirmationStep === 'final') {
+      setDeleteConfirmationStep('initial');
+    } else if (deleteConfirmationStep === 'email') {
+      setDeleteConfirmationStep('final');
+    }
+  };
+
+  const executeAccountDeletion = async () => {
+    if (!user || emailConfirmationInput !== user.email) {
       return;
     }
     
     setIsDeleting(true);
+    setDeleteConfirmationStep('none');
     setIsAccountMenuOpen(false);
     
     try {
@@ -603,44 +607,11 @@ export default function Dashboard() {
       await logout();
       
       // Show completion message
-      if (deleteResults.firebase?.success) {
-        alert(
-          `Account deletion completed!\n\n` +
-          `Game servers: ${successfulServerDeletions} successful, ${failedServerDeletions} failed\n` +
-          `Landing page data: ${deleteResults.landingPage?.success ? 'deleted' : 'failed'}\n` +
-          `Firebase account: deleted\n\n` +
-          `You will now be redirected to the home page.`
-        );
-      } else {
-        alert(
-          `Account deletion partially completed!\n\n` +
-          `Game servers: ${successfulServerDeletions} successful, ${failedServerDeletions} failed\n` +
-          `Landing page data: ${deleteResults.landingPage?.success ? 'deleted' : 'failed'}\n` +
-          `Firebase account: FAILED TO DELETE\n\n` +
-          `Please contact support for assistance with Firebase account deletion: https://github.com/organicfreshcoffee/landing/issues\n` +
-          `You will now be logged out and redirected.`
-        );
-      }
-      
-      router.push('/');
+      setDeleteConfirmationStep('complete');
       
     } catch (error) {
       console.error('Error during account deletion:', error);
-      alert(
-        'An unexpected error occurred during account deletion.\n\n' +
-        'Some data may have been deleted, but the process was not completed.\n' +
-        'Please contact support for assistance: https://github.com/organicfreshcoffee/landing/issues\n\n' +
-        'You will now be logged out for security.'
-      );
-      
-      // Emergency logout
-      try {
-        await logout();
-        router.push('/');
-      } catch (logoutError) {
-        console.error('Failed to logout after deletion error:', logoutError);
-        window.location.href = '/';
-      }
+      setDeleteConfirmationStep('error');
     } finally {
       setIsDeleting(false);
     }
@@ -739,6 +710,210 @@ export default function Dashboard() {
         </div>
       )}
       
+      {deleteConfirmationStep !== 'none' && (
+        <div className={styles.exportOverlay}>
+          <div className={styles.deleteConfirmationModal}>
+            {deleteConfirmationStep === 'initial' && (
+              <>
+                <div className={styles.deleteModalHeader}>
+                  <div className={styles.warningIcon}>⚠️</div>
+                  <h3>Delete Account</h3>
+                  <button 
+                    onClick={handleDeleteConfirmationCancel}
+                    className={styles.closeButton}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className={styles.deleteModalContent}>
+                  <div className={styles.warningMessage}>
+                    <strong>WARNING: This action is IRREVERSIBLE!</strong>
+                  </div>
+                  <div className={styles.deletionList}>
+                    <p>This will permanently delete:</p>
+                    <ul>
+                      <li>All your game data from all listed servers</li>
+                      <li>Your login history</li>
+                      <li>Your account from Firebase</li>
+                    </ul>
+                  </div>
+                  <p>Are you absolutely sure you want to delete your account?</p>
+                </div>
+                <div className={styles.deleteModalActions}>
+                  <button 
+                    onClick={handleDeleteConfirmationCancel}
+                    className={styles.cancelButton}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleDeleteConfirmationNext}
+                    className={styles.continueButton}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </>
+            )}
+
+            {deleteConfirmationStep === 'final' && (
+              <>
+                <div className={styles.deleteModalHeader}>
+                  <div className={styles.warningIcon}>⚠️</div>
+                  <h3>Final Warning</h3>
+                  <button 
+                    onClick={handleDeleteConfirmationCancel}
+                    className={styles.closeButton}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className={styles.deleteModalContent}>
+                  <div className={styles.finalWarning}>
+                    <p><strong>This is your final warning!</strong></p>
+                    <p>Once deleted, your account and all associated data cannot be recovered.</p>
+                    <p>In the next step, you will need to type your email address to confirm deletion.</p>
+                  </div>
+                </div>
+                <div className={styles.deleteModalActions}>
+                  <button 
+                    onClick={handleDeleteConfirmationBack}
+                    className={styles.backButton}
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={handleDeleteConfirmationNext}
+                    className={styles.continueButton}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </>
+            )}
+
+            {deleteConfirmationStep === 'email' && (
+              <>
+                <div className={styles.deleteModalHeader}>
+                  <div className={styles.warningIcon}>✉️</div>
+                  <h3>Confirm Email</h3>
+                  <button 
+                    onClick={handleDeleteConfirmationCancel}
+                    className={styles.closeButton}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className={styles.deleteModalContent}>
+                  <div className={styles.emailConfirmation}>
+                    <p>Please type your email address to confirm account deletion:</p>
+                    <div className={styles.emailDisplay}>
+                      Expected: <strong>{user.email}</strong>
+                    </div>
+                    <input
+                      type="email"
+                      placeholder="Enter your email address"
+                      value={emailConfirmationInput}
+                      onChange={(e) => setEmailConfirmationInput(e.target.value)}
+                      className={styles.emailInput}
+                      autoFocus
+                    />
+                    {emailConfirmationInput && emailConfirmationInput !== user.email && (
+                      <div className={styles.emailMismatch}>
+                        Email does not match. Please try again.
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className={styles.deleteModalActions}>
+                  <button 
+                    onClick={handleDeleteConfirmationBack}
+                    className={styles.backButton}
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={executeAccountDeletion}
+                    disabled={emailConfirmationInput !== user.email}
+                    className={styles.deleteButton}
+                  >
+                    Delete Account
+                  </button>
+                </div>
+              </>
+            )}
+
+            {deleteConfirmationStep === 'complete' && (
+              <>
+                <div className={styles.deleteModalHeader}>
+                  <div className={styles.successIcon}>✅</div>
+                  <h3>Account Deleted</h3>
+                </div>
+                <div className={styles.deleteModalContent}>
+                  <div className={styles.completionMessage}>
+                    <p><strong>Account deletion completed!</strong></p>
+                    <div className={styles.deletionSummary}>
+                      <p>Summary:</p>
+                      <ul>
+                        <li>Game servers: Data deletion attempted</li>
+                        <li>Landing page data: Deleted</li>
+                        <li>Firebase account: Deleted</li>
+                      </ul>
+                    </div>
+                    <p>You will now be redirected to the home page.</p>
+                  </div>
+                </div>
+                <div className={styles.deleteModalActions}>
+                  <button 
+                    onClick={() => router.push('/')}
+                    className={styles.primaryButton}
+                  >
+                    Go to Home Page
+                  </button>
+                </div>
+              </>
+            )}
+
+            {deleteConfirmationStep === 'error' && (
+              <>
+                <div className={styles.deleteModalHeader}>
+                  <div className={styles.errorIcon}>❌</div>
+                  <h3>Deletion Error</h3>
+                </div>
+                <div className={styles.deleteModalContent}>
+                  <div className={styles.errorMessage}>
+                    <p><strong>An unexpected error occurred during account deletion.</strong></p>
+                    <p>Some data may have been deleted, but the process was not completed.</p>
+                    <p>Please contact support for assistance: 
+                      <a href="https://github.com/organicfreshcoffee/landing/issues" target="_blank" rel="noopener noreferrer">
+                        GitHub Issues
+                      </a>
+                    </p>
+                    <p>You will now be logged out for security.</p>
+                  </div>
+                </div>
+                <div className={styles.deleteModalActions}>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await logout();
+                        router.push('/');
+                      } catch (logoutError) {
+                        console.error('Failed to logout after deletion error:', logoutError);
+                        window.location.href = '/';
+                      }
+                    }}
+                    className={styles.primaryButton}
+                  >
+                    Logout and Go Home
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {isViewingAccountData && accountData && (
         <div className={styles.exportOverlay}>
           <div className={styles.accountDataModal}>

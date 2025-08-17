@@ -632,7 +632,7 @@
   color: #495057;
 }
 
-.auditNote {
+  .auditNote {
   background: #e7f3ff;
   border: 1px solid #b8daff;
   border-radius: 4px;
@@ -641,6 +641,282 @@
   color: #004085;
   font-size: 0.875rem;
   font-style: italic;
+}
+
+/* Delete Confirmation Modal Styles */
+.deleteConfirmationModal {
+  background: white;
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.deleteModalHeader {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.deleteModalHeader h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.warningIcon,
+.successIcon,
+.errorIcon {
+  font-size: 1.5rem;
+}
+
+.deleteModalContent {
+  padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.warningMessage {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  color: #856404;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.deletionList {
+  margin-bottom: 1.5rem;
+}
+
+.deletionList p {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.deletionList ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #666;
+}
+
+.deletionList li {
+  margin-bottom: 0.5rem;
+}
+
+.finalWarning {
+  text-align: center;
+  color: #333;
+  line-height: 1.6;
+}
+
+.finalWarning p {
+  margin-bottom: 1rem;
+}
+
+.emailConfirmation {
+  text-align: center;
+}
+
+.emailDisplay {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+  color: #495057;
+}
+
+.emailInput {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ced4da;
+  border-radius: 6px;
+  font-size: 1rem;
+  margin-top: 1rem;
+  transition: border-color 0.2s;
+}
+
+.emailInput:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.emailMismatch {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-top: 1rem;
+  color: #721c24;
+  font-size: 0.875rem;
+}
+
+.completionMessage,
+.errorMessage {
+  text-align: center;
+  color: #333;
+  line-height: 1.6;
+}
+
+.deletionSummary {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.deletionSummary ul {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.5rem;
+}
+
+.deletionSummary li {
+  margin-bottom: 0.25rem;
+}
+
+.errorMessage a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.errorMessage a:hover {
+  text-decoration: underline;
+}
+
+.deleteModalActions {
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.cancelButton {
+  padding: 0.75rem 1.5rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.cancelButton:hover {
+  background: #5a6268;
+}
+
+.backButton {
+  padding: 0.75rem 1.5rem;
+  background: #f8f9fa;
+  color: #333;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.backButton:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.continueButton {
+  padding: 0.75rem 1.5rem;
+  background: #fd7e14;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.continueButton:hover {
+  background: #e8690b;
+}
+
+.deleteButton {
+  padding: 0.75rem 1.5rem;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.deleteButton:disabled {
+  background: #a0aec0;
+  cursor: not-allowed;
+}
+
+.primaryButton {
+  padding: 0.75rem 1.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.primaryButton:hover {
+  background: #0056b3;
+}
+
+/* Responsive design for delete confirmation modal */
+@media (max-width: 768px) {
+  .deleteConfirmationModal {
+    width: 95vw;
+    max-height: 95vh;
+  }
+
+  .deleteModalHeader {
+    padding: 1rem;
+  }
+
+  .deleteModalHeader h3 {
+    font-size: 1.25rem;
+  }
+
+  .deleteModalContent {
+    padding: 1rem;
+  }
+
+  .deleteModalActions {
+    padding: 1rem;
+    flex-direction: column;
+  }
+
+  .deleteModalActions button {
+    width: 100%;
+  }
 }
 
 /* Responsive design for account data modal */
