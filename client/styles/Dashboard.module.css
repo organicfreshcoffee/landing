@@ -180,7 +180,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 1fr 1fr 120px 100px 120px;
+  grid-template-columns: 1fr 1fr 120px 100px 100px 120px;
   gap: 1rem;
   background: #f8f9fa;
   font-weight: 600;
@@ -189,7 +189,7 @@
 
 .tableRow {
   display: grid;
-  grid-template-columns: 1fr 1fr 120px 100px 120px;
+  grid-template-columns: 1fr 1fr 120px 100px 100px 120px;
   gap: 1rem;
   border-top: 1px solid #e9ecef;
   align-items: center;
@@ -201,7 +201,8 @@
 
 .tableCell:nth-child(3),
 .tableCell:nth-child(4),
-.tableCell:nth-child(5) {
+.tableCell:nth-child(5),
+.tableCell:nth-child(6) {
   text-align: center;
 }
 
@@ -319,6 +320,32 @@
 }
 
 .playerCountLoading {
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Ping Time Styles */
+.pingTimeGood {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.pingTimeMedium {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.pingTimeHigh {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.pingTimeLoading {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.pingTimeOffline {
   color: #6c757d;
   font-style: italic;
 }
