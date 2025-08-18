@@ -68,123 +68,6 @@ jobs:
     - name: Build TypeScript
       run: npm run build
 
-  deploy-client:
-    name: Deploy Client to Cloud Run
-    runs-on: ubuntu-latest
-    needs: test-client
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    permissions:
-      contents: read
-      id-token: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
-        
-    - name: Configure Docker for Artifact Registry
-      run: gcloud auth configure-docker ${{ env.REGISTRY }}
-      
-    - name: Build Client Docker image
-      run: |
-        docker build -f client/Dockerfile.prod \
-          --build-arg SERVER_URL=${{ secrets.SERVER_URL }} \
-          --build-arg GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }} \
-          -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:latest \
-          ./client
-          
-    - name: Push Client Docker image
-      run: |
-        docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:latest
-        
-    - name: Deploy Client to Cloud Run
-      run: |
-        gcloud run deploy ${{ env.CLIENT_SERVICE_NAME }} \
-          --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }} \
-          --region ${{ env.REGION }} \
-          --platform managed \
-          --allow-unauthenticated \
-          --port 3000 \
-          --memory 1Gi \
-          --cpu 1 \
-          --min-instances 0 \
-          --max-instances 10 \
-          --concurrency 1000 \
-          --timeout 300 \
-          --set-env-vars NODE_ENV=production
-          
-    - name: Get Client URL
-      run: |
-        CLIENT_URL=$(gcloud run services describe ${{ env.CLIENT_SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
-        echo "🚀 Client deployed successfully!"
-        echo "🌐 Client URL: $CLIENT_URL"
-
-  deploy-server:
-    name: Deploy Server to Cloud Run
-    runs-on: ubuntu-latest
-    needs: test-server
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    permissions:
-      contents: read
-      id-token: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
-        
-    - name: Configure Docker for Artifact Registry
-      run: gcloud auth configure-docker ${{ env.REGISTRY }}
-      
-    - name: Build Server Docker image
-      run: |
-        docker build -f server/Dockerfile.prod \
-          -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVER_SERVICE_NAME }}:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVER_SERVICE_NAME }}:latest \
-          ./server
-          
-    - name: Push Server Docker image
-      run: |
-        docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVER_SERVICE_NAME }}:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVER_SERVICE_NAME }}:latest
-        
-    - name: Deploy Server to Cloud Run
-      run: |
-        gcloud run deploy ${{ env.SERVER_SERVICE_NAME }} \
-          --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVER_SERVICE_NAME }}:${{ github.sha }} \
-          --region ${{ env.REGION }} \
-          --platform managed \
-          --allow-unauthenticated \
-          --port 3001 \
-          --memory 1Gi \
-          --cpu 1 \
-          --min-instances 0 \
-          --max-instances 10 \
-          --concurrency 1000 \
-          --timeout 3600 \
-          --set-env-vars NODE_ENV=production,MONGODB_URI=${{ secrets.MONGODB_URI }},CLIENT_URL=${{ secrets.CLIENT_URL }},GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}
-          
-    - name: Get Server URL
-      run: |
-        SERVER_URL=$(gcloud run services describe ${{ env.SERVER_SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
-        echo "🚀 Server deployed successfully!"
-        echo "� Server URL: $SERVER_URL"
-        echo "❤️  Health Check: $SERVER_URL/health"
-
   deploy-client-staging:
     name: Deploy Client to Staging
     runs-on: ubuntu-latest
@@ -305,8 +188,40 @@ jobs:
       run: |
         SERVER_URL=$(gcloud run services describe ${{ env.SERVER_SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
         echo "🚀 Staging Server deployed successfully!"
-        echo "� Staging Server URL: $SERVER_URL"
+        echo "🔗 Staging Server URL: $SERVER_URL"
         echo "❤️  Staging Health Check: $SERVER_URL/health"
+
+  deploy-client:
+    name: Deploy Client to Production
+    runs-on: ubuntu-latest
+    needs: [test-client, deploy-client-staging, deploy-server-staging]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+        
+    - name: Configure Docker for Artifact Registry
+      run: gcloud auth configure-docker ${{ env.REGISTRY }}
+      
+    - name: Build Client Docker image
+      run: |
+        docker build -f client/Dockerfile.prod \
+          --build-arg SERVER_URL=${{ secrets.SERVER_URL }} \
+          --build-arg GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }} \
+          -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:latest \
+          ./client
           
     - name: Push Client Docker image
       run: |
@@ -332,13 +247,13 @@ jobs:
     - name: Get Client URL
       run: |
         CLIENT_URL=$(gcloud run services describe ${{ env.CLIENT_SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
-        echo "🚀 Client deployed successfully!"
-        echo "🌐 Client URL: $CLIENT_URL"
+        echo "🚀 Production Client deployed successfully!"
+        echo "🌐 Production Client URL: $CLIENT_URL"
 
   deploy-server:
-    name: Deploy Server to Cloud Run
+    name: Deploy Server to Production
     runs-on: ubuntu-latest
-    needs: test-server
+    needs: [test-server, deploy-client-staging, deploy-server-staging]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     permissions:
@@ -389,6 +304,6 @@ jobs:
     - name: Get Server URL
       run: |
         SERVER_URL=$(gcloud run services describe ${{ env.SERVER_SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
-        echo "🚀 Server deployed successfully!"
-        echo "� Server URL: $SERVER_URL"
-        echo "❤️  Health Check: $SERVER_URL/health"
+        echo "🚀 Production Server deployed successfully!"
+        echo "🔗 Production Server URL: $SERVER_URL"
+        echo "❤️  Production Health Check: $SERVER_URL/health"
