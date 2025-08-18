@@ -87,7 +87,9 @@ get_project_id() {
 }
 
 verify_service_exists() {
-    print_step "Verifying Cloud Run services exist..."
+    print_step "Checking Cloud Run services..."
+    
+    SERVICES_EXIST=true
     
     # Check client service
     if gcloud run services describe $CLIENT_SERVICE_NAME --region=$REGION &>/dev/null; then
@@ -95,9 +97,8 @@ verify_service_exists() {
         CLIENT_URL=$(gcloud run services describe $CLIENT_SERVICE_NAME --region=$REGION --format='value(status.url)')
         print_info "Current client URL: $CLIENT_URL"
     else
-        print_error "Client service '$CLIENT_SERVICE_NAME' not found in region '$REGION'"
-        print_error "Please deploy your services first using the GitHub Actions workflow"
-        exit 1
+        print_warning "Client service '$CLIENT_SERVICE_NAME' not found in region '$REGION'"
+        SERVICES_EXIST=false
     fi
     
     # Check server service
@@ -106,23 +107,49 @@ verify_service_exists() {
         SERVER_URL=$(gcloud run services describe $SERVER_SERVICE_NAME --region=$REGION --format='value(status.url)')
         print_info "Current server URL: $SERVER_URL"
     else
-        print_error "Server service '$SERVER_SERVICE_NAME' not found in region '$REGION'"
-        print_error "Please deploy your services first using the GitHub Actions workflow"
-        exit 1
+        print_warning "Server service '$SERVER_SERVICE_NAME' not found in region '$REGION'"
+        SERVICES_EXIST=false
+    fi
+    
+    if [ "$SERVICES_EXIST" = false ]; then
+        print_warning "Services not yet deployed. Domain mappings will be created anyway."
+        print_info "After deploying your services with GitHub Actions, you can run this script again"
+        print_info "or the domain mappings will automatically work once services are deployed."
+        echo ""
+        read -p "Continue with domain setup anyway? (y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Exiting. Deploy your services first, then run this script again."
+            exit 0
+        fi
     fi
 }
 
 verify_domain_ownership() {
     print_step "Checking domain ownership..."
     
-    print_info "Make sure you own the domain '$DOMAIN'"
-    print_info "You should have purchased 'organicfreshcoffee.com' through Google Domains or another registrar"
-    
-    read -p "Do you own the domain 'organicfreshcoffee.com'? (y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_error "You must own the domain to continue"
-        exit 1
+    if [ "$1" = "staging" ] || [ "$1" = "--staging" ]; then
+        print_info "Make sure you own the staging domains:"
+        print_info "  - staging.organicfreshcoffee.com"
+        print_info "  - staging-api.organicfreshcoffee.com"
+        print_info "You should have DNS records configured for these staging subdomains"
+        
+        read -p "Do you have DNS control for staging.organicfreshcoffee.com? (y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_error "You must have DNS control for the staging domains to continue"
+            exit 1
+        fi
+    else
+        print_info "Make sure you own the domain 'organicfreshcoffee.com'"
+        print_info "You should have purchased 'organicfreshcoffee.com' through Google Domains or another registrar"
+        
+        read -p "Do you own the domain 'organicfreshcoffee.com'? (y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_error "You must own the domain to continue"
+            exit 1
+        fi
     fi
 }
 
@@ -205,22 +232,38 @@ get_dns_records() {
 }
 
 configure_google_domains() {
-    print_step "Instructions for configuring Google Domains..."
+    print_step "Instructions for configuring DNS..."
     
     echo ""
-    echo -e "${YELLOW}To configure DNS in Google Domains:${NC}"
-    echo "===================================="
-    echo "1. Go to https://domains.google.com"
-    echo "2. Find your domain 'organicfreshcoffee.com'"
-    echo "3. Click on it and go to 'DNS' tab"
-    echo "4. Scroll down to 'Custom records'"
-    echo "5. Add the DNS records shown above:"
-    echo "   - For organicfreshcoffee.com (client app) - A records"
-    echo "   - For api.organicfreshcoffee.com (server API) - CNAME record"
-    echo "6. Set TTL to 300 seconds for faster propagation during testing"
-    echo "7. Save the changes"
-    echo ""
-    echo -e "${BLUE}Note:${NC} DNS propagation can take up to 48 hours, but usually takes 5-10 minutes"
+    if [[ "$MAIN_DOMAIN" == *"staging"* ]]; then
+        echo -e "${YELLOW}To configure DNS for STAGING domains:${NC}"
+        echo "===================================="
+        echo "1. Go to your DNS provider (Google Domains, Cloudflare, etc.)"
+        echo "2. Find your domain 'organicfreshcoffee.com'"
+        echo "3. Go to DNS management"
+        echo "4. Add the DNS records shown above:"
+        echo "   - For staging.organicfreshcoffee.com (staging client) - A records"
+        echo "   - For staging-api.organicfreshcoffee.com (staging API) - CNAME record"
+        echo "5. Set TTL to 300 seconds for faster propagation during testing"
+        echo "6. Save the changes"
+        echo ""
+        echo -e "${BLUE}Note:${NC} These are STAGING subdomains of your main domain"
+    else
+        echo -e "${YELLOW}To configure DNS in Google Domains:${NC}"
+        echo "===================================="
+        echo "1. Go to https://domains.google.com"
+        echo "2. Find your domain 'organicfreshcoffee.com'"
+        echo "3. Click on it and go to 'DNS' tab"
+        echo "4. Scroll down to 'Custom records'"
+        echo "5. Add the DNS records shown above:"
+        echo "   - For organicfreshcoffee.com (client app) - A records"
+        echo "   - For api.organicfreshcoffee.com (server API) - CNAME record"
+        echo "6. Set TTL to 300 seconds for faster propagation during testing"
+        echo "7. Save the changes"
+        echo ""
+        echo -e "${BLUE}Note:${NC} These are PRODUCTION domains"
+    fi
+    echo -e "${BLUE}DNS propagation info:${NC} Can take up to 48 hours, but usually takes 5-10 minutes"
     echo -e "${BLUE}Tip:${NC} You can use 'dig organicfreshcoffee.com' to check DNS propagation"
     echo ""
     echo -e "${YELLOW}About the A records for the root domain:${NC}"
@@ -309,7 +352,7 @@ main() {
     check_prerequisites
     get_project_id
     verify_service_exists
-    verify_domain_ownership
+    verify_domain_ownership "$1"
     create_domain_mapping
     get_dns_records
     configure_google_domains
