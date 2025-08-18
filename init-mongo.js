@@ -7,6 +7,9 @@ db.createCollection('user_logins');
 // Create the servers collection
 db.createCollection('servers');
 
+// Create the admins collection
+db.createCollection('admins');
+
 // Create an index on the userId field for better performance
 db.user_logins.createIndex({ "userId": 1 });
 db.user_logins.createIndex({ "loginTime": 1 });
@@ -15,6 +18,9 @@ db.user_logins.createIndex({ "loginTime": 1 });
 db.servers.createIndex({ "server_name": 1 });
 db.servers.createIndex({ "is_official": 1 });
 db.servers.createIndex({ "is_third_party": 1 });
+
+// Create indexes for admins collection
+db.admins.createIndex({ "email": 1 }, { unique: true });
 
 // Determine server address based on environment
 const isStaging = process.env.NODE_ENV === 'staging';

@@ -3,12 +3,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy migration script and package.json
+# Copy migration script
 COPY ./migration-db.js ./
-COPY package*.json ./
 
-# Install only mongodb dependency
-RUN npm install mongodb
+# Create a minimal package.json for dependencies
+RUN echo '{"name":"migration","version":"1.0.0","dependencies":{"mongodb":"^6.0.0"}}' > package.json
+
+# Install mongodb dependency
+RUN npm install
 
 # Run migration
 CMD ["node", "migration-db.js"]
