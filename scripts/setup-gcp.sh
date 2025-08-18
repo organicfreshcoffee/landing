@@ -20,10 +20,23 @@ SERVER_SERVICE_NAME="organicfreshcoffee-server"
 SERVICE_ACCOUNT_NAME="github-actions-sa"
 REPOSITORY_NAME="organicfreshcoffee"
 
+# Check if staging environment is requested
+if [ "$1" = "staging" ] || [ "$1" = "--staging" ]; then
+    echo -e "${BLUE}Setting up STAGING environment${NC}"
+    CLIENT_SERVICE_NAME="organicfreshcoffee-client-staging"
+    SERVER_SERVICE_NAME="organicfreshcoffee-server-staging"
+    SERVICE_ACCOUNT_NAME="github-actions-staging-sa"
+fi
+
 print_header() {
     echo -e "${BLUE}======================================${NC}"
     echo -e "${BLUE}  GCP Deployment Setup for Landing App${NC}"
     echo -e "${BLUE}  Client + Server Architecture${NC}"
+    if [ "$1" = "staging" ] || [ "$1" = "--staging" ]; then
+        echo -e "${BLUE}       STAGING ENVIRONMENT${NC}"
+    else
+        echo -e "${BLUE}      PRODUCTION ENVIRONMENT${NC}"
+    fi
     echo -e "${BLUE}======================================${NC}"
     echo ""
 }
@@ -209,11 +222,15 @@ print_summary() {
     echo "3. Push to main branch to trigger deployment"
     echo "4. After deployment, run ./scripts/setup-domain.sh to configure organicfreshcoffee.com"
     echo "5. Check the Actions tab in GitHub to monitor the deployment"
+    echo ""
+    echo -e "${YELLOW}For staging environment:${NC}"
+    echo "Run this script again with: ./scripts/setup-gcp.sh staging"
+    echo "Then run: ./scripts/setup-domain.sh staging"
 }
 
 # Main execution
 main() {
-    print_header
+    print_header "$1"
     check_prerequisites
     get_project_id
     enable_apis

@@ -42,13 +42,17 @@ export const isProd = (): boolean => {
   return process.env.NODE_ENV === 'production';
 };
 
+export const isStaging = (): boolean => {
+  return (process.env.NODE_ENV as string) === 'staging';
+};
+
 export const isDev = (): boolean => {
   return process.env.NODE_ENV === 'development';
 };
 
 // Log current configuration (for debugging)
 export const logApiConfig = (): void => {
-  if (isDev()) {
+  if (isDev() || isStaging()) {
     console.log('API Configuration:', {
       apiUrl: getApiUrl(),
       environment: process.env.NODE_ENV,

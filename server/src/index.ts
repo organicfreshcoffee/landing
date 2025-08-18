@@ -11,14 +11,32 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware - Configure CORS for both development and production
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [
+// Middleware - Configure CORS for development, staging, and production
+const getAllowedOrigins = (): string[] => {
+  if (process.env.NODE_ENV === 'production') {
+    return [
       process.env.CLIENT_URL || 'https://organicfreshcoffee.com',
       'https://organicfreshcoffee.com',
       'https://www.organicfreshcoffee.com'
-    ]
-  : [
+    ];
+  } else if (process.env.NODE_ENV === 'staging') {
+    const stagingOrigins = [
+      process.env.CLIENT_URL || 'https://staging.organicfreshcoffee.com',
+      'https://staging.organicfreshcoffee.com',
+      'https://staging-api.organicfreshcoffee.com'
+    ];
+    
+    // Add Cloud Run URLs if they exist
+    if (process.env.CLIENT_URL_CLOUD_RUN) {
+      stagingOrigins.push(process.env.CLIENT_URL_CLOUD_RUN);
+    }
+    if (process.env.SERVER_URL_CLOUD_RUN) {
+      stagingOrigins.push(process.env.SERVER_URL_CLOUD_RUN);
+    }
+    
+    return stagingOrigins;
+  } else {
+    return [
       'http://localhost:3000',
       'http://localhost:3001', 
       'http://localhost:3002',
@@ -26,6 +44,13 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'http://localhost:3004',
       'http://localhost:3005'
     ];
+  }
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+console.log(`🌐 CORS configured for ${process.env.NODE_ENV || 'development'} environment:`);
+console.log('   Allowed origins:', allowedOrigins);
 
 app.use(cors({
   origin: allowedOrigins,
