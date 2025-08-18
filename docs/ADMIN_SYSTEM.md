@@ -17,14 +17,14 @@ The admin system requires an `admins` collection in MongoDB. This is automatical
 
 #### Method 1: Simple Usage (Recommended)
 ```bash
-# Development - simple usage
+# Development - simple usage (will use .env file if present)
 node scripts/add-admin.js your-email@example.com
 
 # Production with custom MongoDB URI
 MONGODB_URI=mongodb://user:pass@host:port/db node scripts/add-admin.js admin@example.com
 ```
 
-#### Method 2: Using Flags
+#### Method 2: Using Flags  
 ```bash
 # Using --email flag
 node scripts/add-admin.js --email admin@example.com
@@ -33,7 +33,17 @@ node scripts/add-admin.js --email admin@example.com
 ADMIN_EMAIL=admin@example.com node scripts/add-admin.js
 ```
 
-#### Method 3: Direct Database Insert
+#### Method 3: Using .env File
+Create a `.env` file in the project root with:
+```bash
+MONGODB_URI=mongodb://admin:password@localhost:27017/landing?authSource=admin
+```
+Then run:
+```bash
+node scripts/add-admin.js your-email@example.com
+```
+
+#### Method 4: Direct Database Insert
 Connect to your MongoDB instance and run:
 ```javascript
 db.admins.insertOne({

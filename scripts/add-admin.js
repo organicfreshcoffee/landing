@@ -1,6 +1,29 @@
 #!/usr/bin/env node
-
+/**
+ * Admin User Management Script
+ * 
+ * Add admin users to the database for both development and production environments.
+ * Automatically loads environment variables from .env file if available.
+ * 
+ * Usage Examples:
+ * - Development: node scripts/add-admin.js your-email@example.com
+ * - Production: MONGODB_URI=mongodb://... node scripts/add-admin.js admin@example.com
+ * - With env var: ADMIN_EMAIL=admin@example.com node scripts/add-admin.js
+ * - With .env file: Create .env file with MONGODB_URI, then run script normally
+ */
 const { MongoClient } = require('mongodb');
+const path = require('path');
+
+// Load environment variables from .env file
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+} catch (error) {
+  // If dotenv is not available, provide helpful guidance
+  console.log('💡 Note: dotenv package not found. To use .env files, install dependencies:');
+  console.log('   cd server && npm install');
+  console.log('   or run: node -r dotenv/config scripts/add-admin.js your-email@example.com');
+  console.log('');
+}
 
 /**
  * Admin User Management Script
