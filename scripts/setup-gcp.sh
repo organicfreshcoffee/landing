@@ -227,7 +227,6 @@ print_summary() {
     echo "Run this script again with: ./scripts/setup-gcp.sh staging"
     echo "Then run: ./scripts/setup-domain.sh staging"
 }
-}
 
 # Main execution
 main() {
