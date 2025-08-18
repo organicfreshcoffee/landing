@@ -1114,6 +1114,17 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div>
+                    {/* Admin Data */}
+                    {accountData.landingPage.adminData && (
+                      <div className={styles.subDataSection}>
+                        <h5>🔧 Admin Privileges</h5>
+                        <div className={styles.adminBadge}>
+                          <p><strong>Admin Status:</strong> ✅ Active</p>
+                          <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage.adminData, null, 2)}</pre>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Login History */}
                     <div className={styles.subDataSection}>
                       <h5>🔐 Login History</h5>
