@@ -117,6 +117,32 @@ const getMongoUri = () => {
 
 const MONGODB_URI = getMongoUri();
 
+// Add a connection test function
+async function testConnection() {
+  let client;
+  try {
+    console.log('🧪 Testing MongoDB connection...');
+    client = new MongoClient(MONGODB_URI, {
+      authSource: 'admin',
+      authMechanism: 'SCRAM-SHA-256',
+      serverSelectionTimeoutMS: 5000  // 5 second timeout
+    });
+    
+    await client.connect();
+    const adminDb = client.db('admin');
+    await adminDb.command({ ping: 1 });
+    console.log('✅ MongoDB connection test successful');
+    return true;
+  } catch (error) {
+    console.error('❌ MongoDB connection test failed:', error.message);
+    return false;
+  } finally {
+    if (client) {
+      await client.close();
+    }
+  }
+}
+
 async function addAdminUser() {
   let client;
   
@@ -124,8 +150,18 @@ async function addAdminUser() {
     console.log('🔗 Connecting to MongoDB...');
     console.log(`📍 Database: ${MONGODB_URI.replace(/\/\/[^@]*@/, '//***:***@')}`); // Hide credentials in log
     
-    client = new MongoClient(MONGODB_URI);
+    // Create client with explicit auth configuration
+    client = new MongoClient(MONGODB_URI, {
+      authSource: 'admin',  // Explicitly set auth source
+      authMechanism: 'SCRAM-SHA-256'  // Explicitly set auth mechanism
+    });
+    
     await client.connect();
+    
+    // Test the connection by pinging the admin database first
+    const adminDb = client.db('admin');
+    await adminDb.command({ ping: 1 });
+    console.log('✅ Connected to MongoDB successfully');
     
     const db = client.db('landing');
     const adminsCollection = db.collection('admins');
@@ -158,8 +194,16 @@ async function addAdminUser() {
     if (error.message.includes('ECONNREFUSED')) {
       console.error('💡 Make sure MongoDB is running. For local development:');
       console.error('   docker-compose up mongodb');
-    } else if (error.message.includes('Authentication failed')) {
-      console.error('💡 Check your MongoDB connection string and credentials');
+    } else if (error.message.includes('Authentication failed') || error.message.includes('requires authentication')) {
+      console.error('💡 Authentication issue. Check your MongoDB connection:');
+      console.error('   - Verify username/password in docker-compose.yml');
+      console.error('   - Make sure MongoDB container is fully started');
+      console.error('   - Current URI format should be: mongodb://admin:password@localhost:27017/landing?authSource=admin');
+    } else if (error.message.includes('find requires authentication')) {
+      console.error('💡 Database access issue. Try these steps:');
+      console.error('   1. Restart MongoDB: docker-compose restart mongodb');
+      console.error('   2. Wait a few seconds for initialization');
+      console.error('   3. Try the script again');
     }
     
     process.exit(1);
@@ -171,5 +215,22 @@ async function addAdminUser() {
   }
 }
 
-// Run the migration
-addAdminUser().catch(console.error);
+// Run the migration with connection test
+async function main() {
+  // Test connection first
+  const connectionOk = await testConnection();
+  if (!connectionOk) {
+    console.error('');
+    console.error('💡 Troubleshooting steps:');
+    console.error('   1. Make sure MongoDB is running: docker-compose up mongodb');
+    console.error('   2. Wait for MongoDB to fully initialize (check logs)');
+    console.error('   3. Verify credentials in docker-compose.yml');
+    console.error('   4. Try: docker-compose restart mongodb');
+    process.exit(1);
+  }
+  
+  // If connection test passes, proceed with adding admin
+  await addAdminUser();
+}
+
+main().catch(console.error);
