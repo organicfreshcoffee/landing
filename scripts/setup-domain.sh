@@ -20,9 +20,23 @@ SERVER_SERVICE_NAME="organicfreshcoffee-server"
 MAIN_DOMAIN="organicfreshcoffee.com"
 API_DOMAIN="api.organicfreshcoffee.com"
 
+# Check if staging environment is requested
+if [ "$1" = "staging" ] || [ "$1" = "--staging" ]; then
+    echo -e "${BLUE}Setting up STAGING environment${NC}"
+    CLIENT_SERVICE_NAME="organicfreshcoffee-client-staging"
+    SERVER_SERVICE_NAME="organicfreshcoffee-server-staging"
+    MAIN_DOMAIN="staging.organicfreshcoffee.com"
+    API_DOMAIN="staging-api.organicfreshcoffee.com"
+fi
+
 print_header() {
     echo -e "${BLUE}======================================${NC}"
     echo -e "${BLUE}  Custom Domain Setup for Cloud Run${NC}"
+    if [ "$1" = "staging" ] || [ "$1" = "--staging" ]; then
+        echo -e "${BLUE}       STAGING ENVIRONMENT${NC}"
+    else
+        echo -e "${BLUE}      PRODUCTION ENVIRONMENT${NC}"
+    fi
     echo -e "${BLUE}======================================${NC}"
     echo ""
 }
@@ -291,7 +305,7 @@ print_next_steps() {
 
 # Main execution
 main() {
-    print_header
+    print_header "$1"
     check_prerequisites
     get_project_id
     verify_service_exists
