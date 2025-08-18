@@ -156,7 +156,7 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `🚀 **Staging Client Deployed!**\n\n🌐 **URL:** ${{ steps.get-client-url.outputs.CLIENT_URL }}\n\n📦 **Image Tag:** pr-${{ github.event.number }}\n\nYou can test this PR deployment at the staging client URL.`
+            body: `🚀 **Staging Client Deployed!**\n\n🌐 **Cloud Run URL:** ${{ steps.get-client-url.outputs.CLIENT_URL }}\n\n🎉 **Custom Domain:** https://staging.organicfreshcoffee.com\n\n📦 **Image Tag:** pr-${{ github.event.number }}\n\nYou can test this PR deployment at either URL above.`
           })
 
   deploy-server-staging:
@@ -229,5 +229,5 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `🚀 **Staging Server Deployed!**\n\n🔗 **API URL:** ${{ steps.get-server-url.outputs.SERVER_URL }}\n❤️ **Health Check:** ${{ steps.get-server-url.outputs.SERVER_URL }}/health\n\n📦 **Image Tag:** pr-${{ github.event.number }}\n\nThe staging API server is ready for testing.`
+            body: `🚀 **Staging Server Deployed!**\n\n🔗 **Cloud Run URL:** ${{ steps.get-server-url.outputs.SERVER_URL }}\n❤️ **Health Check:** ${{ steps.get-server-url.outputs.SERVER_URL }}/health\n\n🎉 **Custom Domain:** https://staging-api.organicfreshcoffee.com\n❤️ **Custom Health Check:** https://staging-api.organicfreshcoffee.com/health\n\n📦 **Image Tag:** pr-${{ github.event.number }}\n\nThe staging API server is ready for testing at either URL above.`
           })
