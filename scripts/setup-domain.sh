@@ -292,15 +292,21 @@ test_domain_setup() {
 }
 
 update_cors_configuration() {
-    print_step "Updating CORS configuration..."
+    print_step "CORS configuration update..."
     
-    print_warning "Remember to update your application's CORS configuration"
-    print_info "Add these domains to your allowed origins:"
-    print_info "  - 'https://$MAIN_DOMAIN' (client)"  
-    print_info "  - 'https://$API_DOMAIN' (API)"
-    print_info "Update your GitHub secrets:"
-    print_info "  - CLIENT_URL: https://$MAIN_DOMAIN"
-    print_info "  - SERVER_URL: https://$API_DOMAIN"
+    if [[ "$MAIN_DOMAIN" == *"staging"* ]]; then
+        print_info "✅ CORS is automatically configured for staging domains:"
+        print_info "  - staging.organicfreshcoffee.com"
+        print_info "  - staging-api.organicfreshcoffee.com"
+        print_info "  - Cloud Run URLs (as fallback)"
+    else
+        print_info "✅ CORS is automatically configured for production domains:"
+        print_info "  - organicfreshcoffee.com"
+        print_info "  - www.organicfreshcoffee.com"
+        print_info "  - api.organicfreshcoffee.com"
+    fi
+    
+    print_info "The server will log allowed origins on startup for verification."
 }
 
 print_next_steps() {
