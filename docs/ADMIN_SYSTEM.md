@@ -15,6 +15,11 @@ The admin system requires an `admins` collection in MongoDB. This is automatical
 
 ### 2. Adding Admin Users
 
+**Prerequisites**: Make sure dependencies are installed:
+```bash
+cd server && npm install
+```
+
 #### Method 1: Simple Usage (Recommended)
 ```bash
 # Development - simple usage (will use .env file if present)
@@ -112,6 +117,11 @@ The admin system adds these endpoints:
 ## Development
 
 To test the admin functionality locally:
+
+0. **Install dependencies** (if not already done):
+   ```bash
+   cd server && npm install
+   ```
 
 1. Start the development environment:
    ```bash

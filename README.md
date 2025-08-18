@@ -438,17 +438,22 @@ This application includes an admin system for managing game servers. See [docs/A
 
 ### Quick Admin Setup (Development)
 
-1. Start the application:
+1. Install server dependencies (if not already done):
+   ```bash
+   cd server && npm install
+   ```
+
+2. Start the application:
    ```bash
    docker-compose up
    ```
 
-2. Add yourself as an admin:
+3. Add yourself as an admin:
    ```bash
    node scripts/add-admin.js your-email@example.com
    ```
 
-3. Log in with your email and access the admin panel via the hamburger menu (☰) → "Admin Panel"
+4. Log in with your email and access the admin panel via the hamburger menu (☰) → "Admin Panel"
 
 ### Admin Features
 

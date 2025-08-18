@@ -10,19 +10,51 @@
  * - Production: MONGODB_URI=mongodb://... node scripts/add-admin.js admin@example.com
  * - With env var: ADMIN_EMAIL=admin@example.com node scripts/add-admin.js
  * - With .env file: Create .env file with MONGODB_URI, then run script normally
+ * 
+ * Note: This script requires mongodb and dotenv packages. If you get module not found errors:
+ * 1. Run: cd server && npm install
+ * 2. Or run from server directory: cd server && node ../scripts/add-admin.js email@example.com
  */
-const { MongoClient } = require('mongodb');
+
 const path = require('path');
+
+// Try to require mongodb from server node_modules first, then fallback to global
+let MongoClient;
+try {
+  // Try to load from server node_modules
+  const serverNodeModules = path.join(__dirname, '..', 'server', 'node_modules', 'mongodb');
+  MongoClient = require(serverNodeModules).MongoClient;
+} catch (error) {
+  try {
+    // Fallback to global mongodb
+    MongoClient = require('mongodb').MongoClient;
+  } catch (globalError) {
+    console.error('❌ Error: mongodb package not found');
+    console.error('');
+    console.error('Please install dependencies first:');
+    console.error('  cd server && npm install');
+    console.error('');
+    console.error('Or run the script from the server directory:');
+    console.error('  cd server && node ../scripts/add-admin.js your-email@example.com');
+    process.exit(1);
+  }
+}
 
 // Load environment variables from .env file
 try {
-  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+  // Try to load dotenv from server node_modules first
+  const serverNodeModules = path.join(__dirname, '..', 'server', 'node_modules', 'dotenv');
+  require(serverNodeModules).config({ path: path.join(__dirname, '..', '.env') });
 } catch (error) {
-  // If dotenv is not available, provide helpful guidance
-  console.log('💡 Note: dotenv package not found. To use .env files, install dependencies:');
-  console.log('   cd server && npm install');
-  console.log('   or run: node -r dotenv/config scripts/add-admin.js your-email@example.com');
-  console.log('');
+  try {
+    // Fallback to global dotenv
+    require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+  } catch (globalError) {
+    // If dotenv is not available, provide helpful guidance
+    console.log('💡 Note: dotenv package not found. To use .env files, install dependencies:');
+    console.log('   cd server && npm install');
+    console.log('');
+  }
 }
 
 /**
