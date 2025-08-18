@@ -129,12 +129,16 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
+    const adminsCollection = db.collection('admins');
 
     // Get all login records for the authenticated user
     const userLogins = await userLoginsCollection
       .find({ userId: req.user?.uid })
       .sort({ loginTime: -1 }) // Most recent first
       .toArray();
+
+    // Check if user is an admin and get admin data
+    const adminRecord = await adminsCollection.findOne({ email: req.user?.email });
 
     // Get audit logs for the user
     const auditLogs = await getAuditLogsForUser(req.user?.uid || '');
@@ -143,7 +147,8 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
       user: {
         uid: req.user?.uid,
         email: req.user?.email,
-        emailVerified: req.user?.email_verified
+        emailVerified: req.user?.email_verified,
+        isAdmin: !!adminRecord
       },
       loginHistory: userLogins.map(login => ({
         _id: login._id,
@@ -153,6 +158,12 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
         userAgent: login.userAgent,
         ip: login.ip
       })),
+      adminData: adminRecord ? {
+        email: adminRecord.email,
+        createdAt: adminRecord.created_at,
+        updatedAt: adminRecord.updated_at,
+        addedBy: adminRecord.added_by || 'unknown'
+      } : null,
       auditLogs: auditLogs.map(log => ({
         userId: log.userId,
         action: log.action,
@@ -163,11 +174,12 @@ router.get('/user/view-data', authenticateToken, async (req: AuthenticatedReques
         viewDate: new Date().toISOString(),
         totalLoginRecords: userLogins.length,
         totalAuditRecords: auditLogs.length,
+        hasAdminData: !!adminRecord,
         source: 'landing_page_server'
       }
     };
 
-    console.log(`Viewed ${userLogins.length} login records and ${auditLogs.length} audit records for user ${req.user?.uid}`);
+    console.log(`Viewed ${userLogins.length} login records and ${auditLogs.length} audit records for user ${req.user?.uid}${adminRecord ? ' (admin)' : ''}`);
     
     res.json({
       success: true,
@@ -200,12 +212,16 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
+    const adminsCollection = db.collection('admins');
 
     // Get all login records for the authenticated user
     const userLogins = await userLoginsCollection
       .find({ userId: req.user?.uid })
       .sort({ loginTime: -1 }) // Most recent first
       .toArray();
+
+    // Check if user is an admin and get admin data
+    const adminRecord = await adminsCollection.findOne({ email: req.user?.email });
 
     // Get audit logs for the user
     const auditLogs = await getAuditLogsForUser(req.user?.uid || '');
@@ -214,7 +230,8 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
       user: {
         uid: req.user?.uid,
         email: req.user?.email,
-        emailVerified: req.user?.email_verified
+        emailVerified: req.user?.email_verified,
+        isAdmin: !!adminRecord
       },
       loginHistory: userLogins.map(login => ({
         _id: login._id,
@@ -224,6 +241,12 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
         userAgent: login.userAgent,
         ip: login.ip
       })),
+      adminData: adminRecord ? {
+        email: adminRecord.email,
+        createdAt: adminRecord.created_at,
+        updatedAt: adminRecord.updated_at,
+        addedBy: adminRecord.added_by || 'unknown'
+      } : null,
       auditLogs: auditLogs.map(log => ({
         userId: log.userId,
         action: log.action,
@@ -234,11 +257,12 @@ router.get('/user/export-data', authenticateToken, async (req: AuthenticatedRequ
         exportDate: new Date().toISOString(),
         totalLoginRecords: userLogins.length,
         totalAuditRecords: auditLogs.length,
+        hasAdminData: !!adminRecord,
         source: 'landing_page_server'
       }
     };
 
-    console.log(`Exported ${userLogins.length} login records and ${auditLogs.length} audit records for user ${req.user?.uid}`);
+    console.log(`Exported ${userLogins.length} login records and ${auditLogs.length} audit records for user ${req.user?.uid}${adminRecord ? ' (admin)' : ''}`);
     
     res.json({
       success: true,
@@ -272,11 +296,24 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
 
     const db = getDatabase();
     const userLoginsCollection = db.collection('user_logins');
+    const adminsCollection = db.collection('admins');
 
+    // Check if user is an admin before deletion
+    const adminRecord = await adminsCollection.findOne({ email: req.user?.email });
+    
     // Delete all login records for the authenticated user
     const deleteResult = await userLoginsCollection.deleteMany({ 
       userId: req.user?.uid 
     });
+
+    // Delete admin record if user is an admin
+    let adminDeleteResult = null;
+    if (adminRecord) {
+      adminDeleteResult = await adminsCollection.deleteOne({ 
+        email: req.user?.email 
+      });
+      console.log(`Deleted admin record for user ${req.user?.email}`);
+    }
 
     // Pseudonymize audit logs to comply with GDPR while maintaining compliance records
     const pseudonymizedCount = await pseudonymizeUserAuditLogs(
@@ -285,16 +322,21 @@ router.delete('/user/delete-data', authenticateToken, async (req: AuthenticatedR
     );
 
     console.log(`Deleted ${deleteResult.deletedCount} login records for user ${req.user?.uid}`);
+    if (adminDeleteResult) {
+      console.log(`Deleted ${adminDeleteResult.deletedCount} admin records for user ${req.user?.email}`);
+    }
     console.log(`Pseudonymized ${pseudonymizedCount} audit log entries for GDPR compliance`);
     
     res.json({
       success: true,
       message: 'User data deleted successfully',
       deletedRecords: deleteResult.deletedCount,
+      deletedAdminRecords: adminDeleteResult?.deletedCount || 0,
       pseudonymizedAuditLogs: pseudonymizedCount,
       userId: req.user?.uid,
       gdprCompliance: {
         personalDataDeleted: true,
+        adminDataDeleted: !!adminDeleteResult,
         auditLogsPseudonymized: true,
         retentionReason: 'Legal compliance requirements',
         note: 'Personal identifiers removed from audit logs while preserving compliance records'

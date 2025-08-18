@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { apiEndpoints } from '../lib/api';
 import axios from 'axios';
-import styles from '../styles/Dashboard.module.css';
+import styles from '../styles/Admin.module.css';
 
 interface Server {
   _id: string;
@@ -272,7 +272,12 @@ export default function Admin() {
                   ) : (
                     <div className={styles.serverInfo}>
                       <div>
-                        <strong>{server.server_name}</strong>
+                        <strong>
+                          {server.server_name}
+                          <span className={`${styles.serverBadge} ${styles.officialBadge}`}>
+                            Official
+                          </span>
+                        </strong>
                         <div className={styles.serverAddress}>{server.server_address}</div>
                       </div>
                       <div className={styles.buttonGroup}>
@@ -331,7 +336,12 @@ export default function Admin() {
                   ) : (
                     <div className={styles.serverInfo}>
                       <div>
-                        <strong>{server.server_name}</strong>
+                        <strong>
+                          {server.server_name}
+                          <span className={`${styles.serverBadge} ${styles.thirdPartyBadge}`}>
+                            Third Party
+                          </span>
+                        </strong>
                         <div className={styles.serverAddress}>{server.server_address}</div>
                       </div>
                       <div className={styles.buttonGroup}>
