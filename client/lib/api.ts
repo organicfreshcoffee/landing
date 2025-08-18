@@ -33,6 +33,10 @@ export const apiEndpoints = {
   exportUserData: () => `${getApiUrl()}/api/user/export-data`,
   deleteUserData: () => `${getApiUrl()}/api/user/delete-data`,
   
+  // Admin endpoints
+  checkAdmin: () => `${getApiUrl()}/api/admin/check`,
+  adminServers: () => `${getApiUrl()}/api/admin/servers`,
+  
   // Health check
   health: () => `${getApiUrl()}/health`,
 };

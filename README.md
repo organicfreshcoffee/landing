@@ -432,6 +432,43 @@ docker-compose -f docker-compose.prod.yml build
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
+## 🔧 Admin System
+
+This application includes an admin system for managing game servers. See [docs/ADMIN_SYSTEM.md](docs/ADMIN_SYSTEM.md) for complete documentation.
+
+### Quick Admin Setup (Development)
+
+1. Install server dependencies (if not already done):
+   ```bash
+   cd server && npm install
+   ```
+
+2. Start the application:
+   ```bash
+   docker-compose up
+   ```
+
+3. Add yourself as an admin:
+   ```bash
+   node scripts/add-admin.js your-email@example.com
+   ```
+
+4. Log in with your email and access the admin panel via the hamburger menu (☰) → "Admin Panel"
+
+### Admin Features
+
+- **Server Management**: Add, edit, and delete official and third-party game servers
+- **Role-based Access**: Only designated admin users can access admin functionality
+- **Secure API**: All admin endpoints require authentication and admin privileges
+
+### Production Admin Setup
+
+For production environments, use the same script with a custom MongoDB URI:
+```bash
+# Add admin user in production
+MONGODB_URI=your-production-uri node scripts/add-admin.js admin@example.com
+```
+
 ## 🤝 Contributing
 
 1. Fork the repository

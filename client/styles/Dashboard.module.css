@@ -1188,3 +1188,26 @@
     margin: 0.75rem 1rem;
   }
 }
+
+/* Admin Badge Styles */
+.adminBadge {
+  background: linear-gradient(135deg, #48bb78, #38a169);
+  border: 1px solid #38a169;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 1.5rem;
+  color: white;
+}
+
+.adminBadge p {
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+  text-align: center;
+}
+
+.adminBadge .jsonData {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f0fff4;
+  margin: 0;
+}

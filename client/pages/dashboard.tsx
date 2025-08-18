@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isViewingAccountData, setIsViewingAccountData] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [accountData, setAccountData] = useState<AccountData | null>(null);
   const [isLoadingAccountData, setIsLoadingAccountData] = useState(false);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<'none' | 'initial' | 'final' | 'email' | 'complete' | 'error'>('none');
@@ -75,6 +76,7 @@ export default function Dashboard() {
       // Log API configuration in development
       logApiConfig();
       fetchServers();
+      checkAdminStatus();
       
       // Set up periodic refresh every 5 seconds
       const interval = setInterval(() => {
@@ -113,6 +115,23 @@ export default function Dashboard() {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isAccountMenuOpen, isViewingAccountData, deleteConfirmationStep]);
+
+  const checkAdminStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const token = await user.getIdToken();
+      const response = await axios.get(apiEndpoints.checkAdmin(), {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      setIsAdmin(response.data.isAdmin);
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      setIsAdmin(false);
+    }
+  };
 
   const fetchServers = async () => {
     if (!user) return;
@@ -1095,6 +1114,17 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div>
+                    {/* Admin Data */}
+                    {accountData.landingPage.adminData && (
+                      <div className={styles.subDataSection}>
+                        <h5>🔧 Admin Privileges</h5>
+                        <div className={styles.adminBadge}>
+                          <p><strong>Admin Status:</strong> ✅ Active</p>
+                          <pre className={styles.jsonData}>{JSON.stringify(accountData.landingPage.adminData, null, 2)}</pre>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Login History */}
                     <div className={styles.subDataSection}>
                       <h5>🔐 Login History</h5>
@@ -1178,6 +1208,14 @@ export default function Dashboard() {
               </button>
               {isAccountMenuOpen && (
                 <div className={styles.accountPopup}>
+                  {isAdmin && (
+                    <button 
+                      onClick={() => router.push('/admin')}
+                      className={styles.accountMenuItem}
+                    >
+                      🔧 Admin Panel
+                    </button>
+                  )}
                   <button 
                     onClick={handleViewAccountData}
                     className={styles.accountMenuItem}
