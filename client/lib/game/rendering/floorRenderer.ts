@@ -264,36 +264,13 @@ export class FloorRenderer {
    * Fetch floor layout from server (consolidates FloorGenerator functionality)
    */
   static async getFloorLayout(serverAddress: string, dungeonDagNodeName: string): Promise<ServerFloorLayout> {
-    try {
-      // First try the new server-side generated floor endpoint
-      const response = await DungeonApi.getGeneratedFloor(serverAddress, dungeonDagNodeName);
-      
-      if (!response.success) {
+    const response = await DungeonApi.getGeneratedFloor(serverAddress, dungeonDagNodeName);
+    
+    if (!response.success) {
         throw new Error('Failed to get generated floor layout from server');
-      }
-
-      return this.convertServerGeneratedData(response.data);
-    } catch (error) {
-      console.error('Error fetching generated floor layout:', error);
-      console.log('🔄 Falling back to legacy DAG-based generation...');
-      
-      try {
-        // Fall back to legacy endpoint and client-side generation
-        const legacyResponse = await DungeonApi.getFloorLayout(serverAddress, dungeonDagNodeName);
-        
-        if (!legacyResponse.success) {
-          throw new Error('Failed to get legacy floor layout from server');
-        }
-
-        return this.processServerResponse(legacyResponse.data);
-      } catch (legacyError) {
-        console.error('Legacy generation also failed:', legacyError);
-        console.log('🔄 Falling back to sample data for development...');
-        
-        // Last resort: use sample data
-        return this.getSampleFloorLayout(dungeonDagNodeName);
-      }
     }
+
+    return this.convertServerGeneratedData(response.data);
   }
 
   /**
