@@ -165,7 +165,7 @@ export class StairRenderer {
       const scaledModelBottomOffset = -scaledBox.min.y;
 
       // Position the stairs at the specified location
-      // Use the same coordinate calculation as in getExcludedFloorCoordinates() -- TODO
+      // Use the same coordinate calculation as in getExcludedFloorCoordinates()
       const gridX = tile.x;
       const gridY = tile.y;
       const worldX = gridX * cubeSize + cubeSize / 2;

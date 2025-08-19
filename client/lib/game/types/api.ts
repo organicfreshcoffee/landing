@@ -88,6 +88,8 @@ export interface WallTile {
 }
 
 export interface StairTile {
+  room_id: string;
+  room_name: string;
   x: number;
   y: number;
 }

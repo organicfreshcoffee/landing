@@ -47,34 +47,46 @@ export class StairInteractionManager {
    */
   initializeStairs(upwardsStairs: StairTile[], downwardStairs: StairTile[]): void {
     this.stairs.clear();
-    
-    // TODO: return room with stair data
-    // rooms.forEach(room => {
-    //   if ((room.hasUpwardStair || room.hasDownwardStair) && 
-    //       room.stairLocationX !== undefined && 
-    //       room.stairLocationY !== undefined) {
-        
-    //     const cubeSize = CubeConfig.getCubeSize();
-    //     const gridX = room.position.x + room.stairLocationX;
-    //     const gridY = room.position.y + room.stairLocationY;
-    //     const worldX = gridX * cubeSize + cubeSize / 2;
-    //     const worldZ = gridY * cubeSize + cubeSize / 2;
-    //     const worldY = room.hasDownwardStair ? 0 : cubeSize;
-        
-    //     const stairData: StairInteractionData = {
-    //       roomId: room.id,
-    //       roomName: room.name,
-    //       stairType: room.hasUpwardStair ? 'upward' : 'downward',
-    //       position: new THREE.Vector3(worldX, worldY, worldZ),
-    //       gridPosition: { x: gridX, y: gridY }
-    //     };
-        
-    //     const key = `${room.id}_${gridX}_${gridY}`;
-    //     this.stairs.set(key, stairData);
-        
-    //     console.log(`🏗️ Registered ${stairData.stairType} stair: ${room.name} at (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`);
-    //   }
-    // });
+  
+    upwardsStairs.forEach(stair => {        
+        const cubeSize = CubeConfig.getCubeSize();
+        const gridX = stair.x;
+        const gridY = stair.y;
+        const worldX = gridX * cubeSize + cubeSize / 2;
+        const worldZ = gridY * cubeSize + cubeSize / 2;
+        const worldY = cubeSize;
+
+        const stairData: StairInteractionData = {
+          roomId: stair.room_id,
+          roomName: stair.room_name,
+          stairType: 'upward',
+          position: new THREE.Vector3(worldX, worldY, worldZ),
+          gridPosition: { x: gridX, y: gridY }
+        };
+
+        const key = `${stair.room_id}_${gridX}_${gridY}`;
+        this.stairs.set(key, stairData);
+    });
+
+    downwardStairs.forEach(stair => {
+        const cubeSize = CubeConfig.getCubeSize();
+        const gridX = stair.x;
+        const gridY = stair.y;
+        const worldX = gridX * cubeSize + cubeSize / 2;
+        const worldZ = gridY * cubeSize + cubeSize / 2;
+        const worldY = 0;
+
+        const stairData: StairInteractionData = {
+          roomId: stair.room_id,
+          roomName: stair.room_name,
+          stairType: 'downward',
+          position: new THREE.Vector3(worldX, worldY, worldZ),
+          gridPosition: { x: gridX, y: gridY }
+        };
+
+        const key = `${stair.room_id}_${gridX}_${gridY}`;
+        this.stairs.set(key, stairData);
+    });
     
     console.log(`✅ StairInteractionManager: Initialized ${this.stairs.size} stairs`);
   }
