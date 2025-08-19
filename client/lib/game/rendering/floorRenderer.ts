@@ -222,16 +222,30 @@ export class FloorRenderer {
     layout.hallways.forEach(hallway => {
       if (hallway.segments) {
         hallway.segments.forEach(segment => {
-          const dx = segment.end.x - segment.start.x;
-          const dy = segment.end.y - segment.start.y;
-          const length = Math.sqrt(dx * dx + dy * dy);
-          const steps = Math.max(1, Math.ceil(length));
+          // Simple line drawing for straight lines (horizontal, vertical, diagonal)
+          const startX = segment.start.x;
+          const startY = segment.start.y;
+          const endX = segment.end.x;
+          const endY = segment.end.y;
+
+          // Calculate step direction (will be -1, 0, or 1 for each axis)
+          const stepX = Math.sign(endX - startX);
+          const stepY = Math.sign(endY - startY);
           
-          for (let i = 0; i <= steps; i++) {
-            const t = steps > 0 ? i / steps : 0;
-            const x = Math.round(segment.start.x + (dx * t));
-            const y = Math.round(segment.start.y + (dy * t));
+          // Current position
+          let x = startX;
+          let y = startY;
+          
+          // Add all points from start to end
+          while (true) {
             hallwayCoordinates.push({ x, y });
+            
+            // Break if we've reached the end
+            if (x === endX && y === endY) break;
+            
+            // Move one step toward the end
+            if (x !== endX) x += stepX;
+            if (y !== endY) y += stepY;
           }
         });
       }
