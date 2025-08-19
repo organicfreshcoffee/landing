@@ -415,6 +415,167 @@ export class DungeonFloorRenderer {
   }
 
   /**
+   * Optimized rendering using server-provided pre-calculated tiles
+   */
+  static async renderFromServerTiles(
+    scene: THREE.Scene,
+    layout: ServerFloorLayout,
+    options: DungeonRenderOptions = {}
+  ): Promise<{
+    floorGroup: THREE.Group;
+    wallGroup: THREE.Group | null;
+    ceilingGroup: THREE.Group | null;
+    stairGroup: THREE.Group | null;
+    roomCount: number;
+    hallwayCount: number;
+    overlapCount: number;
+    totalArea: number;
+    wallCount: number;
+    ceilingCount: number;
+    stairCount: number;
+    layout: ServerFloorLayout;
+  }> {
+    const opts = { ...this.DEFAULT_OPTIONS, ...options };
+    
+    console.log(`🚀 Optimized rendering using server tiles for: ${layout.dungeonDagNodeName}`);
+    
+    // Check if we have server tiles to work with
+    if (!FloorGenerator.hasServerTiles(layout)) {
+      console.log(`⚠️ No server tiles available, falling back to standard rendering`);
+      return this.renderDungeonFloorFromLayout(scene, layout, options);
+    }
+
+    // Set excluded coordinates for downward stairs
+    const excludedCoords = StairRenderer.getExcludedFloorCoordinates(layout.rooms);
+    CubeFloorRenderer.setExcludedCoordinates(excludedCoords);
+
+    // Register all server-provided floor tiles in batches for efficiency
+    const allFloorTiles = FloorGenerator.getAllFloorTiles(layout);
+    console.log(`📍 Registering ${allFloorTiles.length} server-provided floor tiles`);
+    
+    // Group tiles by type for better performance
+    const roomTilePositions: Array<{ x: number; y: number }> = [];
+    const hallwayTilePositions: Array<{ x: number; y: number }> = [];
+    const otherTilePositions: Array<{ x: number; y: number }> = [];
+    
+    allFloorTiles.forEach(tile => {
+      // Check if this tile belongs to a room
+      const inRoom = layout.rooms.some(room => {
+        if (layout.serverRoomTiles?.[room.name]) {
+          return layout.serverRoomTiles[room.name].some(roomTile => 
+            roomTile.x === tile.x && roomTile.y === tile.y
+          );
+        }
+        return false;
+      });
+      
+      if (inRoom) {
+        roomTilePositions.push({ x: tile.x, y: tile.y });
+      } else {
+        // Check if it's a hallway tile
+        const inHallway = layout.hallways.some(hallway => {
+          if (layout.serverHallwayTiles?.[hallway.name]) {
+            return layout.serverHallwayTiles[hallway.name].some(hallwayTile => 
+              hallwayTile.x === tile.x && hallwayTile.y === tile.y
+            );
+          }
+          return false;
+        });
+        
+        if (inHallway) {
+          hallwayTilePositions.push({ x: tile.x, y: tile.y });
+        } else {
+          otherTilePositions.push({ x: tile.x, y: tile.y });
+        }
+      }
+    });
+
+    // Register cubes in batches
+    if (roomTilePositions.length > 0) {
+      CubeFloorRenderer.registerCubes(roomTilePositions, opts.roomColor, 'room');
+    }
+    if (hallwayTilePositions.length > 0) {
+      CubeFloorRenderer.registerCubes(hallwayTilePositions, opts.hallwayColor, 'hallway');
+    }
+    if (otherTilePositions.length > 0) {
+      CubeFloorRenderer.registerCubes(otherTilePositions, opts.cubeColor, 'room');
+    }
+
+    // Render all cubes
+    const floorGroup = CubeFloorRenderer.renderAllCubes(scene, {
+      cubeSize: opts.cubeSize,
+      yOffset: opts.yOffset
+    });
+
+    // Render stair models if enabled
+    let stairGroup: THREE.Group | null = null;
+    let stairCount = 0;
+    if (opts.showStairModels) {
+      try {
+        stairGroup = await StairRenderer.renderStairs(scene, layout.rooms, {
+          cubeSize: opts.cubeSize,
+          yOffset: opts.yOffset
+        });
+        stairCount = stairGroup.children.length;
+      } catch (error) {
+        console.error('Failed to render stair models:', error);
+      }
+    }
+
+    // Generate walls and ceiling if enabled
+    let wallGroup: THREE.Group | null = null;
+    let ceilingGroup: THREE.Group | null = null;
+    let wallCount = 0;
+    let ceilingCount = 0;
+    
+    if (opts.showWalls) {
+      const floorCoords = allFloorTiles.map(tile => ({ x: tile.x, y: tile.y }));
+      
+      // Generate wall coordinates around the floor
+      const wallCoords = WallGenerator.generateWalls(floorCoords, {}, excludedCoords);
+      wallGroup = WallGenerator.renderWalls(scene, wallCoords, {
+        wallHeight: opts.wallHeight,
+        wallColor: opts.wallColor,
+        cubeSize: opts.cubeSize
+      });
+      wallCount = wallGroup?.children.length || 0;
+
+      if (opts.showCeiling) {
+        const ceilingCoords = [...floorCoords, ...excludedCoords];
+        ceilingGroup = WallGenerator.renderCeiling(scene, ceilingCoords, {
+          wallHeight: opts.wallHeight,
+          ceilingColor: opts.ceilingColor,
+          cubeSize: opts.cubeSize
+        });
+        ceilingCount = ceilingCoords.length;
+      }
+    }
+
+    // Calculate statistics
+    const roomCount = layout.rooms.length;
+    const hallwayCount = layout.hallways.length;
+    const totalArea = allFloorTiles.length;
+    const overlapCount = 0; // No overlaps with server tiles
+
+    console.log(`✅ Optimized rendering complete: ${totalArea} tiles, ${roomCount} rooms, ${hallwayCount} hallways`);
+
+    return {
+      floorGroup,
+      wallGroup,
+      ceilingGroup,
+      stairGroup,
+      roomCount,
+      hallwayCount,
+      overlapCount,
+      totalArea,
+      wallCount,
+      ceilingCount,
+      stairCount,
+      layout
+    };
+  }
+
+  /**
    * Add debug visualization to the scene
    */
   private static addDebugVisualization(

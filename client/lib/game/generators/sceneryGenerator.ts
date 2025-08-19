@@ -59,18 +59,35 @@ export class ServerSceneryGenerator {
         this.debugSceneObjects(scene);
       }
 
-      // Step 2: Render the complete dungeon floor using the new system
-      const result = await DungeonFloorRenderer.renderDungeonFloorFromLayout(scene, floorLayout, {
-        cubeSize,
-        roomColor: floorColor,
-        hallwayColor: hallwayFloorColor,
-        yOffset: 0,
-        hallwayWidth: 1,
-        showDoors: true,
-        showStairs: false,
-        showStairModels: true,
-        showDebug: false
-      });
+      // Step 2: Choose optimal rendering method based on available data
+      let result;
+      if (FloorGenerator.hasServerTiles(floorLayout)) {
+        console.log(`🚀 Using optimized server-tile rendering`);
+        result = await DungeonFloorRenderer.renderFromServerTiles(scene, floorLayout, {
+          cubeSize,
+          roomColor: floorColor,
+          hallwayColor: hallwayFloorColor,
+          yOffset: 0,
+          hallwayWidth: 1,
+          showDoors: true,
+          showStairs: false,
+          showStairModels: true,
+          showDebug: false
+        });
+      } else {
+        console.log(`⚙️ Using legacy room/hallway rendering`);
+        result = await DungeonFloorRenderer.renderDungeonFloorFromLayout(scene, floorLayout, {
+          cubeSize,
+          roomColor: floorColor,
+          hallwayColor: hallwayFloorColor,
+          yOffset: 0,
+          hallwayWidth: 1,
+          showDoors: true,
+          showStairs: false,
+          showStairModels: true,
+          showDebug: false
+        });
+      }
 
       console.log(`✅ Server floor generation finished for: ${dungeonDagNodeName}`);
       console.log(`📊 Generated: ${result.roomCount} rooms, ${result.hallwayCount} hallways`);
