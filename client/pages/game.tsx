@@ -126,7 +126,6 @@ export default function Game() {
         (window as any).gameDebug = {
           gameManager,
           debugInfo: () => gameManager.debugInfo,
-          debugPlayers: () => gameManager.debugPlayers(),
           selectedCharacter
         };
         // Also expose gameManager directly for easier access
