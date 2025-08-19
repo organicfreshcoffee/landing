@@ -15,16 +15,14 @@ export class AnimationTest {
    */
   static async createTestRunner(scene: THREE.Scene): Promise<void> {
     try {
-      console.log('🏃 Creating test runner for animation debugging...');
-      
+            
       // Load a completely fresh player model instance
       const playerData = await ModelLoader.loadPlayerModel();
       
       // Use the scene directly (it's already properly cloned by ModelLoader)
       const testPlayerScene = playerData.scene;
       
-      console.log('🏃 Loaded fresh player model for test runner');
-      
+            
       // Debug: Check if we have skeleton structure
       let foundSkeleton = false;
       let skinnedMeshCount = 0;
@@ -34,11 +32,9 @@ export class AnimationTest {
         }
         if (child.type === 'SkinnedMesh') {
           skinnedMeshCount++;
-          console.log(`Found SkinnedMesh:`, child.name, 'skeleton:', !!(child as THREE.SkinnedMesh).skeleton);
-        }
+                  }
       });
-      console.log('Test runner skeleton info:', { foundSkeleton, skinnedMeshCount });
-      
+            
       // Position at spawn point (slightly elevated to be visible)
       testPlayerScene.position.set(0, 2, 0); // Reduced from 6 to 2 units above ground
       testPlayerScene.rotation.y = 0; // Face forward
@@ -74,8 +70,7 @@ export class AnimationTest {
           this.testAction.timeScale = 300.0; // Speed up by factor of 300
           this.testAction.play();
           
-          console.log('✅ Test runner animation started');
-          console.log('Animation details:', {
+                    console.log('Animation details:', {
             clipName: runClip.name,
             duration: runClip.duration,
             isRunning: this.testAction.isRunning(),
@@ -93,8 +88,7 @@ export class AnimationTest {
           });
         } else {
           console.error('❌ StickMan_Run animation not found in loaded model');
-          console.log('Available animations:', playerData.animations.map(clip => clip.name));
-        }
+                  }
       } else {
         console.error('❌ No animations found in player model');
       }
@@ -108,8 +102,7 @@ export class AnimationTest {
       scene.add(testPlayerScene);
       this.testPlayer = testPlayerScene;
       
-      console.log('🏃 Test runner created at position:', testPlayerScene.position.toArray());
-      
+            
     } catch (error) {
       console.error('❌ Failed to create test runner:', error);
     }
@@ -145,8 +138,7 @@ export class AnimationTest {
     }
     
     this.testAction = null;
-    console.log('🗑️ Test runner removed');
-  }
+      }
 
   /**
    * Toggle test runner visibility
@@ -154,8 +146,7 @@ export class AnimationTest {
   static toggleTestRunner(scene: THREE.Scene): void {
     if (this.testPlayer) {
       this.testPlayer.visible = !this.testPlayer.visible;
-      console.log('👁️ Test runner visibility:', this.testPlayer.visible);
-    }
+          }
   }
 
   /**

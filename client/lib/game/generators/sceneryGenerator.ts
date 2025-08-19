@@ -4,6 +4,7 @@ import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
 import { CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 import { CubeConfig } from '../config/cubeConfig';
 import { DungeonApi } from '../network/dungeonApi';
+import { GeneratedFloorTilesResponse } from '../types/api';
 
 export class ServerSceneryGenerator {
   /**
@@ -19,16 +20,13 @@ export class ServerSceneryGenerator {
     dungeonDagNodeName: string,
     options: ServerSceneryOptions = {}
   ): Promise<{
-    floorLayout: ServerFloorLayout;
+    floorLayout: GeneratedFloorTilesResponse;
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
     stairGroup: THREE.Group | null;
-    roomCount: number;
-    hallwayCount: number;
     overlapCount: number;
     wallCount: number;
     stairCount: number;
-    totalArea: number;
   }> {
     const {
       cubeSize = CubeConfig.getCubeSize(),
@@ -36,12 +34,10 @@ export class ServerSceneryGenerator {
       hallwayFloorColor = 0xff0000 // Red for hallways
     } = options;
 
-    console.log(`🏰 ServerSceneryGenerator: Starting floor generation for ${dungeonDagNodeName} from ${serverAddress}`);
-    
+        
     try {
       // Step 1: Use FloorRenderer to get and render the floor
-      console.log(`📡 ServerSceneryGenerator: Using FloorRenderer to render floor...`);
-      const { layout: floorLayout, stats } = await FloorRenderer.renderFloor(
+            const floorLayout = await FloorRenderer.renderFloor(
         scene,
         serverAddress,
         dungeonDagNodeName,
@@ -54,30 +50,20 @@ export class ServerSceneryGenerator {
         }
       );
 
-      console.log(`🎯 Rendered layout: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
-      console.log(`📐 Bounds: ${floorLayout.bounds.width}x${floorLayout.bounds.height}`);
-      console.log(`📊 Rendering stats:`, stats);
-
       // Create groups for organization
       const floorGroup = new THREE.Group();
       floorGroup.name = 'server-floor';
       scene.add(floorGroup);
 
-      console.log(`✅ Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`📊 Generated: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
-      console.log(`🎯 Total tiles: ${stats.totalFloorTiles || 0}`);
-
+      
       return {
         floorLayout,
         floorGroup,
         wallGroup: null, // FloorRenderer handles walls internally
         stairGroup: null, // FloorRenderer handles stairs internally
-        roomCount: floorLayout.rooms.length,
-        hallwayCount: floorLayout.hallways.length,
         overlapCount: 0, // No overlaps with server tiles
         wallCount: 0, // Handled internally by FloorRenderer
-        stairCount: floorLayout.rooms.filter(r => r.hasUpwardStair || r.hasDownwardStair).length,
-        totalArea: stats.totalFloorTiles || 0
+        stairCount: floorLayout.data.tiles.upwardStairTiles.length + floorLayout.data.tiles.downwardStairTiles.length,
       };
     } catch (error) {
       console.error('Error generating server floor:', error);
@@ -89,26 +75,22 @@ export class ServerSceneryGenerator {
    * Get the spawn location for new players
    */
   static async getSpawnLocation(serverAddress: string): Promise<string> {
-    console.log(`🎯 ServerSceneryGenerator: Getting current floor from ${serverAddress}`);
-    try {
+        try {
       // Get the player's current status from the API
       const currentStatusResponse = await DungeonApi.getCurrentStatus(serverAddress);
       
       if (currentStatusResponse.success && currentStatusResponse.data.currentFloor) {
-        console.log(`✅ Using player's current floor: ${currentStatusResponse.data.currentFloor}`);
-        return currentStatusResponse.data.currentFloor;
+                return currentStatusResponse.data.currentFloor;
       } else {
         console.warn(`⚠️ Failed to get current floor from API, using default spawn location`);
         return "A"; // Default to root node
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
-        console.log(`🎯 Player not alive, using default spawn location`);
-        return "A"; // Default to root node for new players
+                return "A"; // Default to root node for new players
       }
       console.error(`❌ Error getting current status from API:`, error);
-      console.log(`🎯 Falling back to default spawn location`);
-      return "A"; // Default to root node as fallback
+            return "A"; // Default to root node as fallback
     }
   }
 
@@ -116,11 +98,9 @@ export class ServerSceneryGenerator {
    * Notify server that player moved to a new floor
    */
   static async notifyPlayerMovedFloor(serverAddress: string, newFloorName: string): Promise<void> {
-    console.log(`📡 ServerSceneryGenerator: Notifying server of floor change to ${newFloorName}`);
-    try {
+        try {
       await DungeonApi.notifyPlayerMovedFloor(serverAddress, newFloorName);
-      console.log(`✅ Successfully notified server of floor change to ${newFloorName}`);
-    } catch (error) {
+          } catch (error) {
       console.error(`❌ Failed to notify server of floor change to ${newFloorName}:`, error);
       throw error;
     }
@@ -163,9 +143,7 @@ export class ServerSceneryGenerator {
       }
     });
     
-    console.log(`🧹 Clearing ${objectsToRemove.length} scenery objects`);
-    console.log(`🛡️ Preserving ${objectsToPreserve.length} objects: ${objectsToPreserve.slice(0, 5).join(', ')}${objectsToPreserve.length > 5 ? '...' : ''}`);
-    
+            
     // Remove objects in reverse order to avoid issues with nested objects
     objectsToRemove.reverse().forEach((obj) => {
       try {
@@ -197,15 +175,13 @@ export class ServerSceneryGenerator {
       if (child.userData.isOtherPlayer) otherPlayerCount++;
     });
     
-    console.log(`✅ After cleanup: ${playerCount} current players, ${otherPlayerCount} other players preserved`);
-  }
+      }
 
   /**
    * Debug method to log all objects in the scene
    */
   static debugSceneObjects(scene: THREE.Scene): void {
-    console.log(`🔍 Scene Debug - Total objects: ${scene.children.length}`);
-    
+        
     const objectSummary: { [key: string]: number } = {};
     const playerObjects: any[] = [];
     
@@ -228,8 +204,7 @@ export class ServerSceneryGenerator {
     });
     
     console.table(objectSummary);
-    console.log(`👥 Player objects found:`, playerObjects);
-  }
+      }
 
   /**
    * Alternative safer clear method - only removes specific scenery types
@@ -269,8 +244,7 @@ export class ServerSceneryGenerator {
       }
     });
     
-    console.log(`🧹 Safely clearing ${objectsToRemove.length} scenery objects only`);
-    
+        
     objectsToRemove.forEach((obj) => {
       try {
         if (obj.parent) {
@@ -298,9 +272,7 @@ export class ServerSceneryGenerator {
    * Help debug player visibility issues - call from browser console
    */
   static debugPlayerVisibility(scene: THREE.Scene): void {
-    console.log(`🔍 Player Visibility Debug`);
-    console.log(`Browser: ${navigator.userAgent}`);
-    
+            
     let currentPlayers = 0;
     let otherPlayers = 0;
     let allPlayers = 0;
@@ -342,11 +314,9 @@ export class ServerSceneryGenerator {
       }
     });
     
-    console.log(`📊 Summary: ${currentPlayers} current players, ${otherPlayers} other players, ${allPlayers} total player-like objects`);
-    
+        
     if (currentPlayers === 0) {
       console.error(`❌ No current player found! This indicates the player model was accidentally removed.`);
-      console.log(`💡 Try calling ServerSceneryGenerator.debugSceneObjects(scene) to see all objects`);
-    }
+          }
   }
 }

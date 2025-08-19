@@ -47,8 +47,7 @@ export class ParticleSystem {
     this.particleSystem.renderOrder = 999; // Render after most other objects
     this.scene.add(this.particleSystem);
 
-    console.log('✅ Particle system initialized and added to scene');
-
+    
     // Initialize buffers with empty data
     this.updateParticleBuffers();
   }
@@ -86,8 +85,7 @@ export class ParticleSystem {
     
     // Ensure particle system is in the scene
     if (!this.scene.children.includes(this.particleSystem)) {
-      console.log('⚠️ Particle system not in scene, re-adding...');
-      this.scene.add(this.particleSystem);
+            this.scene.add(this.particleSystem);
     }
     
     const direction = new THREE.Vector3().subVectors(toPosition, fromPosition).normalize();
@@ -95,8 +93,7 @@ export class ParticleSystem {
     
     // Create multiple particles for the spell effect
     const particleCount = Math.min(40, Math.floor(distance * 3) + 15);
-    console.log('🌟 Creating', particleCount, 'particles for', isFromOtherPlayer ? 'other player' : 'local player');
-    
+        
     // Different colors for local vs other players
     const baseHue = isFromOtherPlayer ? 0.05 : 0.55; // Orange for others, blue for local
     const hueRange = isFromOtherPlayer ? 0.15 : 0.3; // Narrower range for others
@@ -238,8 +235,7 @@ export class ParticleSystem {
     
     // Ensure particle system is still in scene
     if (!this.scene.children.includes(this.particleSystem)) {
-      console.log('⚠️ Particle system missing from scene during update, re-adding...');
-      this.scene.add(this.particleSystem);
+            this.scene.add(this.particleSystem);
     }
     
     // Update all particles
@@ -345,8 +341,7 @@ export class ParticleSystem {
 
   // Method to reinitialize if needed (for floor changes, etc.)
   public reinitialize(): void {
-    console.log('🔄 Reinitializing particle system...');
-    this.dispose();
+        this.dispose();
     this.initializeParticleSystem();
   }
 

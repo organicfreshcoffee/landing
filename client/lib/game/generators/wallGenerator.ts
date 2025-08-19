@@ -28,73 +28,6 @@ export class WallGenerator {
   };
 
   /**
-   * Generate walls around all floor coordinates
-   */
-  static generateWalls(
-    allFloorCoords: CubePosition[],
-    options: WallGenerationOptions = {},
-    excludedCoords: CubePosition[] = []
-  ): CubePosition[] {
-    const opts = { ...this.DEFAULT_OPTIONS, ...options };
-    
-    if (allFloorCoords.length === 0) {
-      console.warn('No floor coordinates provided for wall generation');
-      return [];
-    }
-
-    // Create a set of floor positions for quick lookup
-    const floorSet = new Set<string>();
-    allFloorCoords.forEach(coord => {
-      floorSet.add(`${coord.x},${coord.y}`);
-    });
-
-    // Create a set of excluded positions (stair locations) for quick lookup
-    const excludedSet = new Set<string>();
-    excludedCoords.forEach(coord => {
-      excludedSet.add(`${coord.x},${coord.y}`);
-    });
-
-    console.log(`🧱 WallGenerator.generateWalls: ${allFloorCoords.length} floor coords, ${excludedCoords.length} excluded coords`);
-    console.log(`🧱 Excluded coordinates:`, excludedCoords);
-    console.log(`🧱 Excluded set keys:`, Array.from(excludedSet));
-
-    const wallCoords: CubePosition[] = [];
-
-    // For each floor coordinate, check all 4 adjacent positions
-    allFloorCoords.forEach(coord => {
-      const adjacentPositions = [
-        { x: coord.x + 1, y: coord.y },     // East
-        { x: coord.x - 1, y: coord.y },     // West
-        { x: coord.x, y: coord.y + 1 },     // North
-        { x: coord.x, y: coord.y - 1 }      // South
-      ];
-
-      adjacentPositions.forEach(adjPos => {
-        const adjKey = `${adjPos.x},${adjPos.y}`;
-        
-        // Check conditions
-        const hasFloor = floorSet.has(adjKey);
-        const isExcluded = excludedSet.has(adjKey);
-        
-        // If adjacent position doesn't have a floor, place a wall there
-        // BUT exclude positions that are stairs (excluded coordinates)
-        if (!hasFloor && !isExcluded) {
-          // Check if we already have a wall at this position
-          const wallKey = `${adjPos.x},${adjPos.y}`;
-          if (!wallCoords.some(w => w.x === adjPos.x && w.y === adjPos.y)) {
-            wallCoords.push({ x: adjPos.x, y: adjPos.y });
-          }
-        } else if (isExcluded) {
-          console.log(`🚫 Skipping wall at excluded position (${adjPos.x}, ${adjPos.y})`);
-        }
-      });
-    });
-
-    console.log(`🧱 Generated ${wallCoords.length} wall positions around ${allFloorCoords.length} floor tiles`);
-    return wallCoords;
-  }
-
-  /**
    * Render walls in the scene
    */
   static renderWalls(
@@ -131,8 +64,7 @@ export class WallGenerator {
     });
 
     scene.add(wallGroup);
-    console.log(`🏗️ Rendered ${wallCoords.length} wall cubes with textures in scene`);
-    
+        
     return wallGroup;
   }
 
@@ -173,138 +105,7 @@ export class WallGenerator {
     });
 
     scene.add(ceilingGroup);
-    console.log(`🏠 Rendered ${floorCoords.length} ceiling cubes with textures in scene`);
-    
+        
     return ceilingGroup;
-  }
-
-    /**
-   * Generate and render walls and ceiling in one call
-   */
-  static generateAndRenderWalls(
-    scene: THREE.Scene,
-    cubeFloorRenderer: CubeFloorRenderer,
-    options: WallGenerationOptions = {}
-  ): { 
-    wallGroup: THREE.Group; 
-    ceilingGroup?: THREE.Group;
-    wallCount: number; 
-    ceilingCount: number;
-  } {
-    const opts = { ...this.DEFAULT_OPTIONS, ...options };
-    
-    // Get floor coordinates from the renderer
-    const floorCoords = CubeFloorRenderer.getAllCoordinates();
-    
-    // Generate wall coordinates
-    const wallCoords = this.generateWalls(floorCoords);
-    
-    // Render walls
-    const wallGroup = this.renderWalls(scene, wallCoords, opts);
-    
-    // Optionally render ceiling
-    let ceilingGroup: THREE.Group | undefined;
-    let ceilingCount = 0;
-    
-    if (opts.showCeiling) {
-      ceilingGroup = this.renderCeiling(scene, floorCoords, opts);
-      ceilingCount = floorCoords.length;
-    }
-    
-    return { 
-      wallGroup, 
-      ceilingGroup,
-      wallCount: wallCoords.length,
-      ceilingCount
-    };
-  }
-
-  /**
-   * Get wall bounds for the generated walls
-   */
-  static calculateWallBounds(wallCoords: CubePosition[]): { 
-    minX: number; 
-    maxX: number; 
-    minY: number; 
-    maxY: number; 
-    width: number; 
-    height: number; 
-  } {
-    if (wallCoords.length === 0) {
-      return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
-    }
-
-    let minX = wallCoords[0].x;
-    let maxX = wallCoords[0].x;
-    let minY = wallCoords[0].y;
-    let maxY = wallCoords[0].y;
-
-    wallCoords.forEach(coord => {
-      minX = Math.min(minX, coord.x);
-      maxX = Math.max(maxX, coord.x);
-      minY = Math.min(minY, coord.y);
-      maxY = Math.max(maxY, coord.y);
-    });
-
-    return {
-      minX,
-      maxX,
-      minY,
-      maxY,
-      width: maxX - minX + 1,
-      height: maxY - minY + 1
-    };
-  }
-
-  /**
-   * Create a more advanced wall system with corner detection
-   */
-  static generateWallsWithCorners(
-    allFloorCoords: CubePosition[],
-    options: WallGenerationOptions = {}
-  ): {
-    straightWalls: CubePosition[];
-    cornerWalls: CubePosition[];
-    allWalls: CubePosition[];
-  } {
-    const wallCoords = this.generateWalls(allFloorCoords, options);
-    
-    // Create a set for quick wall lookup
-    const wallSet = new Set<string>();
-    wallCoords.forEach(coord => {
-      wallSet.add(`${coord.x},${coord.y}`);
-    });
-
-    const straightWalls: CubePosition[] = [];
-    const cornerWalls: CubePosition[] = [];
-
-    wallCoords.forEach(coord => {
-      // Check if this wall position has wall neighbors
-      const neighbors = [
-        { x: coord.x + 1, y: coord.y },     // East
-        { x: coord.x - 1, y: coord.y },     // West
-        { x: coord.x, y: coord.y + 1 },     // North
-        { x: coord.x, y: coord.y - 1 }      // South
-      ];
-
-      const wallNeighborCount = neighbors.filter(neighbor => 
-        wallSet.has(`${neighbor.x},${neighbor.y}`)
-      ).length;
-
-      // If it has 2+ wall neighbors, it's likely a corner or intersection
-      if (wallNeighborCount >= 2) {
-        cornerWalls.push(coord);
-      } else {
-        straightWalls.push(coord);
-      }
-    });
-
-    console.log(`🧱 Wall analysis: ${straightWalls.length} straight walls, ${cornerWalls.length} corner walls`);
-
-    return {
-      straightWalls,
-      cornerWalls,
-      allWalls: wallCoords
-    };
   }
 }

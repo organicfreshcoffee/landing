@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ServerRoom } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
+import { StairTile } from '../types/api';
 
 export interface StairInteractionData {
   roomId: string;
@@ -25,13 +26,11 @@ export class StairInteractionManager {
   private onDownstairsCallback: ((stairData: StairInteractionData) => void) | null = null;
   
   private constructor() {
-    console.log(`[popup] StairInteractionManager constructor called`);
-    // Don't create popup immediately in constructor, wait for DOM to be ready
+        // Don't create popup immediately in constructor, wait for DOM to be ready
     setTimeout(() => {
       this.createInteractionPopup();
       this.setupKeyListener();
-      console.log(`[popup] StairInteractionManager fully initialized`);
-    }, 0);
+          }, 0);
   }
 
   static getInstance(): StairInteractionManager {
@@ -44,38 +43,50 @@ export class StairInteractionManager {
   /**
    * Initialize stairs from room data
    */
-  initializeStairs(rooms: ServerRoom[]): void {
+  initializeStairs(upwardsStairs: StairTile[], downwardStairs: StairTile[]): void {
     this.stairs.clear();
-    
-    rooms.forEach(room => {
-      if ((room.hasUpwardStair || room.hasDownwardStair) && 
-          room.stairLocationX !== undefined && 
-          room.stairLocationY !== undefined) {
-        
+  
+    upwardsStairs.forEach(stair => {        
         const cubeSize = CubeConfig.getCubeSize();
-        const gridX = room.position.x + room.stairLocationX;
-        const gridY = room.position.y + room.stairLocationY;
+        const gridX = stair.x;
+        const gridY = stair.y;
         const worldX = gridX * cubeSize + cubeSize / 2;
         const worldZ = gridY * cubeSize + cubeSize / 2;
-        const worldY = room.hasDownwardStair ? 0 : cubeSize;
-        
+        const worldY = cubeSize;
+
         const stairData: StairInteractionData = {
-          roomId: room.id,
-          roomName: room.name,
-          stairType: room.hasUpwardStair ? 'upward' : 'downward',
+          roomId: stair.room_id,
+          roomName: stair.room_name,
+          stairType: 'upward',
           position: new THREE.Vector3(worldX, worldY, worldZ),
           gridPosition: { x: gridX, y: gridY }
         };
-        
-        const key = `${room.id}_${gridX}_${gridY}`;
+
+        const key = `${stair.room_id}_${gridX}_${gridY}`;
         this.stairs.set(key, stairData);
-        
-        console.log(`🏗️ Registered ${stairData.stairType} stair: ${room.name} at (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`);
-      }
+    });
+
+    downwardStairs.forEach(stair => {
+        const cubeSize = CubeConfig.getCubeSize();
+        const gridX = stair.x;
+        const gridY = stair.y;
+        const worldX = gridX * cubeSize + cubeSize / 2;
+        const worldZ = gridY * cubeSize + cubeSize / 2;
+        const worldY = 0;
+
+        const stairData: StairInteractionData = {
+          roomId: stair.room_id,
+          roomName: stair.room_name,
+          stairType: 'downward',
+          position: new THREE.Vector3(worldX, worldY, worldZ),
+          gridPosition: { x: gridX, y: gridY }
+        };
+
+        const key = `${stair.room_id}_${gridX}_${gridY}`;
+        this.stairs.set(key, stairData);
     });
     
-    console.log(`✅ StairInteractionManager: Initialized ${this.stairs.size} stairs`);
-  }
+      }
 
   /**
    * Update player position and check for nearby stairs
@@ -83,14 +94,11 @@ export class StairInteractionManager {
   updatePlayerPosition(playerPosition: THREE.Vector3): void {
     // Debug logging - log every 180 frames (about once per 3 seconds at 60fps)
     if (Math.random() < 0.0056) { // ~1/180 chance
-      console.log(`[popup] Player position: (${playerPosition.x.toFixed(1)}, ${playerPosition.y.toFixed(1)}, ${playerPosition.z.toFixed(1)})`);
-      console.log(`[popup] Total stairs available: ${this.stairs.size}`);
-      
+                  
       // Log all stair positions
       this.stairs.forEach((stair, key) => {
         const distance = playerPosition.distanceTo(stair.position);
-        console.log(`[popup] Stair ${key}: ${stair.stairType} at (${stair.position.x.toFixed(1)}, ${stair.position.y.toFixed(1)}, ${stair.position.z.toFixed(1)}) - distance: ${distance.toFixed(2)}`);
-      });
+              });
     }
     
     let closestStair: StairInteractionData | null = null;
@@ -108,8 +116,7 @@ export class StairInteractionManager {
     // Update nearby stair state
     if (closestStair !== this.nearbyStair) {
       this.nearbyStair = closestStair;
-      console.log(`[popup] Nearby stair changed: ${closestStair ? 'found stair' : 'none'}`);
-      this.updateInteractionUI();
+            this.updateInteractionUI();
     }
   }
 
@@ -130,8 +137,7 @@ export class StairInteractionManager {
   private createInteractionPopup(): void {
     // Ensure we don't have a duplicate popup
     if (this.interactionPopup) {
-      console.log(`[popup] Popup already exists, removing old one`);
-      this.interactionPopup.remove();
+            this.interactionPopup.remove();
       this.interactionPopup = null;
     }
 
@@ -187,8 +193,7 @@ export class StairInteractionManager {
       document.head.appendChild(style);
       
       document.body.appendChild(this.interactionPopup);
-      console.log(`[popup] StairInteractionManager created, popup element added to DOM`);
-    } catch (error) {
+          } catch (error) {
       console.error(`[popup] Error creating interaction popup:`, error);
       this.interactionPopup = null;
     }
@@ -198,11 +203,9 @@ export class StairInteractionManager {
    * Update the interaction UI based on nearby stairs
    */
   private updateInteractionUI(): void {
-    console.log(`[popup] updateInteractionUI called, nearbyStair: ${this.nearbyStair ? `${this.nearbyStair.stairType} stair` : 'null'}`);
-    
+        
     if (!this.interactionPopup) {
-      console.log(`[popup] ERROR: interactionPopup element is null! Attempting to recreate...`);
-      this.createInteractionPopup();
+            this.createInteractionPopup();
       if (!this.interactionPopup) {
         console.error(`[popup] CRITICAL: Failed to recreate interactionPopup element!`);
         return;
@@ -214,8 +217,7 @@ export class StairInteractionManager {
       const actionText = isUpward ? 'go upstairs' : 'go downstairs';
       const icon = isUpward ? '⬆️' : '⬇️';
       
-      console.log(`[popup] Showing popup for ${this.nearbyStair.stairType} stair: "${actionText}"`);
-      
+            
       this.interactionPopup.innerHTML = `
         <div style="margin-bottom: 5px;">${icon}</div>
         <div>Press <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px;">E</span> to ${actionText}</div>
@@ -225,10 +227,8 @@ export class StairInteractionManager {
       this.interactionPopup.className = this.nearbyStair.stairType;
       this.interactionPopup.style.display = 'block';
       
-      console.log(`🔍 Near ${this.nearbyStair.stairType} stair in ${this.nearbyStair.roomName}`);
-    } else {
-      console.log(`[popup] Hiding popup - no nearby stair`);
-      this.interactionPopup.style.display = 'none';
+          } else {
+            this.interactionPopup.style.display = 'none';
     }
   }
 
@@ -252,8 +252,7 @@ export class StairInteractionManager {
   private handleStairInteraction(): void {
     if (!this.nearbyStair) return;
     
-    console.log(`🏃 Player interacting with ${this.nearbyStair.stairType} stair in ${this.nearbyStair.roomName}`);
-    
+        
     if (this.nearbyStair.stairType === 'upward' && this.onUpstairsCallback) {
       this.onUpstairsCallback(this.nearbyStair);
     } else if (this.nearbyStair.stairType === 'downward' && this.onDownstairsCallback) {
@@ -272,8 +271,7 @@ export class StairInteractionManager {
   forceHidePopup(): void {
     if (this.interactionPopup) {
       this.interactionPopup.style.display = 'none';
-      console.log(`[popup] Force hiding popup during scene transition`);
-    }
+          }
   }
 
   /**
@@ -308,6 +306,5 @@ export class StairInteractionManager {
     // Don't reset the singleton instance - just clean up the popup
     // This allows the instance to be reused
     
-    console.log('🧹 StairInteractionManager resources cleaned up');
-  }
+      }
 }

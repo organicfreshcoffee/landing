@@ -5,6 +5,13 @@ import { GameHUD } from '../ui/gameHUD';
 import { AnimationTest } from '../utils/animationTest';
 import { PlayerManager } from './playerManager';
 
+/**
+ * MovementController handles player movement, keyboard input, and camera controls.
+ * 
+ * Debug Controls:
+ * - Tab: Toggle admin mode (fly mode)
+ * - 9: Trigger debug death and respawn sequence
+ */
 export class MovementController {
   private keysPressed = new Set<string>();
   private localPlayerRotation = { x: 0, y: 0, z: 0 };
@@ -43,7 +50,8 @@ export class MovementController {
     private sendMovementUpdate: (data: any) => void,
     private selectedCharacter: CharacterData,
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
-    private sendPlayerAction?: (action: string, data?: any, target?: string) => void
+    private sendPlayerAction?: (action: string, data?: any, target?: string) => void,
+    private onDebugDeath?: () => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -54,6 +62,15 @@ export class MovementController {
   private setupKeyboardListeners(): void {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!this.isConnected()) return;
+
+      // Handle debug death (key "9")
+      if (event.code === 'Digit9') {
+        event.preventDefault();
+                if (this.onDebugDeath) {
+          this.onDebugDeath();
+        }
+        return;
+      }
 
       // Handle admin mode toggle
       if (event.code === 'Tab') {
@@ -110,20 +127,17 @@ export class MovementController {
       // Only handle left clicks for spell casting
       if (event.button === 0) {
         event.preventDefault(); // Prevent other handlers
-        console.log('✨ Left click - casting spell!');
-        this.castSpell();
+                this.castSpell();
       }
     };
 
     const handlePointerLockChange = () => {
       isPointerLocked = document.pointerLockElement !== null;
-      console.log('🔒 Pointer lock changed:', isPointerLocked);
-    };
+          };
 
     const handleCanvasClick = (canvas: HTMLCanvasElement) => {
       if (!isPointerLocked) {
-        console.log('🖱️ Canvas clicked - requesting pointer lock');
-        canvas.requestPointerLock();
+                canvas.requestPointerLock();
       }
     };
 
@@ -251,8 +265,7 @@ export class MovementController {
       this.isGrounded = false;
       this.gameHUD.updateAdminMode(true);
       this.gameHUD.showMessage('🔧 Admin Mode Enabled', 2000);
-      console.log('🔧 Admin mode enabled - No collision, no gravity, use Space/Shift for vertical movement');
-    } else {
+          } else {
       // When exiting admin mode, snap to ground level if above ground
       if (this.localPlayerRef.current) {
         const floorHeight = this.collisionSystem.getVisualFloorHeight(this.localPlayerRef.current.position);
@@ -263,8 +276,7 @@ export class MovementController {
       }
       this.gameHUD.updateAdminMode(false);
       this.gameHUD.showMessage('👤 Normal Mode Enabled', 2000);
-      console.log('👤 Admin mode disabled - Collision and gravity enabled');
-    }
+          }
   }
 
   private applyGravity(delta: number): void {
@@ -281,17 +293,6 @@ export class MovementController {
     // Apply vertical velocity
     const newY = this.localPlayerRef.current.position.y + this.velocity.y * delta;
     const floorHeight = this.collisionSystem.getVisualFloorHeight(this.localPlayerRef.current.position);
-    
-    // Debug: Log gravity information occasionally
-    if (Math.random() < 0.01) {
-      console.log('🌍 Gravity info:', {
-        currentY: this.localPlayerRef.current.position.y.toFixed(2),
-        newY: newY.toFixed(2),
-        floorHeight: floorHeight.toFixed(2),
-        velocity: this.velocity.y.toFixed(2),
-        isGrounded: this.isGrounded
-      });
-    }
     
     // Check if we hit the ground
     if (newY <= floorHeight) {
@@ -537,8 +538,7 @@ export class MovementController {
         }
       };
       
-      console.log('🎮 Sending movement update with character:', this.selectedCharacter.name, 'Full character data:', this.selectedCharacter);
-      this.sendMovementUpdate(moveMessage);
+            this.sendMovementUpdate(moveMessage);
     }
   }
 
@@ -560,8 +560,7 @@ export class MovementController {
    * Update the selected character data (useful when character changes after game start)
    */
   updateSelectedCharacter(character: CharacterData): void {
-    console.log('🔄 Updating MovementController character from:', this.selectedCharacter.name, 'to:', character.name);
-    this.selectedCharacter = character;
+        this.selectedCharacter = character;
   }
 
   private castSpell(): void {
@@ -574,8 +573,7 @@ export class MovementController {
       return;
     }
 
-    console.log('✨ Casting spell!');
-
+    
     // Get the actual player model's world position
     const playerWorldPosition = new THREE.Vector3();
     this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
@@ -641,8 +639,7 @@ export class MovementController {
         spellRadius: spellRadius
       };
 
-      console.log('📡 Sending spell action to other players:', spellActionData);
-      this.sendPlayerAction('spell_cast', spellActionData);
+            this.sendPlayerAction('spell_cast', spellActionData);
     }
 
     // Call the spell cast callback for local visual effect

@@ -59,21 +59,18 @@ export class WebSocketManager {
         wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(authToken)}`;
       }
 
-      console.log('Attempting to connect to:', wsUrl);
-      const ws = new WebSocket(wsUrl);
+            const ws = new WebSocket(wsUrl);
       this.ws = ws;
 
       // Connection timeout
       const connectionTimeout = setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
-          console.log('Connection timeout, closing WebSocket...');
-          ws.close();
+                    ws.close();
         }
       }, 10000);
 
       ws.onopen = () => {
-        console.log('Connected to game server');
-        clearTimeout(connectionTimeout);
+                clearTimeout(connectionTimeout);
         this.reconnectAttempts = 0;
         this.isReconnecting = false;
         this.lastPongTime = Date.now();
@@ -131,8 +128,7 @@ export class WebSocketManager {
       };
 
       ws.onclose = (event) => {
-        console.log('Disconnected from game server. Code:', event.code, 'Reason:', event.reason);
-        clearTimeout(connectionTimeout);
+                clearTimeout(connectionTimeout);
         this.stopHeartbeat();
         this.stopConnectionHealthCheck();
         
@@ -169,8 +165,7 @@ export class WebSocketManager {
       try {
         const parsedMessage = JSON.parse(message);
         if (parsedMessage.type === 'player_move' && parsedMessage.data?.character) {
-          console.log('📡 Sending player_move with character:', parsedMessage.data.character);
-        }
+                  }
       } catch (parseError) {
         // Ignore parse errors, just send the message
       }
@@ -213,8 +208,7 @@ export class WebSocketManager {
   private attemptReconnection(serverAddress: string, user: any, characterData?: CharacterData): void {
     if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        console.log('Max reconnection attempts reached');
-        this.onStateChange({
+                this.onStateChange({
           connected: false,
           error: 'Connection lost. Please refresh to reconnect.',
           loading: false
@@ -227,8 +221,7 @@ export class WebSocketManager {
     this.reconnectAttempts++;
     
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
-    console.log(`Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms...`);
-    
+        
     this.onStateChange({
       connected: false,
       error: `Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
@@ -288,8 +281,7 @@ export class WebSocketManager {
       const timeSinceLastPong = now - this.lastPongTime;
       
       if (timeSinceLastPong > 60000) {
-        console.log('Connection appears to be dead (no pong received), closing...');
-        if (this.ws) {
+                if (this.ws) {
           this.ws.close();
         }
       }

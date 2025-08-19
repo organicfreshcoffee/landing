@@ -39,15 +39,13 @@ export class TextureTest {
         // Add text label above cube
         this.addTextLabel(testGroup, label, position.x, position.y + 1.5, position.z);
 
-        console.log(`✅ Created test cube for ${type} at position ${position.x}, ${position.y}, ${position.z}`);
-      } catch (error) {
+              } catch (error) {
         console.error(`❌ Failed to create test cube for ${type}:`, error);
       }
     });
 
     scene.add(testGroup);
-    console.log(`🧪 Created texture test scene with ${testPositions.length} test cubes`);
-    
+        
     return testGroup;
   }
 
@@ -83,8 +81,7 @@ export class TextureTest {
    * Test specific texture loading
    */
   static testTextureLoading(): void {
-    console.log('🧪 Testing texture loading...');
-    
+        
     const testTypes: Array<{ type: 'ceiling' | 'wall' | 'hallway-floor' | 'room-floor', count: number }> = [
       { type: 'ceiling', count: 3 },
       { type: 'wall', count: 3 },
@@ -93,12 +90,10 @@ export class TextureTest {
     ];
 
     testTypes.forEach(({ type, count }) => {
-      console.log(`\n🎨 Testing ${type} textures:`);
-      for (let i = 0; i < count; i++) {
+            for (let i = 0; i < count; i++) {
         try {
           const texture = TextureManager.getRandomTexture(type);
-          console.log(`  ✅ Loaded random ${type} texture: ${texture.image?.src || 'loading...'}`);
-        } catch (error) {
+                  } catch (error) {
           console.error(`  ❌ Failed to load ${type} texture:`, error);
         }
       }
@@ -106,9 +101,7 @@ export class TextureTest {
 
     // Show cache stats
     const stats = TextureManager.getCacheStats();
-    console.log(`\n📊 Texture cache stats: ${stats.size} textures loaded`);
-    console.log('Cache keys:', stats.keys);
-  }
+          }
 
   /**
    * Remove test scene
@@ -132,8 +125,7 @@ export class TextureTest {
         }
       });
       
-      console.log('🧹 Removed texture test scene');
-    }
+          }
   }
 
   /**
@@ -183,8 +175,7 @@ export class TextureTest {
     });
 
     scene.add(testGroup);
-    console.log(`🧪 Created comprehensive texture test with ${types.length * 5} cubes`);
-    
+        
     return testGroup;
   }
 }

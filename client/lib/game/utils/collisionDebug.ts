@@ -8,13 +8,11 @@ export class CollisionDebug {
 
   static enable(): void {
     this.enabled = true;
-    console.log('🔍 Collision debugging enabled');
-  }
+      }
 
   static disable(): void {
     this.enabled = false;
-    console.log('🔍 Collision debugging disabled');
-  }
+      }
 
   static logCollision(
     playerPos: THREE.Vector3,

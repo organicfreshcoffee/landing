@@ -4,6 +4,7 @@ import {
   DungeonNode,
   FloorLayoutResponse,
   GeneratedFloorResponse,
+  GeneratedFloorTilesResponse,
   RoomStairsResponse,
   SpawnLocationResponse,
   PlayerMovedFloorResponse,
@@ -16,8 +17,7 @@ import {
  */
 const buildDungeonEndpoints = (serverAddress: string) => {
   const baseUrl = ensureProtocol(serverAddress);
-  console.log(`🔗 DungeonApi: Building endpoints for server: ${baseUrl}`);
-  
+    
   if (!isValidUrl(baseUrl)) {
     throw new Error(`Invalid server address: ${serverAddress} -> ${baseUrl}`);
   }
@@ -26,6 +26,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     playerMovedFloor: () => `${baseUrl}/api/dungeon/player-moved-floor`,
     getFloorLayout: (dungeonDagNodeName: string) => `${baseUrl}/api/dungeon/floor/${dungeonDagNodeName}`,
     getGeneratedFloor: (floorName: string) => `${baseUrl}/api/dungeon/generated-floor/${floorName}`,
+    getGeneratedFloorTiles: (floorName: string) => `${baseUrl}/api/dungeon/generated-floor-tiles/${floorName}`,
     getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
     getCurrentStatus: () => `${baseUrl}/api/dungeon/current-status`,
@@ -89,12 +90,10 @@ export class DungeonApi {
       const endpoints = buildDungeonEndpoints(serverAddress);
       const url = endpoints.getFloorLayout(dungeonDagNodeName);
       
-      console.log(`🏰 DungeonApi: Getting floor layout from ${url}`);
-      
+            
       const response = await axios.get(url, config);
       
-      console.log(`✅ DungeonApi: Floor layout response:`, response.data);
-      return response.data;
+            return response.data;
     } catch (error) {
       console.error('❌ Error getting floor layout:', error);
       throw error;
@@ -110,14 +109,39 @@ export class DungeonApi {
       const endpoints = buildDungeonEndpoints(serverAddress);
       const url = endpoints.getGeneratedFloor(floorName);
       
-      console.log(`🏗️ DungeonApi: Getting generated floor from ${url}`);
-      
+            
       const response = await axios.get(url, config);
       
-      console.log(`✅ DungeonApi: Generated floor response:`, response.data);
-      return response.data;
+            return response.data;
     } catch (error) {
       console.error('❌ Error getting generated floor:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get pre-calculated floor tiles from server (newest server-side tile generation)
+   */
+  static async getGeneratedFloorTiles(serverAddress: string, floorName: string): Promise<GeneratedFloorTilesResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const url = endpoints.getGeneratedFloorTiles(floorName);
+      
+                        
+      const response = await axios.get(url, config);
+      
+            return response.data;
+    } catch (error) {
+      console.error('❌ Error getting generated floor tiles:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('❌ Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       throw error;
     }
   }
@@ -149,12 +173,10 @@ export class DungeonApi {
       const endpoints = buildDungeonEndpoints(serverAddress);
       const url = endpoints.getSpawnLocation();
       
-      console.log(`🎯 DungeonApi: Getting spawn location from ${url}`);
-      
+            
       const response = await axios.get(url, config);
       
-      console.log(`✅ DungeonApi: Spawn location response:`, response.data);
-      return response.data;
+            return response.data;
     } catch (error) {
       console.error('❌ Error getting spawn location:', error);
       throw error;
@@ -170,17 +192,14 @@ export class DungeonApi {
       const endpoints = buildDungeonEndpoints(serverAddress);
       const url = endpoints.getCurrentStatus();
       
-      console.log(`🏠 DungeonApi: Getting current status from ${url}`);
-      
+            
       const response = await axios.get(url, config);
       
-      console.log(`✅ DungeonApi: Current status response:`, response.data);
-      return response.data;
+            return response.data;
     } catch (error) {
       // If 404, player is not alive - this is expected behavior
       if (axios.isAxiosError(error) && error.response?.status === 404) {
-        console.log(`🚫 DungeonApi: Player not alive (404), need to show character selection`);
-        throw new Error('PLAYER_NOT_ALIVE');
+                throw new Error('PLAYER_NOT_ALIVE');
       }
       console.error('❌ Error getting current status:', error);
       throw error;

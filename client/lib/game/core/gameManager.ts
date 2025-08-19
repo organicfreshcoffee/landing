@@ -59,7 +59,8 @@ export class GameManager {
       (message) => this.webSocketManager.send(JSON.stringify(message)),
       this.selectedCharacter,
       (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos),
-      (action, data, target) => this.sendPlayerAction(action, data, target)
+      (action, data, target) => this.sendPlayerAction(action, data, target),
+      () => this.handleDebugDeath()
     );
 
     this.initializeGame();
@@ -89,8 +90,7 @@ export class GameManager {
       
       // Ensure particle system is initialized and update it
       if (!this.particleSystem.isInitialized()) {
-        console.log('⚠️ Particle system not initialized in render loop, reinitializing...');
-        this.particleSystem.reinitialize();
+                this.particleSystem.reinitialize();
       }
       this.particleSystem.update();
       
@@ -112,8 +112,7 @@ export class GameManager {
   }
 
   private async createLocalPlayer(): Promise<void> {
-    console.log('🏃 Creating local sprite player...');
-    
+        
     // Create local player object with character data
     const localPlayer: Player = {
       id: this.currentPlayerId,
@@ -157,18 +156,15 @@ export class GameManager {
     this.sceneManager.addToScene(localPlayerScene);
     this.localPlayerRef.current = localPlayerScene;
     
-    console.log('✅ Local sprite player added to scene');
-  }
+      }
 
   async connectToServer(serverAddress: string): Promise<void> {
-    console.log(`🔗 GameManager: Connecting to server ${serverAddress}`);
-    
+        
     // Set server address for dungeon API calls
     this.sceneManager.setServerAddress(serverAddress);
     
     // Load initial scenery from server
-    console.log(`🎮 GameManager: Loading scenery from server...`);
-    await this.sceneManager.loadScenery();
+        await this.sceneManager.loadScenery();
     
     // Update collision data after loading scenery
     this.movementController.updateCollisionData(this.sceneManager.scene);
@@ -182,9 +178,7 @@ export class GameManager {
         const position = JSON.parse(storedPosition);
         const rotation = JSON.parse(storedRotation);
         
-        console.log('🔄 Restoring player position from server:', position);
-        console.log('🔄 Restoring player rotation from server:', rotation);
-        
+                        
         // Set position
         this.localPlayerRef.current.position.set(position.x, position.y, position.z);
         
@@ -199,8 +193,7 @@ export class GameManager {
         sessionStorage.removeItem('playerPosition');
         sessionStorage.removeItem('playerRotation');
         
-        console.log('✅ Player positioned at stored location');
-      } catch (error) {
+              } catch (error) {
         console.error('❌ Error parsing stored position/rotation, falling back to ground positioning:', error);
         this.positionPlayerOnGround();
       }
@@ -218,25 +211,19 @@ export class GameManager {
     // Create test runner for animation debugging
     await AnimationTest.createTestRunner(this.sceneManager.scene);
     
-    console.log(`🎯 GameManager: Collision data initialized`);
-    
-    console.log(`✅ GameManager: Scenery loaded successfully`);
-    
+        
+        
     // Connect to WebSocket
-    console.log(`🔌 GameManager: Connecting to WebSocket...`);
-    await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
-    console.log(`✅ GameManager: WebSocket connected`);
-  }
+        await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
+      }
 
   private handleGameMessage(message: GameMessage): void {
-    console.log('📥 RECEIVED MESSAGE:', message.type, message.data);
-    
+        
     switch (message.type) {
       case 'player_joined':
         // Handle new player joining with full player data
         if (message.data.id && message.data.position && message.data.character) {
-          console.log('👥 Player joined:', message.data.character.name, 'at position:', message.data.position);
-          
+                    
           this.updatePlayer({
             id: message.data.id,
             position: message.data.position,
@@ -257,8 +244,7 @@ export class GameManager {
           // Only log character data for new players
           const isNewPlayer = !this.players.has(message.data.playerId);
           if (isNewPlayer && message.data.character) {
-            console.log('👥 New player joined via player_moved:', message.data.character.name);
-          }
+                      }
           
           console.log('📨 Received player_moved for:', message.data.playerId, {
             isNewPlayer,
@@ -299,8 +285,7 @@ export class GameManager {
 
       case 'player_action':
         if (message.data.playerId && message.data.action) {
-          console.log('⚡ Received player action:', message.data.action, 'from player:', message.data.playerId, 'raw data:', message.data);
-          this.handlePlayerAction(message.data);
+                    this.handlePlayerAction(message.data);
         } else {
           console.warn('⚠️ Invalid player_action message data:', message.data);
         }
@@ -308,13 +293,11 @@ export class GameManager {
 
       case 'players_list':
         if (message.data.players && Array.isArray(message.data.players)) {
-          console.log(`📋 Received players list with ${message.data.players.length} players`);
-          
+                    
           message.data.players.forEach((playerData: PlayerUpdate) => {
             // Skip local player
             if (playerData.id !== this.user?.uid) {
-              console.log('📝 Processing player from list:', playerData.id, 'character:', playerData.character?.name || 'unknown');
-              this.updatePlayer(playerData).catch((error) => {
+                            this.updatePlayer(playerData).catch((error) => {
                 console.error('❌ Error updating player from list:', playerData.id, error);
               });
             }
@@ -326,8 +309,7 @@ export class GameManager {
 
       case 'health_update':
         if (message.data.health !== undefined && message.data.maxHealth !== undefined) {
-          console.log('❤️ Received health update:', message.data);
-          this.handleHealthUpdate(message.data);
+                    this.handleHealthUpdate(message.data);
         } else {
           console.warn('⚠️ Invalid health_update message data:', message.data);
         }
@@ -335,8 +317,7 @@ export class GameManager {
 
       case 'respawn_success':
         if (message.data.player) {
-          console.log('🔄 Received respawn success:', message.data);
-          this.handleRespawnSuccess(message.data.player);
+                    this.handleRespawnSuccess(message.data.player);
         } else {
           console.warn('⚠️ Invalid respawn_success message data:', message.data);
         }
@@ -347,18 +328,15 @@ export class GameManager {
   private async updatePlayer(playerData: PlayerUpdate): Promise<void> {
     // Skip if this is the local player
     if (playerData.id === this.currentPlayerId) {
-      console.log('⏭️ Skipping update for local player:', playerData.id, '(local ID:', this.currentPlayerId, ')');
-      return;
+            return;
     }
 
-    console.log('🔍 Processing player update for:', playerData.id, '(local ID:', this.currentPlayerId, ')');
-
+    
     const existingPlayer = this.players.get(playerData.id);
 
     if (existingPlayer) {
       // Update existing player
-      console.log('🔄 Updating existing player:', playerData.id, 'at position:', playerData.position);
-      
+            
       // Check if character has changed and needs sprite recreation
       let needsSpriteRecreation = false;
       if (playerData.character && existingPlayer.character) {
@@ -410,8 +388,7 @@ export class GameManager {
           // Add to scene
           this.sceneManager.addToScene(playerResult.model);
           
-          console.log('✅ Successfully recreated sprite for character change:', playerData.id);
-          
+                    
         } catch (error) {
           console.error('❌ Error recreating sprite:', playerData.id, error);
         }
@@ -440,8 +417,7 @@ export class GameManager {
       }
     } else {
       // Create new player
-      console.log('✨ Creating new player:', playerData.id, 'with character:', playerData.character?.name || 'unknown');
-      
+            
       if (!playerData.character) {
         console.warn('⚠️ Cannot create player without character data:', playerData.id);
         return;
@@ -478,8 +454,7 @@ export class GameManager {
         });
         
         this.players.set(playerData.id, newPlayer);
-        console.log('✅ Successfully created and added new player:', playerData.id);
-        
+                
         // Set initial sprite direction based on rotation and local player position
         if (this.localPlayerRef.current) {
           PlayerManager.updateSpriteDirection(
@@ -515,20 +490,17 @@ export class GameManager {
       }
     };
 
-    console.log('📤 Sending player action:', actionMessage);
-    this.webSocketManager.send(JSON.stringify(actionMessage));
+        this.webSocketManager.send(JSON.stringify(actionMessage));
   }
 
   private handlePlayerAction(actionData: any): void {
-    console.log('🎭 Raw actionData received:', actionData);
-    
+        
     // Handle potential nested structure from server
     let playerId, action, data;
     
     if (actionData.action && typeof actionData.action === 'object') {
       // Server wrapped our action data in another layer
-      console.log('🔄 Detected wrapped message structure');
-      playerId = actionData.action.playerId;
+            playerId = actionData.action.playerId;
       action = actionData.action.action;
       data = actionData.action.data;
     } else {
@@ -538,23 +510,19 @@ export class GameManager {
       data = actionData.data;
     }
     
-    console.log('🎬 Parsed action data:', { playerId, action, data });
-    
+        
     // Skip if this is the local player (we don't need to visualize our own actions)
     if (playerId === this.currentPlayerId) {
-      console.log('⏭️ Skipping action from local player:', playerId);
-      return;
+            return;
     }
 
-    console.log('🎬 Handling player action:', action, 'from player:', playerId, 'with data:', data);
-
+    
     switch (action) {
       case 'spell_cast':
         this.handleSpellCastAction(playerId, data);
         break;
       default:
-        console.log('❓ Unknown player action:', action);
-        break;
+                break;
     }
   }
 
@@ -573,8 +541,7 @@ export class GameManager {
       return;
     }
 
-    console.log('✨ Rendering spell cast from player:', playerId, spellData);
-
+    
     // Convert positions from the message data to THREE.Vector3
     const fromPosition = new THREE.Vector3(
       spellData.fromPosition.x,
@@ -598,8 +565,7 @@ export class GameManager {
   }
 
   private handleHealthUpdate(healthData: any): void {
-    console.log('❤️ Processing health update:', healthData);
-    
+        
     if (this.onHealthUpdate) {
       this.onHealthUpdate({
         health: healthData.health,
@@ -610,14 +576,12 @@ export class GameManager {
 
     // If player died, handle death
     if (!healthData.isAlive || healthData.health <= 0) {
-      console.log('💀 Player died, initiating death sequence');
-      this.handlePlayerDeath();
+            this.handlePlayerDeath();
     }
   }
 
   private async handlePlayerDeath(): Promise<void> {
-    console.log('💀 Handling player death');
-    
+        
     try {
       // Notify the UI about death
       if (this.onPlayerDeath) {
@@ -634,20 +598,32 @@ export class GameManager {
       const serverAddress = this.sceneManager.getServerAddress();
       if (serverAddress) {
         await DungeonApi.notifyPlayerMovedFloor(serverAddress, 'A');
-        console.log('✅ Notified server of respawn floor change to A');
-        
+                
         // Load floor A
         await this.loadFloor('A');
-        console.log('✅ Loaded respawn floor A');
-      }
+              }
     } catch (error) {
       console.error('❌ Error handling player death:', error);
     }
   }
 
+  private handleDebugDeath(): void {
+        
+    // Update health to show death
+    if (this.onHealthUpdate) {
+      this.onHealthUpdate({
+        health: 0,
+        maxHealth: 100,
+        isAlive: false
+      });
+    }
+
+    // Trigger the death sequence (this will open character selection)
+    this.handlePlayerDeath();
+  }
+
   private handleRespawnSuccess(playerData: any): void {
-    console.log('🔄 Processing respawn success:', playerData);
-    
+        
     // Update health from respawn data
     if (this.onHealthUpdate) {
       this.onHealthUpdate({
@@ -660,8 +636,7 @@ export class GameManager {
     // Update character data if provided
     if (playerData.character) {
       this.selectedCharacter = playerData.character;
-      console.log('🎭 Updated character after respawn:', this.selectedCharacter);
-    }
+          }
   }
 
   sendRespawnRequest(characterData: CharacterData): void {
@@ -681,13 +656,11 @@ export class GameManager {
       }
     };
 
-    console.log('🔄 Sending respawn request:', respawnMessage);
-    this.webSocketManager.send(JSON.stringify(respawnMessage));
+        this.webSocketManager.send(JSON.stringify(respawnMessage));
   }
 
   private removePlayer(playerId: string): void {
-    console.log('🗑️ Removing player:', playerId);
-    
+        
     const player = this.players.get(playerId);
     
     if (player && player.mesh) {
@@ -703,8 +676,7 @@ export class GameManager {
         PlayerManager.disposePlayerMesh(player.mesh);
         this.players.delete(playerId);
         
-        console.log('✅ Successfully removed player:', playerId);
-      } catch (error) {
+              } catch (error) {
         console.error('❌ Error removing player:', playerId, error);
         // Force cleanup even if error occurs
         this.players.delete(playerId);
@@ -714,8 +686,7 @@ export class GameManager {
       // Clean up any orphaned data
       this.players.delete(playerId);
       this.playersAnimations.delete(playerId);
-      console.log('🧹 Cleaned up orphaned player data for:', playerId);
-    }
+          }
   }
 
   private setupVisibilityHandler(): void {
@@ -733,16 +704,13 @@ export class GameManager {
 
   private setupNetworkHandlers(): void {
     const handleOnline = () => {
-      console.log('Network connection restored');
-      if (!this.webSocketManager.isConnected) {
-        console.log('Attempting reconnection after network restore...');
-        // The reconnection logic will be handled by the component
+            if (!this.webSocketManager.isConnected) {
+                // The reconnection logic will be handled by the component
       }
     };
 
     const handleOffline = () => {
-      console.log('Network connection lost');
-      this.onStateChange({
+            this.onStateChange({
         connected: false,
         error: 'Network connection lost',
         loading: false
@@ -766,41 +734,38 @@ export class GameManager {
     stairManager.setCallbacks(
       // Upstairs callback
       (stairData: StairInteractionData) => {
-        console.log('🔺 Player wants to go upstairs!');
-        this.handleUpstairsInteraction(stairData);
+                this.handleUpstairsInteraction(stairData);
       },
       // Downstairs callback
       (stairData: StairInteractionData) => {
-        console.log('🔻 Player wants to go downstairs!');
-        this.handleDownstairsInteraction(stairData);
+                this.handleDownstairsInteraction(stairData);
       }
     );
     
-    console.log('🏗️ Stair interaction callbacks configured');
-  }
+      }
 
   private async handleUpstairsInteraction(stairData: StairInteractionData): Promise<void> {
-    console.log('⬆️ Handling upstairs interaction for room:', stairData.roomName);
-    
-    try {
-      // Get the target floor information from the stairs API
-      const serverAddress = this.sceneManager.getServerAddress();
-      if (!serverAddress) {
-        console.error('❌ Server address not available for stair transition');
+                  
+      try {
+        // Get the target floor information from the stairs API
+        const serverAddress = this.sceneManager.getServerAddress();
+        if (!serverAddress) {
+          console.error('❌ Server address not available for stair transition');
+          return;
+        }
+        
+        const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
+        
+        if (!stairsResponse.success || !stairsResponse.data.upwardStair) {
+          console.error('❌ No upward stair found for room:', stairData.roomName);
+          return;
+        }      const targetFloor = stairsResponse.data.upwardStair.dungeonDagNodeName;
+      const currentFloor = this.sceneManager.getCurrentFloor(); // The floor we're coming from
+      if (!currentFloor) {
+        console.error('❌ Current floor not available for stair transition');
         return;
       }
-      
-      const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
-      
-      if (!stairsResponse.success || !stairsResponse.data.upwardStair) {
-        console.error('❌ No upward stair found for room:', stairData.roomName);
-        return;
-      }
-      
-      const targetFloor = stairsResponse.data.upwardStair.dungeonDagNodeName;
-      const currentFloor = stairData.roomName; // The floor we're coming from
-      console.log(`🔺 Going upstairs from ${currentFloor} to floor: ${targetFloor}`);
-      
+                  
       // Show loading screen
       if (this.onFloorTransition) {
         this.onFloorTransition({
@@ -818,8 +783,7 @@ export class GameManager {
       // Notify server about floor change before loading
       try {
         await DungeonApi.notifyPlayerMovedFloor(serverAddress, targetFloor);
-        console.log(`✅ Successfully notified server of floor change: ${currentFloor} → ${targetFloor}`);
-      } catch (error) {
+              } catch (error) {
         console.warn(`⚠️ Failed to notify server of floor change: ${error}`);
         // Continue with floor transition even if notification fails
       }
@@ -856,27 +820,27 @@ export class GameManager {
   }
 
   private async handleDownstairsInteraction(stairData: StairInteractionData): Promise<void> {
-    console.log('⬇️ Handling downstairs interaction for room:', stairData.roomName);
-    
-    try {
-      // Get the target floor information from the stairs API
-      const serverAddress = this.sceneManager.getServerAddress();
-      if (!serverAddress) {
-        console.error('❌ Server address not available for stair transition');
+                  
+      try {
+        // Get the target floor information from the stairs API
+        const serverAddress = this.sceneManager.getServerAddress();
+        if (!serverAddress) {
+          console.error('❌ Server address not available for stair transition');
+          return;
+        }
+        
+        const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
+        
+        if (!stairsResponse.success || !stairsResponse.data.downwardStair) {
+          console.error('❌ No downward stair found for room:', stairData.roomName);
+          return;
+        }      const targetFloor = stairsResponse.data.downwardStair.dungeonDagNodeName;
+      const currentFloor = this.sceneManager.getCurrentFloor(); // The floor we're coming from
+      if (!currentFloor) {
+        console.error('❌ Current floor not available for stair transition');
         return;
       }
-      
-      const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, stairData.roomName);
-      
-      if (!stairsResponse.success || !stairsResponse.data.downwardStair) {
-        console.error('❌ No downward stair found for room:', stairData.roomName);
-        return;
-      }
-      
-      const targetFloor = stairsResponse.data.downwardStair.dungeonDagNodeName;
-      const currentFloor = stairData.roomName; // The floor we're coming from
-      console.log(`🔻 Going downstairs from ${currentFloor} to floor: ${targetFloor}`);
-      
+                  
       // Show loading screen
       if (this.onFloorTransition) {
         this.onFloorTransition({
@@ -894,8 +858,7 @@ export class GameManager {
       // Notify server about floor change before loading
       try {
         await DungeonApi.notifyPlayerMovedFloor(serverAddress, targetFloor);
-        console.log(`✅ Successfully notified server of floor change: ${currentFloor} → ${targetFloor}`);
-      } catch (error) {
+              } catch (error) {
         console.warn(`⚠️ Failed to notify server of floor change: ${error}`);
         // Continue with floor transition even if notification fails
       }
@@ -946,28 +909,24 @@ export class GameManager {
     
     // Position player on the floor
     this.localPlayerRef.current.position.y = floorHeight;
-    console.log(`👤 Player positioned on ground at height: ${floorHeight}`);
-  }
+      }
 
   private resetPlayerToSpawn(): void {
     if (!this.localPlayerRef.current) return;
     
-    console.log('🔄 Resetting player to spawn location');
-    
+        
     // Reset to origin position (spawn point)
     this.localPlayerRef.current.position.set(0, 0, 0);
     
     // Position player on ground level for the new floor
     this.positionPlayerOnGround();
     
-    console.log('✅ Player reset to spawn position');
-  }
+      }
 
   private positionPlayerAtStair(stairInfo: StairInfo, stairType: 'upward' | 'downward'): void {
     if (!this.localPlayerRef.current) return;
     
-    console.log(`🎯 Positioning player at ${stairType} stair location: (${stairInfo.locationX}, ${stairInfo.locationY})`);
-    
+        
     // Convert grid coordinates to world coordinates (same logic as in StairInteractionManager)
     const cubeSize = CubeConfig.getCubeSize();
     const worldX = stairInfo.locationX * cubeSize + cubeSize / 2;
@@ -979,26 +938,39 @@ export class GameManager {
     // Position player on ground level for the new floor
     this.positionPlayerOnGround();
     
-    console.log(`✅ Player positioned at stair: (${worldX.toFixed(1)}, ${this.localPlayerRef.current.position.y.toFixed(1)}, ${worldZ.toFixed(1)})`);
-  }
+      }
 
   private findStairWorldCoordinates(roomName: string, stairType: 'upward' | 'downward'): { x: number, y: number, z: number } | null {
     // Search through all objects in the scene to find stairs for the specified room
     const scene = this.sceneManager.scene;
     let foundStairData: any = null;
     
+        
+    // Debug: Log all stairs found in scene
+    const allStairs: any[] = [];
     scene.traverse((object) => {
-      if (object.userData.type === 'stairs' && object.userData.roomName === roomName) {
-        const hasTargetStairType = stairType === 'upward' ? object.userData.hasUpwardStair : object.userData.hasDownwardStair;
-        if (hasTargetStairType) {
-          foundStairData = object.userData;
+      if (object.userData.type === 'stairs') {
+        allStairs.push({
+          type: object.userData.type,
+          direction: object.userData.direction,
+          roomName: object.userData.roomName,
+          hasUpwardStair: object.userData.hasUpwardStair,
+          hasDownwardStair: object.userData.hasDownwardStair,
+          worldCoords: `(${object.userData.worldX}, ${object.userData.worldY}, ${object.userData.worldZ})`
+        });
+        
+        if (object.userData.roomName === roomName) {
+          const hasTargetStairType = stairType === 'upward' ? object.userData.hasUpwardStair : object.userData.hasDownwardStair;
+          if (hasTargetStairType) {
+            foundStairData = object.userData;
+          }
         }
       }
     });
     
+            
     if (foundStairData && typeof foundStairData.worldX === 'number') {
-      console.log(`🎯 Found ${stairType} stair for room ${roomName} at world coordinates: (${foundStairData.worldX}, ${foundStairData.worldY}, ${foundStairData.worldZ})`);
-      return {
+            return {
         x: foundStairData.worldX,
         y: foundStairData.worldY,
         z: foundStairData.worldZ
@@ -1018,9 +990,7 @@ export class GameManager {
     try {
       const logPrefix = stairType === 'downward' ? '[upstairs]' : '[downstairs]';
       
-      console.log(`${logPrefix} 🔍 Searching for ${stairType} stair on ${targetFloor} that leads back to ${originalFloor}`);
-      console.log(`${logPrefix} Floor transition: ${originalFloor} → ${targetFloor}`);
-      
+                                                
       // Get the floor layout to find all rooms
       const floorLayout = await DungeonApi.getFloorLayout(serverAddress, targetFloor);
       
@@ -1032,8 +1002,7 @@ export class GameManager {
       
       // Find all rooms on the target floor
       const allRooms = floorLayout.data.nodes.filter(node => node.isRoom);
-      console.log(`${logPrefix} 🏠 Found ${allRooms.length} total rooms on floor ${targetFloor}:`, allRooms.map(r => r.name));
-      
+            
       // Filter to only rooms that have the specific type of stair we're looking for
       const roomsWithRelevantStairs = allRooms.filter(room => {
         if (stairType === 'downward') {
@@ -1042,8 +1011,7 @@ export class GameManager {
           return room.hasUpwardStair;
         }
       });
-      console.log(`${logPrefix} 🏗️ Found ${roomsWithRelevantStairs.length} rooms with ${stairType} stairs:`, roomsWithRelevantStairs.map(r => r.name));
-      
+            
       const stairMappings: { roomName: string, upward?: string, downward?: string }[] = [];
       let matchingStair: StairInfo | undefined;
       let matchingRoomName: string | undefined;
@@ -1051,12 +1019,10 @@ export class GameManager {
       // Check each room with the relevant stair type for stairs that lead back to our original floor
       for (const room of roomsWithRelevantStairs) {
         try {
-          console.log(`${logPrefix} 🔍 Checking room ${room.name} for stairs...`);
-          const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, room.name);
+                    const stairsResponse = await DungeonApi.getRoomStairs(serverAddress, room.name);
           
           if (!stairsResponse.success) {
-            console.log(`${logPrefix} ⚠️ No stairs data for room ${room.name}`);
-            continue;
+                        continue;
           }
           
           const stairMapping: { roomName: string, upward?: string, downward?: string } = { roomName: room.name };
@@ -1073,20 +1039,25 @@ export class GameManager {
           // Extract floor prefix from original floor (e.g., "AA_A" -> "AA")
           const originalFloorPrefix = originalFloor.split('_')[0];
           
+                    
           if (stairType === 'downward' && stairsResponse.data.downwardStair) {
             const stairDestination = stairsResponse.data.downwardStair.dungeonDagNodeName;
-            console.log(`${logPrefix} 🔍 Room ${room.name} downward stair goes to: ${stairDestination}, comparing with prefix: ${originalFloorPrefix}`);
-            if (stairDestination === originalFloorPrefix) {
-              matchingStair = stairsResponse.data.downwardStair;
+                        
+            // Check both exact match and prefix match
+            if (stairDestination === originalFloorPrefix || stairDestination === originalFloor) {
+                            matchingStair = stairsResponse.data.downwardStair;
               matchingRoomName = room.name;
-            }
+            } else {
+                          }
           } else if (stairType === 'upward' && stairsResponse.data.upwardStair) {
             const stairDestination = stairsResponse.data.upwardStair.dungeonDagNodeName;
-            console.log(`${logPrefix} 🔍 Room ${room.name} upward stair goes to: ${stairDestination}, comparing with prefix: ${originalFloorPrefix}`);
-            if (stairDestination === originalFloorPrefix) {
-              matchingStair = stairsResponse.data.upwardStair;
+                        
+            // Check both exact match and prefix match
+            if (stairDestination === originalFloorPrefix || stairDestination === originalFloor) {
+                            matchingStair = stairsResponse.data.upwardStair;
               matchingRoomName = room.name;
-            }
+            } else {
+                          }
           }
           
         } catch (error) {
@@ -1095,24 +1066,19 @@ export class GameManager {
       }
       
       // Log all stair mappings found
-      console.log(`${logPrefix} 📋 Stair mappings on floor ${targetFloor}:`, stairMappings);
-      
+            
       if (matchingStair && matchingRoomName) {
-        console.log(`${logPrefix} ✅ Found matching ${stairType} stair in room ${matchingRoomName} that leads to ${originalFloor}`);
-        console.log(`${logPrefix} 📍 Stair location: (${matchingStair.locationX}, ${matchingStair.locationY})`);
-        
+                        
         // Log player position before moving
         if (this.localPlayerRef.current) {
           const beforePos = this.localPlayerRef.current.position;
-          console.log(`${logPrefix} 👤 Player position before move: (${beforePos.x.toFixed(1)}, ${beforePos.y.toFixed(1)}, ${beforePos.z.toFixed(1)})`);
-        }
+                  }
         
         // Get world coordinates from the rendered stair model
         const stairWorldCoords = this.findStairWorldCoordinates(matchingRoomName, stairType);
         
         if (stairWorldCoords && this.localPlayerRef.current) {
-          console.log(`${logPrefix} 🎯 Using stored world coordinates: (${stairWorldCoords.x.toFixed(1)}, ${stairWorldCoords.y.toFixed(1)}, ${stairWorldCoords.z.toFixed(1)})`);
-          
+                              
           // Position player at the stair's world coordinates
           this.localPlayerRef.current.position.set(stairWorldCoords.x, stairWorldCoords.y, stairWorldCoords.z);
           
@@ -1126,13 +1092,11 @@ export class GameManager {
         // Log player position after moving
         if (this.localPlayerRef.current) {
           const afterPos = this.localPlayerRef.current.position;
-          console.log(`${logPrefix} 👤 Player position after move: (${afterPos.x.toFixed(1)}, ${afterPos.y.toFixed(1)}, ${afterPos.z.toFixed(1)})`);
-        }
+                  }
         
         return;
       } else {
-        console.log(`${logPrefix} ❌ No matching ${stairType} stair found that leads back to ${originalFloor}`);
-      }
+              }
       
       // If no matching stair found, fall back to spawn
       console.warn(`${logPrefix} ⚠️ No ${stairType} stair found on ${targetFloor} that leads back to ${originalFloor}, using spawn`);
@@ -1217,8 +1181,7 @@ export class GameManager {
       });
       
       if (issuesFound > 0) {
-        console.log(`🔧 Fixed ${issuesFound} player state integrity issues`);
-      }
+              }
     }
   }
 
@@ -1232,8 +1195,7 @@ export class GameManager {
       
       // Reinitialize particle system after floor change
       if (!this.particleSystem.isInitialized()) {
-        console.log('🎆 Reinitializing particle system after floor change...');
-        this.particleSystem.reinitialize();
+                this.particleSystem.reinitialize();
       }
       
       // Notify about floor change
@@ -1242,8 +1204,7 @@ export class GameManager {
         this.onFloorChange(currentFloor);
       }
       
-      console.log('🎯 Collision data updated after floor load');
-    } catch (error) {
+          } catch (error) {
       console.error('Error loading floor:', error);
       throw error;
     }
@@ -1261,16 +1222,14 @@ export class GameManager {
    * Update the selected character data and propagate to all relevant components
    */
   updateSelectedCharacter(character: CharacterData): void {
-    console.log('🔄 GameManager: Updating character from:', this.selectedCharacter.name, 'to:', character.name);
-    this.selectedCharacter = character;
+        this.selectedCharacter = character;
     
     // Update MovementController with new character data
     this.movementController.updateSelectedCharacter(character);
     
     // If we have a local player, we should recreate it with the new character
     // This is more complex and might require reconnection for real-time sync
-    console.log('⚠️ Character updated - consider reconnecting to sync with other players');
-  }
+      }
 
   get playersCount(): number {
     return this.players.size + 1; // +1 for local player
@@ -1321,10 +1280,7 @@ export class GameManager {
 
   // Debug method for player state (can be called from browser console)
   debugPlayers(): void {
-    console.log('🐛 === PLAYER DEBUG INFO ===');
-    console.log(`Total players in map: ${this.players.size}`);
-    console.log(`Total animations tracked: ${this.playersAnimations.size}`);
-    
+                
     this.players.forEach((player, id) => {
       const hasAnimation = this.playersAnimations.has(id);
       const meshInScene = player.mesh ? this.sceneManager.scene.getObjectByProperty('uuid', player.mesh.uuid) !== undefined : false;
@@ -1339,8 +1295,7 @@ export class GameManager {
       });
     });
     
-    console.log('🐛 === END DEBUG INFO ===');
-  }
+      }
 
   cleanup(): void {
     this.webSocketManager.close();

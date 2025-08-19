@@ -3,8 +3,10 @@ import { ModelLoader } from '../utils/modelLoader';
 import { ServerRoom } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
 import { CubePosition } from './cubeFloorRenderer';
+import { StairTile } from '../types/api';
 
 export interface StairRenderOptions {
+  direction: string;
   cubeSize?: number;
   yOffset?: number;
   stairScale?: number;
@@ -19,6 +21,7 @@ export class StairRenderer {
   private static loadPromise: Promise<THREE.Group> | null = null;
 
   private static readonly DEFAULT_OPTIONS: Required<StairRenderOptions> = {
+    direction: 'upward',
     cubeSize: CubeConfig.getCubeSize(),
     yOffset: 0,
     stairScale: 0.8 // Scale to fit on a single cube tile
@@ -46,8 +49,7 @@ export class StairRenderer {
         throw new Error('Failed to load stair model');
       }
 
-      console.log(`🏗️ Stair model loaded successfully, children count: ${model.children.length}`);
-      
+            
       // Store the template model
       this.stairModel = model;
       
@@ -72,8 +74,7 @@ export class StairRenderer {
         }
       });
 
-      console.log('🏗️ Stair model loaded successfully');
-      this.isLoading = false;
+            this.isLoading = false;
       return this.stairModel.clone();
     }).catch(error => {
       console.error('Failed to load stair model:', error);
@@ -90,46 +91,36 @@ export class StairRenderer {
    */
   static async renderStairs(
     scene: THREE.Scene,
-    rooms: ServerRoom[],
-    options: StairRenderOptions = {}
+    tiles: StairTile[],
+    options: StairRenderOptions = {
+      direction: '' // upward or downward
+    }
   ): Promise<THREE.Group> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     const stairGroup = new THREE.Group();
     stairGroup.name = 'stairs';
 
-    console.log(`🏗️ StairRenderer: Checking ${rooms.length} rooms for stairs...`);
-
-    // First, let's see which rooms have stairs
-    const roomsWithStairs = rooms.filter(room => this.hasStairs(room));
-    console.log(`🏗️ Found ${roomsWithStairs.length} rooms with stairs:`, 
-      roomsWithStairs.map(r => `${r.name}(${r.stairLocationX},${r.stairLocationY})`));
-
+    
     let stairCount = 0;
-    for (const room of rooms) {
-      if (this.hasStairs(room)) {
-        try {
-          console.log(`🏗️ Rendering stairs for room ${room.name}...`);
-          const stairMesh = await this.renderRoomStairs(room, opts);
-          if (stairMesh) {
-            stairGroup.add(stairMesh);
-            stairCount++;
-            console.log(`✅ Successfully added stairs for room ${room.name}`);
-          } else {
-            console.warn(`⚠️ Failed to create stairs for room ${room.name}`);
-          }
-        } catch (error) {
-          console.warn(`❌ Exception rendering stairs for room ${room.name}:`, error);
+    // TypeError: tiles is not iterable
+    for (const stair of tiles) {
+      try {
+        const stairMesh = await this.renderRoomStairs(stair, opts);
+        if (stairMesh) {
+          stairGroup.add(stairMesh);
+          stairCount++;
+                  } else {
+          console.warn(`⚠️ Failed to create stairs`);
         }
+      } catch (error) {
+        console.warn(`❌ Exception rendering stairs :`, error);
       }
     }
 
     scene.add(stairGroup);
-    console.log(`✅ StairRenderer: Added stair group to scene with ${stairCount} stair models`);
-    console.log(`🔍 Stair group info: name="${stairGroup.name}", children=${stairGroup.children.length}, visible=${stairGroup.visible}`);
-    
+            
     // Debug: Check scene hierarchy
-    console.log(`🔍 Scene now has ${scene.children.length} top-level objects`);
-    
+        
     return stairGroup;
   }
 
@@ -137,15 +128,9 @@ export class StairRenderer {
    * Render stairs for a single room
    */
   private static async renderRoomStairs(
-    room: ServerRoom,
-    options: StairRenderOptions
+    tile: StairTile,
+    options: Required<StairRenderOptions>
   ): Promise<THREE.Group | null> {
-    if (!this.hasStairs(room) || 
-        room.stairLocationX === undefined || 
-        room.stairLocationY === undefined) {
-      return null;
-    }
-
     try {
       // Load the stair model
       const stairModel = await this.loadStairModel();
@@ -174,42 +159,43 @@ export class StairRenderer {
 
       // Position the stairs at the specified location
       // Use the same coordinate calculation as in getExcludedFloorCoordinates()
-      const gridX = room.position.x + room.stairLocationX;
-      const gridY = room.position.y + room.stairLocationY;
+      const gridX = tile.x;
+      const gridY = tile.y;
       const worldX = gridX * cubeSize + cubeSize / 2;
       const worldZ = gridY * cubeSize + cubeSize / 2;
       
       // Different positioning for upward vs downward stairs
       let worldY: number;
-      if (room.hasDownwardStair) {
+      // use options where we stored direction upward or downward
+      if (options.direction === "downward") {
         // For downward stairs, position at floor level (as if going down)
         worldY = options.yOffset! + scaledModelBottomOffset;
-        console.log(`⬇️ Positioning downward stairs at floor level for room ${room.name}`);
-      } else {
+              } else {
         // For upward stairs, position on top of floor cube
         worldY = options.yOffset! + cubeSize + scaledModelBottomOffset;
-        console.log(`⬆️ Positioning upward stairs on top of floor cube for room ${room.name}`);
-      }
+              }
 
       stairModel.position.set(worldX - cubeSize, worldY, worldZ);
 
       // Add metadata for debugging and positioning
       stairModel.userData = {
         type: 'stairs',
-        roomName: room.name,
-        roomId: room.id,
-        hasUpwardStair: room.hasUpwardStair,
-        hasDownwardStair: room.hasDownwardStair,
-        stairLocationX: room.stairLocationX,
-        stairLocationY: room.stairLocationY,
+        direction: options.direction,
+        roomName: tile.room_name,
+        roomId: tile.room_id,
+        stairLocationX: tile.x,
+        stairLocationY: tile.y,
         // Store world coordinates for player positioning
         worldX: worldX - cubeSize,
         worldY: worldY,
-        worldZ: worldZ
+        worldZ: worldZ,
+        // Add stair type flags for easier searching
+        hasUpwardStair: options.direction === 'upward',
+        hasDownwardStair: options.direction === 'downward'
       };
 
       console.log(
-        `[stair] 🏗️ Placed ${room.hasDownwardStair ? 'downward' : 'upward'} stairs for room ${room.name} at grid (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
+        `[stair] 🏗️ Placed ${options.direction === "downward" ? 'downward' : 'upward'} stairs at grid (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`
       );
       console.log(
         `[stair] 📏 Stair model: original=${modelWidth.toFixed(1)}×${modelHeight.toFixed(1)}×${modelDepth.toFixed(1)}, scales=(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)}, ${scaleZ.toFixed(2)})`
@@ -220,7 +206,7 @@ export class StairRenderer {
 
       return stairModel;
     } catch (error) {
-      console.error(`Failed to create stairs for room ${room.name}:`, error);
+      console.error(`Failed to create stairs:`, error);
       return null;
     }
   }
@@ -231,8 +217,7 @@ export class StairRenderer {
   private static hasStairs(room: ServerRoom): boolean {
     const hasStairs = room.hasUpwardStair || room.hasDownwardStair;
     if (hasStairs) {
-      console.log(`🔍 Room ${room.name} has stairs: upward=${room.hasUpwardStair}, downward=${room.hasDownwardStair}, location=(${room.stairLocationX},${room.stairLocationY})`);
-    }
+          }
     return hasStairs;
   }
 
@@ -275,11 +260,9 @@ export class StairRenderer {
   static getExcludedFloorCoordinates(rooms: ServerRoom[]): CubePosition[] {
     const excludedCoords: CubePosition[] = [];
     
-    console.log(`🔍 Checking ${rooms.length} rooms for downward stairs to exclude...`);
-    
+        
     rooms.forEach(room => {
-      console.log(`🔍 Room ${room.name}: hasUpwardStair=${room.hasUpwardStair}, hasDownwardStair=${room.hasDownwardStair}, stairLocationX=${room.stairLocationX}, stairLocationY=${room.stairLocationY}`);
-      
+            
       if (room.hasDownwardStair && 
           room.stairLocationX !== undefined && 
           room.stairLocationY !== undefined) {
@@ -288,12 +271,10 @@ export class StairRenderer {
           y: room.position.y + room.stairLocationY
         };
         excludedCoords.push(coord);
-        console.log(`🚫 Excluding floor cube at (${coord.x}, ${coord.y}) for downward stairs in room ${room.name}`);
-      }
+              }
     });
     
-    console.log(`🚫 Total excluded coordinates from StairRenderer: ${excludedCoords.length}`, excludedCoords);
-    return excludedCoords;
+        return excludedCoords;
   }
 
   /**
@@ -321,6 +302,5 @@ export class StairRenderer {
     // Also dispose of ModelLoader resources
     ModelLoader.dispose();
     
-    console.log('🧹 Stair renderer resources cleaned up');
-  }
+      }
 }

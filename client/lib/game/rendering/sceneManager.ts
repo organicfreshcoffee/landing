@@ -100,16 +100,14 @@ export class SceneManager {
     pointLight3.shadow.mapSize.height = 1024;
     this.scene.add(pointLight3);
 
-    console.log('🔆 Enhanced lighting system initialized with stronger illumination');
-  }
+      }
 
   /**
    * Set the server address for API calls
    */
   setServerAddress(serverAddress: string): void {
     this.serverAddress = serverAddress;
-    console.log(`🔧 SceneManager: Server address set to ${serverAddress}`);
-  }
+      }
 
   /**
    * Get the current server address
@@ -119,11 +117,9 @@ export class SceneManager {
   }
 
   async loadScenery(floorName?: string): Promise<void> {
-    console.log(`🎮 SceneManager: Loading scenery. Server: ${this.serverAddress}, Floor: ${floorName || 'auto-detect'}`);
-    
+        
     if (!this.serverAddress) {
       console.error('❌ Server address not set. Call setServerAddress() first.');
-      this.loadFallbackScenery();
       return;
     }
 
@@ -147,19 +143,15 @@ export class SceneManager {
       );
       
       this.currentFloorName = floorName;
-      console.log(`✅ Loaded floor: ${floorName} with ${floorResult.floorLayout.rooms.length} rooms, ${floorResult.floorLayout.hallways.length} hallways`);
       
       // Initialize stair interactions
       const stairManager = StairInteractionManager.getInstance();
-      stairManager.initializeStairs(floorResult.floorLayout.rooms);
-      console.log(`🏗️ Stair interactions initialized for ${floorResult.floorLayout.rooms.length} rooms`);
+      stairManager.initializeStairs(floorResult.floorLayout.data.tiles.upwardStairTiles, floorResult.floorLayout.data.tiles.downwardStairTiles);
       
       // Detailed rendering verification
       this.verifyFloorRendering(floorResult);
     } catch (error) {
       console.error('Error loading scenery from server:', error);
-      // Fallback to a simple test environment
-      this.loadFallbackScenery();
     }
   }
 
@@ -167,15 +159,7 @@ export class SceneManager {
    * Verify that all floor elements are properly rendered
    */
   private verifyFloorRendering(floorResult: any): void {
-    console.log(`🔍 Verifying floor rendering for ${this.currentFloorName}:`);
-    console.log(`  📊 Statistics:`);
-    console.log(`    • Rooms: ${floorResult.roomCount}`);
-    console.log(`    • Hallways: ${floorResult.hallwayCount}`);
-    console.log(`    • Total floor area: ${floorResult.totalArea} cubes`);
-    console.log(`    • Wall cubes: ${floorResult.wallCount}`);
-    console.log(`    • Overlapping cubes: ${floorResult.overlapCount}`);
-    console.log(`    • Floor bounds: ${floorResult.floorLayout.bounds.width}x${floorResult.floorLayout.bounds.height}`);
-    
+                                    
     // Count rendered objects in scene
     let floorCubes = 0;
     let wallCubes = 0;
@@ -192,11 +176,7 @@ export class SceneManager {
       }
     });
     
-    console.log(`  🎯 Scene verification:`);
-    console.log(`    • Total meshes in scene: ${totalMeshes}`);
-    console.log(`    • Floor cubes rendered: ${floorCubes}`);
-    console.log(`    • Wall cubes rendered: ${wallCubes}`);
-    
+                    
     // Warn if there are discrepancies
     if (floorCubes < floorResult.totalArea) {
       console.warn(`⚠️ Potential rendering issue: Expected ${floorResult.totalArea} floor cubes, but only ${floorCubes} found in scene`);
@@ -210,73 +190,10 @@ export class SceneManager {
       Math.abs(bounds.height * CubeConfig.getCubeSize())
     );
     
-    console.log(`  📷 Camera verification:`);
-    console.log(`    • Camera position: (${cameraPos.x.toFixed(1)}, ${cameraPos.y.toFixed(1)}, ${cameraPos.z.toFixed(1)})`);
-    console.log(`    • Camera far plane: ${this.camera.far}`);
-    console.log(`    • Max floor distance: ${maxDistance.toFixed(1)}`);
-    
+                    
     if (maxDistance > this.camera.far * 0.8) {
       console.warn(`⚠️ Potential clipping issue: Floor extends to ${maxDistance.toFixed(1)} units, camera far plane is ${this.camera.far}`);
     }
-  }
-
-  /**
-   * Load a simple fallback environment if server fails
-   */
-  private loadFallbackScenery(): void {
-    // Create a simple ground plane
-    const groundGeometry = new THREE.PlaneGeometry(100, 100);
-    const groundMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0x666666,
-      roughness: 0.8,
-      metalness: 0.2
-    });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    this.scene.add(ground);
-
-    // Add walls with better materials to show lighting
-    const wallGeometry = new THREE.BoxGeometry(1, CubeConfig.getWallHeight(), 20);
-    const wallMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0xdddddd,
-      roughness: 0.7,
-      metalness: 0.1
-    });
-    
-    const wall1 = new THREE.Mesh(wallGeometry, wallMaterial);
-    wall1.position.set(-10, CubeConfig.getWallHeight() / 2, 0);
-    wall1.castShadow = true;
-    wall1.receiveShadow = true;
-    this.scene.add(wall1);
-    
-    const wall2 = new THREE.Mesh(wallGeometry, wallMaterial);
-    wall2.position.set(10, CubeConfig.getWallHeight() / 2, 0);
-    wall2.castShadow = true;
-    wall2.receiveShadow = true;
-    this.scene.add(wall2);
-
-    // Add some test cubes to better show lighting effects
-    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-    const cubeMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0xff6b6b,
-      roughness: 0.5,
-      metalness: 0.3
-    });
-    
-    const cube1 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    cube1.position.set(0, 1, 5);
-    cube1.castShadow = true;
-    cube1.receiveShadow = true;
-    this.scene.add(cube1);
-    
-    const cube2 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    cube2.position.set(5, 1, -5);
-    cube2.castShadow = true;
-    cube2.receiveShadow = true;
-    this.scene.add(cube2);
-
-    console.log('Loaded enhanced fallback scenery with better lighting materials');
   }
 
   /**
@@ -306,8 +223,7 @@ export class SceneManager {
    */
   async refreshCurrentFloor(): Promise<void> {
     if (this.currentFloorName && this.serverAddress) {
-      console.log(`🔄 Refreshing current floor: ${this.currentFloorName}`);
-      await this.loadScenery(this.currentFloorName);
+            await this.loadScenery(this.currentFloorName);
     } else {
       console.warn('⚠️ Cannot refresh floor: no current floor or server address');
     }
@@ -404,8 +320,7 @@ export class SceneManager {
       }
     });
     
-    console.log(`📊 Scene stats: ${meshCount} meshes, ${floorCubes} floor cubes, ${geometryCount} geometries, ${materialCount} materials`);
-  }
+      }
 
   stopRenderLoop(): void {
     if (this.animationId) {
