@@ -4,6 +4,7 @@ import {
   DungeonNode,
   FloorLayoutResponse,
   GeneratedFloorResponse,
+  GeneratedFloorTilesResponse,
   RoomStairsResponse,
   SpawnLocationResponse,
   PlayerMovedFloorResponse,
@@ -26,6 +27,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     playerMovedFloor: () => `${baseUrl}/api/dungeon/player-moved-floor`,
     getFloorLayout: (dungeonDagNodeName: string) => `${baseUrl}/api/dungeon/floor/${dungeonDagNodeName}`,
     getGeneratedFloor: (floorName: string) => `${baseUrl}/api/dungeon/generated-floor/${floorName}`,
+    getGeneratedFloorTiles: (floorName: string) => `${baseUrl}/api/dungeon/generated-floor-tiles/${floorName}`,
     getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
     getCurrentStatus: () => `${baseUrl}/api/dungeon/current-status`,
@@ -118,6 +120,37 @@ export class DungeonApi {
       return response.data;
     } catch (error) {
       console.error('❌ Error getting generated floor:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get pre-calculated floor tiles from server (newest server-side tile generation)
+   */
+  static async getGeneratedFloorTiles(serverAddress: string, floorName: string): Promise<GeneratedFloorTilesResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const url = endpoints.getGeneratedFloorTiles(floorName);
+      
+      console.log(`🎯 DungeonApi: Getting generated floor tiles from ${url}`);
+      console.log(`🎯 DungeonApi: Floor name: ${floorName}`);
+      console.log(`🎯 DungeonApi: Auth config:`, config);
+      
+      const response = await axios.get(url, config);
+      
+      console.log(`✅ DungeonApi: Generated floor tiles response:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting generated floor tiles:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('❌ Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       throw error;
     }
   }

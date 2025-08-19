@@ -76,6 +76,39 @@ export interface GeneratedFloorResponse {
   data: ServerGeneratedFloorData;
 }
 
+export interface FloorTile {
+  x: number;
+  y: number;
+  type: "room" | "hallway";
+}
+
+export interface WallTile {
+  x: number;
+  y: number;
+}
+
+export interface StairTile {
+  x: number;
+  y: number;
+}
+
+export interface GeneratedFloorTilesResponse {
+  success: boolean;
+  data: {
+    dungeonDagNodeName: string;
+    bounds: {
+      width: number;
+      height: number;
+    };
+    tiles: {
+      floorTiles: FloorTile[];
+      wallTiles: WallTile[];
+      upwardStairTiles: StairTile[];
+      downwardStairTiles: StairTile[];
+    };
+  };
+}
+
 export interface StairInfo {
   floorDagNodeName: string;
   dungeonDagNodeName: string;
