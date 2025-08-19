@@ -21,6 +21,7 @@ export class StairRenderer {
   private static loadPromise: Promise<THREE.Group> | null = null;
 
   private static readonly DEFAULT_OPTIONS: Required<StairRenderOptions> = {
+    direction: 'upward',
     cubeSize: CubeConfig.getCubeSize(),
     yOffset: 0,
     stairScale: 0.8 // Scale to fit on a single cube tile
@@ -135,7 +136,7 @@ export class StairRenderer {
    */
   private static async renderRoomStairs(
     tile: StairTile,
-    options: StairRenderOptions
+    options: Required<StairRenderOptions>
   ): Promise<THREE.Group | null> {
     try {
       // Load the stair model

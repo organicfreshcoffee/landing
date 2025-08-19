@@ -192,13 +192,11 @@ export class FloorRenderer {
    */
   private static renderStairs(scene: THREE.Scene, stairTiles: StairTile[], opts: FloorRenderOptions, direction: "upward" | "downward"): void {
     try {
-        for (const tile of stairTiles) {
-            StairRenderer.renderStairs(scene, tile, {
-                cubeSize: opts.cubeSize,
-                yOffset: opts.yOffset,
-                direction: direction
-            });
-        }
+        StairRenderer.renderStairs(scene, stairTiles, {
+            cubeSize: opts.cubeSize,
+            yOffset: opts.yOffset,
+            direction: direction
+        });
     } catch (error) {
       console.warn('Failed to render stairs:', error);
     }
