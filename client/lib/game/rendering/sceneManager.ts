@@ -150,9 +150,7 @@ export class SceneManager {
       
       // Initialize stair interactions
       const stairManager = StairInteractionManager.getInstance();
-      // TODO
-      // stairManager.initializeStairs(floorResult.floorLayout.rooms);
-      console.log(`🏗️ Stair interactions initialized for ${floorResult.floorLayout.rooms.length} rooms`);
+      stairManager.initializeStairs(floorResult.floorLayout.data.tiles.upwardStairTiles, floorResult.floorLayout.data.tiles.downwardStairTiles);
       
       // Detailed rendering verification
       this.verifyFloorRendering(floorResult);

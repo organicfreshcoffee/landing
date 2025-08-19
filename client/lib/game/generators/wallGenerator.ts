@@ -178,46 +178,46 @@ export class WallGenerator {
     return ceilingGroup;
   }
 
-    /**
-   * Generate and render walls and ceiling in one call
-   */
-  static generateAndRenderWalls(
-    scene: THREE.Scene,
-    cubeFloorRenderer: CubeFloorRenderer,
-    options: WallGenerationOptions = {}
-  ): { 
-    wallGroup: THREE.Group; 
-    ceilingGroup?: THREE.Group;
-    wallCount: number; 
-    ceilingCount: number;
-  } {
-    const opts = { ...this.DEFAULT_OPTIONS, ...options };
+  //   /**
+  //  * Generate and render walls and ceiling in one call
+  //  */
+  // static generateAndRenderWalls(
+  //   scene: THREE.Scene,
+  //   cubeFloorRenderer: CubeFloorRenderer,
+  //   options: WallGenerationOptions = {}
+  // ): { 
+  //   wallGroup: THREE.Group; 
+  //   ceilingGroup?: THREE.Group;
+  //   wallCount: number; 
+  //   ceilingCount: number;
+  // } {
+  //   const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
-    // Get floor coordinates from the renderer
-    const floorCoords = CubeFloorRenderer.getAllCoordinates();
+  //   // Get floor coordinates from the renderer
+  //   const floorCoords = CubeFloorRenderer.getAllCoordinates();
     
-    // Generate wall coordinates
-    const wallCoords = this.generateWalls(floorCoords);
+  //   // Generate wall coordinates
+  //   const wallCoords = this.generateWalls(floorCoords);
     
-    // Render walls
-    const wallGroup = this.renderWalls(scene, wallCoords, opts);
+  //   // Render walls
+  //   const wallGroup = this.renderWalls(scene, wallCoords, opts);
     
-    // Optionally render ceiling
-    let ceilingGroup: THREE.Group | undefined;
-    let ceilingCount = 0;
+  //   // Optionally render ceiling
+  //   let ceilingGroup: THREE.Group | undefined;
+  //   let ceilingCount = 0;
     
-    if (opts.showCeiling) {
-      ceilingGroup = this.renderCeiling(scene, floorCoords, opts);
-      ceilingCount = floorCoords.length;
-    }
+  //   if (opts.showCeiling) {
+  //     ceilingGroup = this.renderCeiling(scene, floorCoords, opts);
+  //     ceilingCount = floorCoords.length;
+  //   }
     
-    return { 
-      wallGroup, 
-      ceilingGroup,
-      wallCount: wallCoords.length,
-      ceilingCount
-    };
-  }
+  //   return { 
+  //     wallGroup, 
+  //     ceilingGroup,
+  //     wallCount: wallCoords.length,
+  //     ceilingCount
+  //   };
+  // }
 
   /**
    * Get wall bounds for the generated walls

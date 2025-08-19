@@ -142,6 +142,17 @@ export class FloorRenderer {
     if (opts.showStairs) {
       this.renderStairs(scene, layout.data.tiles.downwardStairTiles, opts, "downward");
     }
+
+    // Render ceiling if enabled (over ALL floor positions including stairs)
+    if (opts.showCeiling) {
+        // combine floor tiles with stair tiles to get all ceiling coords
+        const allCeilingCoords = [
+            ...layout.data.tiles.floorTiles.map(tile => ({ x: tile.x, y: tile.y, z: opts.wallHeight })),
+            ...layout.data.tiles.upwardStairTiles.map(tile => ({ x: tile.x, y: tile.y, z: opts.wallHeight })),
+            ...layout.data.tiles.downwardStairTiles.map(tile => ({ x: tile.x, y: tile.y, z: opts.wallHeight }))
+        ];
+        WallGenerator.renderCeiling(scene, allCeilingCoords, opts);
+    }
   }
 
   /**
@@ -175,13 +186,6 @@ export class FloorRenderer {
             console.log(`🏗️ Rendering ${wallCoords.length} walls to scene`);
             WallGenerator.renderWalls(scene, wallCoords, wallOptions);
         }
-        
-        // TODO: render ceiling
-        // Render ceiling if enabled (over ALL floor positions including stairs)
-        //   if (opts.showCeiling) {
-        //     console.log(`🏠 Rendering ceiling over ${allFloorCoords.length} floor tiles (including above stairs)`);
-        //     WallGenerator.renderCeiling(scene, allFloorCoords, wallOptions);
-        //   }
     } catch (error) {
       console.warn('Failed to render walls:', error);
     }

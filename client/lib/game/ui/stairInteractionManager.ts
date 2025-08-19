@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ServerRoom } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
+import { StairTile } from '../types/api';
 
 export interface StairInteractionData {
   roomId: string;
@@ -44,35 +45,36 @@ export class StairInteractionManager {
   /**
    * Initialize stairs from room data
    */
-  initializeStairs(rooms: ServerRoom[]): void {
+  initializeStairs(upwardsStairs: StairTile[], downwardStairs: StairTile[]): void {
     this.stairs.clear();
     
-    rooms.forEach(room => {
-      if ((room.hasUpwardStair || room.hasDownwardStair) && 
-          room.stairLocationX !== undefined && 
-          room.stairLocationY !== undefined) {
+    // TODO: return room with stair data
+    // rooms.forEach(room => {
+    //   if ((room.hasUpwardStair || room.hasDownwardStair) && 
+    //       room.stairLocationX !== undefined && 
+    //       room.stairLocationY !== undefined) {
         
-        const cubeSize = CubeConfig.getCubeSize();
-        const gridX = room.position.x + room.stairLocationX;
-        const gridY = room.position.y + room.stairLocationY;
-        const worldX = gridX * cubeSize + cubeSize / 2;
-        const worldZ = gridY * cubeSize + cubeSize / 2;
-        const worldY = room.hasDownwardStair ? 0 : cubeSize;
+    //     const cubeSize = CubeConfig.getCubeSize();
+    //     const gridX = room.position.x + room.stairLocationX;
+    //     const gridY = room.position.y + room.stairLocationY;
+    //     const worldX = gridX * cubeSize + cubeSize / 2;
+    //     const worldZ = gridY * cubeSize + cubeSize / 2;
+    //     const worldY = room.hasDownwardStair ? 0 : cubeSize;
         
-        const stairData: StairInteractionData = {
-          roomId: room.id,
-          roomName: room.name,
-          stairType: room.hasUpwardStair ? 'upward' : 'downward',
-          position: new THREE.Vector3(worldX, worldY, worldZ),
-          gridPosition: { x: gridX, y: gridY }
-        };
+    //     const stairData: StairInteractionData = {
+    //       roomId: room.id,
+    //       roomName: room.name,
+    //       stairType: room.hasUpwardStair ? 'upward' : 'downward',
+    //       position: new THREE.Vector3(worldX, worldY, worldZ),
+    //       gridPosition: { x: gridX, y: gridY }
+    //     };
         
-        const key = `${room.id}_${gridX}_${gridY}`;
-        this.stairs.set(key, stairData);
+    //     const key = `${room.id}_${gridX}_${gridY}`;
+    //     this.stairs.set(key, stairData);
         
-        console.log(`🏗️ Registered ${stairData.stairType} stair: ${room.name} at (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`);
-      }
-    });
+    //     console.log(`🏗️ Registered ${stairData.stairType} stair: ${room.name} at (${gridX}, ${gridY}) -> world (${worldX.toFixed(1)}, ${worldY.toFixed(1)}, ${worldZ.toFixed(1)})`);
+    //   }
+    // });
     
     console.log(`✅ StairInteractionManager: Initialized ${this.stairs.size} stairs`);
   }
