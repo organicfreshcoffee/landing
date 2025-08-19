@@ -131,18 +131,17 @@ export class FloorRenderer {
     });
 
     // Render additional elements
-    // TODO
-    // if (opts.showWalls) {
-    //   this.renderWalls(scene, layout.data.tiles.wallTiles, opts, downwardStairPositions);
-    // }
+    if (opts.showWalls) {
+      this.renderWalls(scene, layout.data.tiles.wallTiles, opts, downwardStairPositions);
+    }
     
-    // if (opts.showStairs) {
-    //   this.renderStairs(scene, layout.data.tiles.upwardStairTiles, opts);
-    // }
+    if (opts.showStairs) {
+      this.renderStairs(scene, layout.data.tiles.upwardStairTiles, opts, "upward");
+    }
 
-    // if (opts.showStairs) {
-    //   this.renderStairs(scene, layout.data.tiles.downwardStairTiles, opts);
-    // }
+    if (opts.showStairs) {
+      this.renderStairs(scene, layout.data.tiles.downwardStairTiles, opts, "downward");
+    }
   }
 
   /**
@@ -191,14 +190,14 @@ export class FloorRenderer {
   /**
    * Render stairs in rooms
    */
-  private static renderStairs(scene: THREE.Scene, stairTiles: StairTile[], opts: FloorRenderOptions): void {
+  private static renderStairs(scene: THREE.Scene, stairTiles: StairTile[], opts: FloorRenderOptions, direction: "upward" | "downward"): void {
     try {
         for (const tile of stairTiles) {
-            // TODO: update stair rendering
-            // StairRenderer.renderStairs(scene, tile, {
-            //     cubeSize: opts.cubeSize,
-            //     yOffset: opts.yOffset
-            // });
+            StairRenderer.renderStairs(scene, tile, {
+                cubeSize: opts.cubeSize,
+                yOffset: opts.yOffset,
+                direction: direction
+            });
         }
     } catch (error) {
       console.warn('Failed to render stairs:', error);
