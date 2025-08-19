@@ -59,7 +59,8 @@ export class GameManager {
       (message) => this.webSocketManager.send(JSON.stringify(message)),
       this.selectedCharacter,
       (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos),
-      (action, data, target) => this.sendPlayerAction(action, data, target)
+      (action, data, target) => this.sendPlayerAction(action, data, target),
+      () => this.handleDebugDeath()
     );
 
     this.initializeGame();
@@ -643,6 +644,22 @@ export class GameManager {
     } catch (error) {
       console.error('❌ Error handling player death:', error);
     }
+  }
+
+  private handleDebugDeath(): void {
+    console.log('🗝️ Debug death triggered - simulating player death');
+    
+    // Update health to show death
+    if (this.onHealthUpdate) {
+      this.onHealthUpdate({
+        health: 0,
+        maxHealth: 100,
+        isAlive: false
+      });
+    }
+
+    // Trigger the death sequence (this will open character selection)
+    this.handlePlayerDeath();
   }
 
   private handleRespawnSuccess(playerData: any): void {

@@ -5,6 +5,13 @@ import { GameHUD } from '../ui/gameHUD';
 import { AnimationTest } from '../utils/animationTest';
 import { PlayerManager } from './playerManager';
 
+/**
+ * MovementController handles player movement, keyboard input, and camera controls.
+ * 
+ * Debug Controls:
+ * - Tab: Toggle admin mode (fly mode)
+ * - 9: Trigger debug death and respawn sequence
+ */
 export class MovementController {
   private keysPressed = new Set<string>();
   private localPlayerRotation = { x: 0, y: 0, z: 0 };
@@ -43,7 +50,8 @@ export class MovementController {
     private sendMovementUpdate: (data: any) => void,
     private selectedCharacter: CharacterData,
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
-    private sendPlayerAction?: (action: string, data?: any, target?: string) => void
+    private sendPlayerAction?: (action: string, data?: any, target?: string) => void,
+    private onDebugDeath?: () => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -54,6 +62,16 @@ export class MovementController {
   private setupKeyboardListeners(): void {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!this.isConnected()) return;
+
+      // Handle debug death (key "9")
+      if (event.code === 'Digit9') {
+        event.preventDefault();
+        console.log('🗝️ Debug death key pressed (9) - triggering death sequence');
+        if (this.onDebugDeath) {
+          this.onDebugDeath();
+        }
+        return;
+      }
 
       // Handle admin mode toggle
       if (event.code === 'Tab') {
