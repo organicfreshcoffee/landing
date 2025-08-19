@@ -39,73 +39,45 @@ export class ServerSceneryGenerator {
     console.log(`🏰 ServerSceneryGenerator: Starting floor generation for ${dungeonDagNodeName} from ${serverAddress}`);
     
     try {
-      // Step 1: Get floor layout from server
-      console.log(`📡 ServerSceneryGenerator: Fetching floor layout...`);
-      const floorLayout = await FloorGenerator.getFloorLayout(serverAddress, dungeonDagNodeName);
+      // Step 1: Use FloorRenderer to get and render the floor
+      console.log(`📡 ServerSceneryGenerator: Using FloorRenderer to render floor...`);
+      const { layout: floorLayout, stats } = await FloorRenderer.renderFloor(
+        scene,
+        serverAddress,
+        dungeonDagNodeName,
+        {
+          cubeSize,
+          roomColor: floorColor,
+          hallwayColor: hallwayFloorColor,
+          showWalls: true,
+          showStairs: true
+        }
+      );
 
-      console.log(`🎯 Received layout: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
+      console.log(`🎯 Rendered layout: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
       console.log(`📐 Bounds: ${floorLayout.bounds.width}x${floorLayout.bounds.height}`);
+      console.log(`📊 Rendering stats:`, stats);
 
-      // Clear any existing cube registrations but preserve players and lighting
-      CubeFloorRenderer.clearRegistry();
-      
-      // Use safer clearing method to avoid accidentally removing players
-      this.clearSceneryOnly(scene);
-      
-      // Optional: Add debug logging to see what's in the scene
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🔍 Before floor generation:`);
-        this.debugSceneObjects(scene);
-      }
-
-      // Step 2: Choose optimal rendering method based on available data
-      let result;
-      if (FloorGenerator.hasServerTiles(floorLayout)) {
-        console.log(`🚀 Using optimized server-tile rendering`);
-        result = await DungeonFloorRenderer.renderFromServerTiles(scene, floorLayout, {
-          cubeSize,
-          roomColor: floorColor,
-          hallwayColor: hallwayFloorColor,
-          yOffset: 0,
-          hallwayWidth: 1,
-          showDoors: true,
-          showStairs: false,
-          showStairModels: true,
-          showDebug: false
-        });
-      } else {
-        console.log(`⚙️ Using legacy room/hallway rendering`);
-        result = await DungeonFloorRenderer.renderDungeonFloorFromLayout(scene, floorLayout, {
-          cubeSize,
-          roomColor: floorColor,
-          hallwayColor: hallwayFloorColor,
-          yOffset: 0,
-          hallwayWidth: 1,
-          showDoors: true,
-          showStairs: false,
-          showStairModels: true,
-          showDebug: false
-        });
-      }
+      // Create groups for organization
+      const floorGroup = new THREE.Group();
+      floorGroup.name = 'server-floor';
+      scene.add(floorGroup);
 
       console.log(`✅ Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`📊 Generated: ${result.roomCount} rooms, ${result.hallwayCount} hallways`);
-      console.log(`🎯 Total area: ${result.totalArea} cubes`);
-      console.log(`🟣 Overlaps: ${result.overlapCount} cubes`);
-      console.log(`🧱 Walls: ${result.wallCount} cubes`);
-      console.log(`🏗️ Stairs: ${result.stairCount} models`);
+      console.log(`📊 Generated: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
+      console.log(`🎯 Total tiles: ${stats.totalFloorTiles || 0}`);
 
       return {
-        floorLayout: result.layout,
-        floorGroup: result.floorGroup,
-        wallGroup: result.wallGroup,
-        stairGroup: result.stairGroup,
-        roomCount: result.roomCount,
-        hallwayCount: result.hallwayCount,
-        overlapCount: result.overlapCount,
-        wallCount: result.wallCount,
-        stairCount: result.stairCount,
-        totalArea: result.totalArea
+        floorLayout,
+        floorGroup,
+        wallGroup: null, // FloorRenderer handles walls internally
+        stairGroup: null, // FloorRenderer handles stairs internally
+        roomCount: floorLayout.rooms.length,
+        hallwayCount: floorLayout.hallways.length,
+        overlapCount: 0, // No overlaps with server tiles
+        wallCount: 0, // Handled internally by FloorRenderer
+        stairCount: floorLayout.rooms.filter(r => r.hasUpwardStair || r.hasDownwardStair).length,
+        totalArea: stats.totalFloorTiles || 0
       };
     } catch (error) {
       console.error('Error generating server floor:', error);

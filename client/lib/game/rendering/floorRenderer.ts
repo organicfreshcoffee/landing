@@ -142,6 +142,13 @@ export class FloorRenderer {
       CubeFloorRenderer.registerCubes(floorTiles, opts.cubeColor, 'room');
     }
 
+    // Actually render all the registered cubes to the scene
+    console.log(`🎯 Rendering all registered floor cubes to scene...`);
+    CubeFloorRenderer.renderAllCubes(scene, {
+      cubeSize: opts.cubeSize,
+      yOffset: opts.yOffset
+    });
+
     // Render additional elements
     if (opts.showWalls) {
       this.renderWalls(scene, layout, opts);
@@ -210,6 +217,13 @@ export class FloorRenderer {
       });
       CubeFloorRenderer.registerCubes(Array.from(uniqueCoords.values()), opts.hallwayColor, 'hallway');
     }
+
+    // Actually render all the registered cubes to the scene
+    console.log(`🎯 Legacy: Rendering all registered floor cubes to scene...`);
+    CubeFloorRenderer.renderAllCubes(scene, {
+      cubeSize: opts.cubeSize,
+      yOffset: opts.yOffset
+    });
 
     // Render additional elements
     if (opts.showWalls) {
@@ -388,14 +402,30 @@ export class FloorRenderer {
         y: tile.y
       }));
       
+      console.log(`🧱 Generating walls around ${floorCoords.length} floor tiles`);
+      
       const wallOptions = {
         wallHeight: opts.wallHeight,
         wallColor: opts.wallColor,
         showCeiling: opts.showCeiling,
-        ceilingColor: opts.ceilingColor
+        ceilingColor: opts.ceilingColor,
+        cubeSize: opts.cubeSize
       };
       
-      WallGenerator.generateWalls(floorCoords, wallOptions);
+      // Generate wall coordinates
+      const wallCoords = WallGenerator.generateWalls(floorCoords, wallOptions);
+      
+      // Actually render the walls to the scene
+      if (wallCoords.length > 0) {
+        console.log(`🏗️ Rendering ${wallCoords.length} walls to scene`);
+        WallGenerator.renderWalls(scene, wallCoords, wallOptions);
+      }
+      
+      // Render ceiling if enabled
+      if (opts.showCeiling) {
+        console.log(`🏠 Rendering ceiling over ${floorCoords.length} floor tiles`);
+        WallGenerator.renderCeiling(scene, floorCoords, wallOptions);
+      }
     } catch (error) {
       console.warn('Failed to render walls:', error);
     }
