@@ -14,7 +14,6 @@ import {
   ServerFloorLayout
 } from '../types/generator';
 import { CubeFloorRenderer, CubePosition } from './cubeFloorRenderer';
-import { RoomRenderer } from './roomRenderer';
 import { WallGenerator } from '../generators/wallGenerator';
 import { StairRenderer } from './stairRenderer';
 import { CubeConfig } from '../config/cubeConfig';
