@@ -49,8 +49,7 @@ export class StairRenderer {
         throw new Error('Failed to load stair model');
       }
 
-      console.log(`🏗️ Stair model loaded successfully, children count: ${model.children.length}`);
-      
+            
       // Store the template model
       this.stairModel = model;
       
@@ -75,8 +74,7 @@ export class StairRenderer {
         }
       });
 
-      console.log('🏗️ Stair model loaded successfully');
-      this.isLoading = false;
+            this.isLoading = false;
       return this.stairModel.clone();
     }).catch(error => {
       console.error('Failed to load stair model:', error);
@@ -102,8 +100,7 @@ export class StairRenderer {
     const stairGroup = new THREE.Group();
     stairGroup.name = 'stairs';
 
-    console.log(`🏗️ StairRenderer: Checking ${tiles.length} tiles for stairs...`);
-
+    
     let stairCount = 0;
     // TypeError: tiles is not iterable
     for (const stair of tiles) {
@@ -112,8 +109,7 @@ export class StairRenderer {
         if (stairMesh) {
           stairGroup.add(stairMesh);
           stairCount++;
-          console.log(`✅ Successfully added stairs`);
-        } else {
+                  } else {
           console.warn(`⚠️ Failed to create stairs`);
         }
       } catch (error) {
@@ -122,12 +118,9 @@ export class StairRenderer {
     }
 
     scene.add(stairGroup);
-    console.log(`✅ StairRenderer: Added stair group to scene with ${stairCount} stair models`);
-    console.log(`🔍 Stair group info: name="${stairGroup.name}", children=${stairGroup.children.length}, visible=${stairGroup.visible}`);
-    
+            
     // Debug: Check scene hierarchy
-    console.log(`🔍 Scene now has ${scene.children.length} top-level objects`);
-    
+        
     return stairGroup;
   }
 
@@ -177,12 +170,10 @@ export class StairRenderer {
       if (options.direction === "downward") {
         // For downward stairs, position at floor level (as if going down)
         worldY = options.yOffset! + scaledModelBottomOffset;
-        console.log(`⬇️ Positioning downward stairs`);
-      } else {
+              } else {
         // For upward stairs, position on top of floor cube
         worldY = options.yOffset! + cubeSize + scaledModelBottomOffset;
-        console.log(`⬆️ Positioning upward stairs`);
-      }
+              }
 
       stairModel.position.set(worldX - cubeSize, worldY, worldZ);
 
@@ -226,8 +217,7 @@ export class StairRenderer {
   private static hasStairs(room: ServerRoom): boolean {
     const hasStairs = room.hasUpwardStair || room.hasDownwardStair;
     if (hasStairs) {
-      console.log(`🔍 Room ${room.name} has stairs: upward=${room.hasUpwardStair}, downward=${room.hasDownwardStair}, location=(${room.stairLocationX},${room.stairLocationY})`);
-    }
+          }
     return hasStairs;
   }
 
@@ -270,11 +260,9 @@ export class StairRenderer {
   static getExcludedFloorCoordinates(rooms: ServerRoom[]): CubePosition[] {
     const excludedCoords: CubePosition[] = [];
     
-    console.log(`🔍 Checking ${rooms.length} rooms for downward stairs to exclude...`);
-    
+        
     rooms.forEach(room => {
-      console.log(`🔍 Room ${room.name}: hasUpwardStair=${room.hasUpwardStair}, hasDownwardStair=${room.hasDownwardStair}, stairLocationX=${room.stairLocationX}, stairLocationY=${room.stairLocationY}`);
-      
+            
       if (room.hasDownwardStair && 
           room.stairLocationX !== undefined && 
           room.stairLocationY !== undefined) {
@@ -283,12 +271,10 @@ export class StairRenderer {
           y: room.position.y + room.stairLocationY
         };
         excludedCoords.push(coord);
-        console.log(`🚫 Excluding floor cube at (${coord.x}, ${coord.y}) for downward stairs in room ${room.name}`);
-      }
+              }
     });
     
-    console.log(`🚫 Total excluded coordinates from StairRenderer: ${excludedCoords.length}`, excludedCoords);
-    return excludedCoords;
+        return excludedCoords;
   }
 
   /**
@@ -316,6 +302,5 @@ export class StairRenderer {
     // Also dispose of ModelLoader resources
     ModelLoader.dispose();
     
-    console.log('🧹 Stair renderer resources cleaned up');
-  }
+      }
 }

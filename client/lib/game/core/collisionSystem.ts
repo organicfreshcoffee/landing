@@ -70,8 +70,7 @@ export class CollisionSystem {
       }
     });
 
-    console.log(`🔄 Updated collision data: ${this.floorCubes.size} floors, ${this.wallCubes.size} walls, ${this.ceilingCubes.size} ceilings`);
-  }
+      }
 
   /**
    * Get player collision box at a given position
@@ -309,13 +308,11 @@ export class CollisionSystem {
       // Floor cubes go from 0 to cubeSize (5), so logical height is 5
       // We want the player to appear standing on top, so add a moderate offset
       const offset = 1.0; // Raise player by 1 unit above the cube top
-      console.log(`🏠 Visual floor height: logical=${logicalHeight}, visual=${logicalHeight + offset}`);
-      return logicalHeight + offset;
+            return logicalHeight + offset;
     } else {
       // Player is on ground level - raise them slightly above ground
       const offset = 1.0;
-      console.log(`🏠 Visual ground height: ${offset}`);
-      return offset;
+            return offset;
     }
   }
 

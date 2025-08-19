@@ -270,8 +270,7 @@ export default function Dashboard() {
       const zip = new JSZip();
       
       // 1. Get Firebase Auth user data
-      console.log('Exporting Firebase Auth data...');
-      const firebaseUserData = {
+            const firebaseUserData = {
         uid: user.uid,
         email: user.email,
         emailVerified: user.emailVerified,
@@ -291,8 +290,7 @@ export default function Dashboard() {
       zip.file('firebase_auth_data.json', JSON.stringify(firebaseUserData, null, 2));
       
       // 2. Get user data from landing page MongoDB
-      console.log('Exporting landing page data...');
-      try {
+            try {
         const landingDataResponse = await axios.get(apiEndpoints.exportUserData(), {
           headers: {
             Authorization: `Bearer ${token}`
@@ -311,8 +309,7 @@ export default function Dashboard() {
       }
       
       // 3. Get data from each game server
-      console.log('Exporting game server data...');
-      const serverDataPromises = servers.map(async (server) => {
+            const serverDataPromises = servers.map(async (server) => {
         try {
           const formattedUrl = formatServerUrl(server.server_address);
           const response = await axios.get(`${formattedUrl}/api/user/export-data`, {
@@ -369,8 +366,7 @@ export default function Dashboard() {
       zip.file('export_summary.json', JSON.stringify(summary, null, 2));
       
       // 5. Generate and download the zip file
-      console.log('Generating zip file...');
-      const content = await zip.generateAsync({ type: 'blob' });
+            const content = await zip.generateAsync({ type: 'blob' });
       
       // Create download link
       const url = window.URL.createObjectURL(content);
@@ -382,8 +378,7 @@ export default function Dashboard() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      console.log('Account data export completed successfully');
-      
+            
     } catch (error) {
       console.error('Error during account data export:', error);
       alert('Failed to export account data. Please try again later.');
@@ -407,8 +402,7 @@ export default function Dashboard() {
       };
       
       // 1. Get Firebase Auth user data
-      console.log('Loading Firebase Auth data...');
-      allAccountData.firebase = {
+            allAccountData.firebase = {
         uid: user.uid,
         email: user.email,
         emailVerified: user.emailVerified,
@@ -427,8 +421,7 @@ export default function Dashboard() {
       };
       
       // 2. Get user data from landing page MongoDB
-      console.log('Loading landing page data...');
-      try {
+            try {
         const landingDataResponse = await axios.get(apiEndpoints.viewUserData(), {
           headers: {
             Authorization: `Bearer ${token}`
@@ -447,8 +440,7 @@ export default function Dashboard() {
       }
       
       // 3. Get data from each game server
-      console.log('Loading game server data...');
-      const serverDataPromises = servers.map(async (server) => {
+            const serverDataPromises = servers.map(async (server) => {
         try {
           const formattedUrl = formatServerUrl(server.server_address);
           const response = await axios.get(`${formattedUrl}/api/user/export-data`, {
@@ -480,8 +472,7 @@ export default function Dashboard() {
       setAccountData(allAccountData);
       setIsViewingAccountData(true);
       
-      console.log('Account data loaded successfully');
-      
+            
     } catch (error) {
       console.error('Error loading account data:', error);
       alert('Failed to load account data. Please try again later.');
@@ -536,11 +527,9 @@ export default function Dashboard() {
         firebase: null as any
       };
       
-      console.log('Starting account deletion process...');
-      
+            
       // 1. Delete data from all game servers
-      console.log('Deleting data from game servers...');
-      const serverDeletePromises = servers.map(async (server) => {
+            const serverDeletePromises = servers.map(async (server) => {
         try {
           const formattedUrl = formatServerUrl(server.server_address);
           const response = await axios.delete(`${formattedUrl}/api/user/delete-data`, {
@@ -570,8 +559,7 @@ export default function Dashboard() {
       deleteResults.gameServers = await Promise.all(serverDeletePromises);
       
       // 2. Delete data from landing page
-      console.log('Deleting data from landing page...');
-      try {
+            try {
         const landingDeleteResponse = await axios.delete(apiEndpoints.deleteUserData(), {
           headers: {
             Authorization: `Bearer ${token}`
@@ -592,8 +580,7 @@ export default function Dashboard() {
       }
       
       // 3. Delete user from Firebase Authentication
-      console.log('Deleting Firebase user account...');
-      try {
+            try {
         await user.delete();
         deleteResults.firebase = {
           success: true,
@@ -993,8 +980,7 @@ export default function Dashboard() {
                   <button 
                     onClick={async () => {
                       try {
-                        console.log('Logging out user...');
-                        await logout();
+                                                await logout();
                         router.push('/');
                       } catch (logoutError) {
                         console.error('Failed to logout after account deletion:', logoutError);

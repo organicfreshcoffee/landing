@@ -14,8 +14,7 @@ export class ModelLoader {
       this.dracoLoader = new DRACOLoader();
       // Set the path to the DRACO decoder (served from node_modules)
       this.dracoLoader.setDecoderPath('/draco/');
-      console.log('🔧 DRACOLoader initialized with decoder path: /draco/');
-    }
+          }
     return this.dracoLoader;
   }
 
@@ -24,8 +23,7 @@ export class ModelLoader {
     const loader = new GLTFLoader();
     const dracoLoader = this.getDracoLoader();
     loader.setDRACOLoader(dracoLoader);
-    console.log('🔧 GLTFLoader configured with DRACO support');
-    return loader;
+        return loader;
   }
 
   static async loadPlayerModel(): Promise<ModelData> {
@@ -33,8 +31,7 @@ export class ModelLoader {
 
     // Try to load the animated stickman model (GLB format)
     try {
-      console.log('Attempting to load stickman.glb...');
-      const gltf = await new Promise<any>((resolve, reject) => {
+            const gltf = await new Promise<any>((resolve, reject) => {
         loader.load(
           '/assets/3d-models/stickman.glb',
           resolve,
@@ -43,18 +40,15 @@ export class ModelLoader {
         );
       });
 
-      console.log('Successfully loaded stickman.glb with', gltf.animations?.length || 0, 'animations');
-
+      
       // Use SkeletonUtils.clone to properly handle SkinnedMesh and skeleton data
       const freshScene = SkeletonUtils.clone(gltf.scene) as THREE.Group;
       
-      console.log('🔄 Cloned fresh scene with SkeletonUtils, UUID:', freshScene.uuid);
-      
+            
       // Debug: Log animation details
       if (gltf.animations && gltf.animations.length > 0) {
         gltf.animations.forEach((anim: any, index: number) => {
-          console.log(`Animation ${index}: "${anim.name}" - Duration: ${anim.duration}s - Tracks: ${anim.tracks.length}`);
-        });
+                  });
       } else {
         console.warn('⚠️ No animations found in stickman.glb!');
       }
@@ -86,18 +80,15 @@ export class ModelLoader {
       // Reset position to origin for template - individual instances will apply offsets
       freshScene.position.set(0, 0, 0);
       
-      console.log('Template model reset to origin, ground offset calculated (positioned above floor cubes):', groundOffset);
-      
+            
       // Debug: Check for bones/skeleton structure
       let foundSkeleton = false;
       freshScene.traverse((child: THREE.Object3D) => {
         if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
-          console.log(`Found ${child.type}:`, child.name, 'position:', child.position.toArray(), 'world position:', child.getWorldPosition(new THREE.Vector3()).toArray());
-          foundSkeleton = true;
+                    foundSkeleton = true;
         }
       });
-      console.log('Has skeleton/bones:', foundSkeleton);
-      
+            
       // Ensure all materials render properly and are visible
       freshScene.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh) {
@@ -133,8 +124,7 @@ export class ModelLoader {
         groundOffset
       };
     } catch (error) {
-      console.log('StickMan GLB model not available, using fallback cube:', error);
-      
+            
       // Fallback to cube geometry with improved appearance
       const geometry = new THREE.BoxGeometry(0.5, 1.8, 0.3); // Human-like proportions, smaller size
       const material = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
@@ -195,6 +185,5 @@ export class ModelLoader {
       this.dracoLoader = null;
     }
     this.loader = null;
-    console.log('🧹 ModelLoader resources cleaned up');
-  }
+      }
 }

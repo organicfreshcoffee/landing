@@ -61,8 +61,7 @@ export class TextureManager {
       texturePath,
       // onLoad
       (loadedTexture) => {
-        console.log(`🖼️ Loaded texture: ${texturePath}`);
-      },
+              },
       // onProgress
       undefined,
       // onError
@@ -173,8 +172,7 @@ export class TextureManager {
       texture.dispose();
     });
     this.textureCache.clear();
-    console.log('🧹 Cleared texture cache');
-  }
+      }
 
   /**
    * Get cache statistics

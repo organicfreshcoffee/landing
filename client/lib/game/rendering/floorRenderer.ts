@@ -75,8 +75,7 @@ export class FloorRenderer {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
     // Clear any existing floor elements before rendering new floor
-    console.log('🧹 Clearing previous floor elements...');
-    this.clearFloor(scene);
+        this.clearFloor(scene);
     
     // Fetch layout with server tiles
     const layout = await this.getFloorLayout(serverAddress, dungeonDagNodeName);
@@ -99,8 +98,7 @@ export class FloorRenderer {
   
     // Get downward stair positions to exclude from floor rendering
     const downwardStairPositions = layout.data.tiles.downwardStairTiles;
-    console.log(`🪜 Found ${downwardStairPositions.length} downward stair positions to exclude from floor`);
-
+    
     // Render different tile types with different colors
     // filter layout.data.tiles.floorTiles by floorTiles.type
     const roomTiles: CubePosition[] = [];
@@ -123,8 +121,7 @@ export class FloorRenderer {
     }
 
     // Actually render all the registered cubes to the scene
-    console.log(`🎯 Rendering all registered floor cubes to scene...`);
-    CubeFloorRenderer.renderAllCubes(scene, {
+        CubeFloorRenderer.renderAllCubes(scene, {
       cubeSize: opts.cubeSize,
       yOffset: opts.yOffset
     });
@@ -182,8 +179,7 @@ export class FloorRenderer {
 
         // Actually render the walls to the scene
         if (wallCoords.length > 0) {
-            console.log(`🏗️ Rendering ${wallCoords.length} walls to scene`);
-            WallGenerator.renderWalls(scene, wallCoords, wallOptions);
+                        WallGenerator.renderWalls(scene, wallCoords, wallOptions);
         }
     } catch (error) {
       console.warn('Failed to render walls:', error);
@@ -209,8 +205,7 @@ export class FloorRenderer {
    * Clear all rendered elements
    */
   static clearFloor(scene: THREE.Scene): void {
-    console.log('🧹 Clearing all floor elements from scene...');
-    
+        
     // Clear CubeFloorRenderer registry first
     CubeFloorRenderer.clearRegistry();
     
@@ -242,8 +237,7 @@ export class FloorRenderer {
       }
     });
     
-    console.log(`🧹 Found ${objectsToRemove.length} floor-related objects to remove`);
-    
+        
     // Remove all found objects and dispose resources
     objectsToRemove.forEach(obj => {
       // Remove from parent (which could be scene or a group)
@@ -287,6 +281,5 @@ export class FloorRenderer {
       }
     });
     
-    console.log('✅ Floor clearing complete');
-  }
+      }
 }

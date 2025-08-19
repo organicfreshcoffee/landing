@@ -64,8 +64,7 @@ export class WallGenerator {
     });
 
     scene.add(wallGroup);
-    console.log(`🏗️ Rendered ${wallCoords.length} wall cubes with textures in scene`);
-    
+        
     return wallGroup;
   }
 
@@ -106,8 +105,7 @@ export class WallGenerator {
     });
 
     scene.add(ceilingGroup);
-    console.log(`🏠 Rendered ${floorCoords.length} ceiling cubes with textures in scene`);
-    
+        
     return ceilingGroup;
   }
 }

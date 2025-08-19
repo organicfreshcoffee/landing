@@ -131,8 +131,7 @@ export class PlayerManager {
     // Store sprite mesh reference for texture updates
     this.spriteMeshReferences.set(player.id, spriteMesh);
     
-    console.log(`🎮 Created sprite player: ${character.name} (${character.type}${character.style}) for ${isLocalPlayer ? 'local' : 'other'} player`);
-    
+        
     return {
       model: playerGroup,
       mixer: this.spriteAnimations.get(player.id)?.mixer,
@@ -197,8 +196,7 @@ export class PlayerManager {
   private static fixSkinnedMeshes(playerModel: THREE.Group, playerId: string): void {
     playerModel.traverse((child: THREE.Object3D) => {
       if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
-        console.log(`Player ${playerId} - ${child.type}:`, child.name, 'local pos:', child.position.toArray());
-        
+                
         // Fix SkinnedMesh coordinate system issues
         if (child.type === 'SkinnedMesh') {
           // Force the SkinnedMesh to respect parent transforms
@@ -206,8 +204,7 @@ export class PlayerManager {
           
           // Reset the SkinnedMesh to origin if it's not already there
           if (child.position.x !== 0 || child.position.y !== 0 || child.position.z !== 0) {
-            console.log(`Resetting SkinnedMesh position for player ${playerId}`);
-            child.position.set(0, 0, 0);
+                        child.position.set(0, 0, 0);
           }
           
           // Ensure the SkinnedMesh doesn't have its own transform that conflicts
@@ -218,11 +215,9 @@ export class PlayerManager {
           if (skinnedMesh.skeleton) {
             // Force skeleton to update relative to parent
             skinnedMesh.skeleton.update();
-            console.log(`Updated skeleton for player ${playerId}`);
-          }
+                      }
           
-          console.log(`Fixed SkinnedMesh for player ${playerId}`);
-        }
+                  }
       }
     });
   }
@@ -263,8 +258,7 @@ export class PlayerManager {
         }
       });
       
-      console.log('Created animation actions for player:', Object.keys(actions));
-    }
+          }
 
     return { model: playerModel, mixer, actions };
   }
@@ -289,8 +283,7 @@ export class PlayerManager {
   }
 
   private static positionPlayer(playerModel: THREE.Group, player: Player, groundOffset?: { x: number; y: number; z: number }): void {
-    console.log(`Setting player ${player.id} position to:`, player.position);
-    
+        
     // Apply ground offset if provided, otherwise use player position directly
     if (groundOffset) {
       playerModel.position.set(
@@ -325,9 +318,7 @@ export class PlayerManager {
     playerModel.traverse((child: THREE.Object3D) => {
       if (child.type === 'SkinnedMesh') {
         const worldPos = child.getWorldPosition(new THREE.Vector3());
-        console.log(`Final world position for player ${player.id} SkinnedMesh:`, worldPos.toArray());
-        console.log(`Expected position:`, [player.position.x, player.position.y, player.position.z]);
-        
+                        
         // If world position is still wrong, this indicates a deeper issue
         if (Math.abs(worldPos.x - player.position.x) > 0.1 || 
             Math.abs(worldPos.z - player.position.z) > 0.1) {
@@ -416,8 +407,7 @@ export class PlayerManager {
 
     // Only update if direction changed
     if (newDirection !== currentDirection) {
-      console.log(`🔄 Updating sprite direction for player ${playerId}: ${currentDirection} → ${newDirection}`);
-      
+            
       // Update stored direction
       this.spriteDirections.set(playerId, newDirection);
       animData.direction = newDirection;

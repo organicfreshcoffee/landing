@@ -143,8 +143,7 @@ export default function CharacterSelection({ onCharacterSelected, onBack }: Char
         style: selectedStyle,
         name: CHARACTER_CLASSES[selectedClass as keyof typeof CHARACTER_CLASSES]
       };
-      console.log('🎮 Character selected:', characterData);
-      onCharacterSelected(characterData);
+            onCharacterSelected(characterData);
     }
   };
 

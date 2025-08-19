@@ -57,13 +57,11 @@ export default function Game() {
       try {
         setCheckingExistingCharacter(true);
         const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-        console.log('🔍 Checking for existing character on server:', serverAddress);
-        
+                
         const statusResponse = await DungeonApi.getCurrentStatus(serverAddress);
         
         if (statusResponse.success && statusResponse.data.isAlive) {
-          console.log('✅ Found existing character:', statusResponse.data.character);
-          
+                    
           // Set the character from server response
           setSelectedCharacter({
             type: statusResponse.data.character.type,
@@ -81,19 +79,15 @@ export default function Game() {
           // Store the player position and rotation for later use
           const playerPosition = statusResponse.data.position;
           const playerRotation = statusResponse.data.rotation;
-          console.log('📍 Player position:', playerPosition);
-          console.log('🔄 Player rotation:', playerRotation);
-
+                    
           // Store these in sessionStorage so GameManager can use them
           sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
           sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
         } else {
-          console.log('🚫 No existing character found or character not alive');
-        }
+                  }
       } catch (error) {
         if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
-          console.log('🚫 Player is not alive, showing character selection');
-        } else {
+                  } else {
           console.error('❌ Error checking for existing character:', error);
         }
       } finally {
@@ -109,9 +103,7 @@ export default function Game() {
     if (!server || !user || !canvasRef.current || !selectedCharacter) return;
 
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-    console.log('🔗 Game: Connecting to server with protocol:', serverAddress);
-    console.log('🎮 Selected Character:', selectedCharacter);
-    
+            
     // Initialize game manager
     const initGame = async () => {
       const gameManager = new GameManager(
@@ -164,15 +156,13 @@ export default function Game() {
 
   // Handle character selection
   const handleCharacterSelected = (character: CharacterData) => {
-    console.log('🎮 Character selected:', character);
-    
+        
     // Update the character state
     setSelectedCharacter(character);
     
     // If we're respawning, send respawn request
     if (isRespawning && gameManagerRef.current) {
-      console.log('🔄 Sending respawn request for character:', character);
-      gameManagerRef.current.sendRespawnRequest(character);
+            gameManagerRef.current.sendRespawnRequest(character);
       setIsRespawning(false);
       
       // Reset health to alive state (will be updated by server response)
@@ -185,8 +175,7 @@ export default function Game() {
     
     // If we already have a running GameManager, update its character data
     if (gameManagerRef.current && !isRespawning) {
-      console.log('🔄 Updating existing GameManager with new character');
-      gameManagerRef.current.updateSelectedCharacter(character);
+            gameManagerRef.current.updateSelectedCharacter(character);
     }
   };
 
@@ -200,8 +189,7 @@ export default function Game() {
     if (!server || !gameManagerRef.current) return;
     
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-    console.log('🔄 Game: Manual reconnect to server:', serverAddress);
-    gameManagerRef.current.manualReconnect(serverAddress);
+        gameManagerRef.current.manualReconnect(serverAddress);
   };
 
   // Render connection status with quality information
