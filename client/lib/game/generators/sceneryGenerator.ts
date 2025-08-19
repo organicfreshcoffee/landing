@@ -4,6 +4,7 @@ import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
 import { CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 import { CubeConfig } from '../config/cubeConfig';
 import { DungeonApi } from '../network/dungeonApi';
+import { GeneratedFloorTilesResponse } from '../types/api';
 
 export class ServerSceneryGenerator {
   /**
@@ -19,16 +20,13 @@ export class ServerSceneryGenerator {
     dungeonDagNodeName: string,
     options: ServerSceneryOptions = {}
   ): Promise<{
-    floorLayout: ServerFloorLayout;
+    floorLayout: GeneratedFloorTilesResponse;
     floorGroup: THREE.Group;
     wallGroup: THREE.Group | null;
     stairGroup: THREE.Group | null;
-    roomCount: number;
-    hallwayCount: number;
     overlapCount: number;
     wallCount: number;
     stairCount: number;
-    totalArea: number;
   }> {
     const {
       cubeSize = CubeConfig.getCubeSize(),
@@ -41,7 +39,7 @@ export class ServerSceneryGenerator {
     try {
       // Step 1: Use FloorRenderer to get and render the floor
       console.log(`📡 ServerSceneryGenerator: Using FloorRenderer to render floor...`);
-      const { layout: floorLayout, stats } = await FloorRenderer.renderFloor(
+      const floorLayout = await FloorRenderer.renderFloor(
         scene,
         serverAddress,
         dungeonDagNodeName,
@@ -54,30 +52,21 @@ export class ServerSceneryGenerator {
         }
       );
 
-      console.log(`🎯 Rendered layout: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
-      console.log(`📐 Bounds: ${floorLayout.bounds.width}x${floorLayout.bounds.height}`);
-      console.log(`📊 Rendering stats:`, stats);
-
       // Create groups for organization
       const floorGroup = new THREE.Group();
       floorGroup.name = 'server-floor';
       scene.add(floorGroup);
 
       console.log(`✅ Server floor generation finished for: ${dungeonDagNodeName}`);
-      console.log(`📊 Generated: ${floorLayout.rooms.length} rooms, ${floorLayout.hallways.length} hallways`);
-      console.log(`🎯 Total tiles: ${stats.totalFloorTiles || 0}`);
 
       return {
         floorLayout,
         floorGroup,
         wallGroup: null, // FloorRenderer handles walls internally
         stairGroup: null, // FloorRenderer handles stairs internally
-        roomCount: floorLayout.rooms.length,
-        hallwayCount: floorLayout.hallways.length,
         overlapCount: 0, // No overlaps with server tiles
         wallCount: 0, // Handled internally by FloorRenderer
-        stairCount: floorLayout.rooms.filter(r => r.hasUpwardStair || r.hasDownwardStair).length,
-        totalArea: stats.totalFloorTiles || 0
+        stairCount: floorLayout.data.tiles.upwardStairTiles.length + floorLayout.data.tiles.downwardStairTiles.length,
       };
     } catch (error) {
       console.error('Error generating server floor:', error);
