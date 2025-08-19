@@ -190,12 +190,17 @@ export class StairRenderer {
       stairModel.userData = {
         type: 'stairs',
         direction: options.direction,
+        roomName: tile.room_name,
+        roomId: tile.room_id,
         stairLocationX: tile.x,
         stairLocationY: tile.y,
         // Store world coordinates for player positioning
         worldX: worldX - cubeSize,
         worldY: worldY,
-        worldZ: worldZ
+        worldZ: worldZ,
+        // Add stair type flags for easier searching
+        hasUpwardStair: options.direction === 'upward',
+        hasDownwardStair: options.direction === 'downward'
       };
 
       console.log(
