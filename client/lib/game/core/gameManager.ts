@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData, PlayerActionData, SpellActionData } from '../types';
-import { ModelLoader, AnimationTest } from '../utils';
 import { PlayerManager } from './playerManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
@@ -207,15 +206,10 @@ export class GameManager {
     if (this.onFloorChange && initialFloor) {
       this.onFloorChange(initialFloor);
     }
-    
-    // Create test runner for animation debugging
-    await AnimationTest.createTestRunner(this.sceneManager.scene);
-    
-        
         
     // Connect to WebSocket
-        await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
-      }
+    await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
+  }
 
   private handleGameMessage(message: GameMessage): void {
         
@@ -1263,39 +1257,10 @@ export class GameManager {
       localPlayer: this.localPlayerRef.current?.position,
       localCharacter: this.selectedCharacter,
       animations: Array.from(this.playersAnimations.keys()),
-      testRunner: AnimationTest.getDebugInfo(),
       totalPlayersInMap: this.players.size,
       totalAnimationsTracked: this.playersAnimations.size
     };
   }
-
-  // Debug methods for animation testing
-  toggleTestRunner(): void {
-    AnimationTest.toggleTestRunner(this.sceneManager.scene);
-  }
-
-  removeTestRunner(): void {
-    AnimationTest.removeTestRunner(this.sceneManager.scene);
-  }
-
-  // Debug method for player state (can be called from browser console)
-  debugPlayers(): void {
-                
-    this.players.forEach((player, id) => {
-      const hasAnimation = this.playersAnimations.has(id);
-      const meshInScene = player.mesh ? this.sceneManager.scene.getObjectByProperty('uuid', player.mesh.uuid) !== undefined : false;
-      
-      console.log(`Player ${id}:`, {
-        character: player.character?.name || 'unknown',
-        position: player.position,
-        hasMesh: !!player.mesh,
-        meshInScene,
-        hasAnimation,
-        isMoving: player.isMoving
-      });
-    });
-    
-      }
 
   cleanup(): void {
     this.webSocketManager.close();

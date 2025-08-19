@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { PlayerAnimationData, CharacterData, SpellActionData } from '../types';
 import { CollisionSystem } from './collisionSystem';
 import { GameHUD } from '../ui/gameHUD';
-import { AnimationTest } from '../utils/animationTest';
 import { PlayerManager } from './playerManager';
 
 /**
@@ -500,9 +499,6 @@ export class MovementController {
     this.playersAnimations.forEach((animData) => {
       animData.mixer.update(smoothDelta);
     });
-    
-    // Update test runner animation for debugging with smooth delta
-    AnimationTest.updateTestRunner(smoothDelta);
   }
 
   private sendMovementUpdateIfNeeded(userId: string, moved: boolean, oldRotation: any): void {
