@@ -106,30 +106,47 @@ export class FloorRenderer {
 
     console.log(`🎯 Rendering ${layout.serverFloorTiles.length} server-provided floor tiles`);
     
-    // Convert server tiles to CubePosition format
-    const floorTiles: CubePosition[] = layout.serverFloorTiles.map(tile => ({
+    // Get downward stair positions to exclude from floor rendering
+    const downwardStairPositions = this.getDownwardStairPositions(layout);
+    console.log(`🪜 Found ${downwardStairPositions.length} downward stair positions to exclude from floor`);
+    
+    // Convert server tiles to CubePosition format and filter out downward stairs
+    const allFloorTiles: CubePosition[] = layout.serverFloorTiles.map(tile => ({
       x: tile.x,
       y: tile.y
     }));
+    
+    const floorTiles = this.filterOutStairPositions(allFloorTiles, downwardStairPositions);
+    console.log(`🎯 Filtered floor tiles: ${allFloorTiles.length} -> ${floorTiles.length} (excluded ${allFloorTiles.length - floorTiles.length} stair positions)`);
 
     // Render different tile types with different colors
     const roomTiles: CubePosition[] = [];
     const hallwayTiles: CubePosition[] = [];
     
-    // Categorize tiles if server provides room/hallway specific tiles
+    // Categorize tiles if server provides room/hallway specific tiles (also filter out stairs)
     if (layout.serverRoomTiles) {
       Object.values(layout.serverRoomTiles).forEach(tiles => {
-        tiles.forEach(tile => roomTiles.push({ x: tile.x, y: tile.y }));
+        tiles.forEach(tile => {
+          const pos = { x: tile.x, y: tile.y };
+          if (!this.isStairPosition(pos, downwardStairPositions)) {
+            roomTiles.push(pos);
+          }
+        });
       });
     }
     
     if (layout.serverHallwayTiles) {
       Object.values(layout.serverHallwayTiles).forEach(tiles => {
-        tiles.forEach(tile => hallwayTiles.push({ x: tile.x, y: tile.y }));
+        tiles.forEach(tile => {
+          const pos = { x: tile.x, y: tile.y };
+          if (!this.isStairPosition(pos, downwardStairPositions)) {
+            hallwayTiles.push(pos);
+          }
+        });
       });
     }
 
-    // Register cubes with appropriate colors
+    // Register cubes with appropriate colors (excluding stair positions)
     if (roomTiles.length > 0) {
       CubeFloorRenderer.registerCubes(roomTiles, opts.roomColor, 'room');
     }
@@ -137,7 +154,7 @@ export class FloorRenderer {
       CubeFloorRenderer.registerCubes(hallwayTiles, opts.hallwayColor, 'hallway');
     }
     
-    // If no categorized tiles, use all floor tiles with default color
+    // If no categorized tiles, use all floor tiles with default color (already filtered)
     if (roomTiles.length === 0 && hallwayTiles.length === 0) {
       CubeFloorRenderer.registerCubes(floorTiles, opts.cubeColor, 'room');
     }
@@ -151,7 +168,7 @@ export class FloorRenderer {
 
     // Render additional elements
     if (opts.showWalls) {
-      this.renderWalls(scene, layout, opts);
+      this.renderWalls(scene, layout, opts, downwardStairPositions);
     }
     
     if (opts.showStairs) {
@@ -171,15 +188,23 @@ export class FloorRenderer {
     
     console.log(`⚙️ Legacy rendering: ${layout.rooms.length} rooms, ${layout.hallways.length} hallways`);
     
-    // Render rooms
+    // Get downward stair positions to exclude from floor rendering
+    const downwardStairPositions = this.getDownwardStairPositions(layout);
+    console.log(`🪜 Found ${downwardStairPositions.length} downward stair positions to exclude from floor`);
+    
+    // Render rooms (excluding downward stair positions)
     const roomCoordinates: CubePosition[] = [];
     layout.rooms.forEach(room => {
       for (let x = 0; x < room.width; x++) {
         for (let y = 0; y < room.height; y++) {
-          roomCoordinates.push({
+          const pos = {
             x: room.position.x + x,
             y: room.position.y + y
-          });
+          };
+          // Don't render floor tile if there's a downward stair at this position
+          if (!this.isStairPosition(pos, downwardStairPositions)) {
+            roomCoordinates.push(pos);
+          }
         }
       }
     });
@@ -188,7 +213,7 @@ export class FloorRenderer {
       CubeFloorRenderer.registerCubes(roomCoordinates, opts.roomColor, 'room');
     }
 
-    // Render hallways  
+    // Render hallways (they don't have stairs, so no filtering needed)
     const hallwayCoordinates: CubePosition[] = [];
     layout.hallways.forEach(hallway => {
       if (hallway.segments) {
@@ -227,7 +252,7 @@ export class FloorRenderer {
 
     // Render additional elements
     if (opts.showWalls) {
-      this.renderWalls(scene, layout, opts);
+      this.renderWalls(scene, layout, opts, downwardStairPositions);
     }
     
     if (opts.showStairs) {
@@ -394,15 +419,15 @@ export class FloorRenderer {
   /**
    * Render walls around the floor
    */
-  private static renderWalls(scene: THREE.Scene, layout: ServerFloorLayout, opts: FloorRenderOptions): void {
+  private static renderWalls(scene: THREE.Scene, layout: ServerFloorLayout, opts: FloorRenderOptions, excludedStairPositions: CubePosition[] = []): void {
     try {
-      // Get all floor coordinates for wall generation
-      const floorCoords = this.getAllFloorTiles(layout).map(tile => ({
+      // Get all floor coordinates for wall generation (including stair positions for ceiling)
+      const allFloorCoords = this.getAllFloorTiles(layout).map(tile => ({
         x: tile.x,
         y: tile.y
       }));
       
-      console.log(`🧱 Generating walls around ${floorCoords.length} floor tiles`);
+      console.log(`🧱 Generating walls around ${allFloorCoords.length} floor tiles`);
       
       const wallOptions = {
         wallHeight: opts.wallHeight,
@@ -412,8 +437,8 @@ export class FloorRenderer {
         cubeSize: opts.cubeSize
       };
       
-      // Generate wall coordinates
-      const wallCoords = WallGenerator.generateWalls(floorCoords, wallOptions);
+      // Generate wall coordinates (excluding stair positions so no walls block stairs)
+      const wallCoords = WallGenerator.generateWalls(allFloorCoords, wallOptions, excludedStairPositions);
       
       // Actually render the walls to the scene
       if (wallCoords.length > 0) {
@@ -421,10 +446,10 @@ export class FloorRenderer {
         WallGenerator.renderWalls(scene, wallCoords, wallOptions);
       }
       
-      // Render ceiling if enabled
+      // Render ceiling if enabled (over ALL floor positions including stairs)
       if (opts.showCeiling) {
-        console.log(`🏠 Rendering ceiling over ${floorCoords.length} floor tiles`);
-        WallGenerator.renderCeiling(scene, floorCoords, wallOptions);
+        console.log(`🏠 Rendering ceiling over ${allFloorCoords.length} floor tiles (including above stairs)`);
+        WallGenerator.renderCeiling(scene, allFloorCoords, wallOptions);
       }
     } catch (error) {
       console.warn('Failed to render walls:', error);
@@ -494,6 +519,40 @@ export class FloorRenderer {
   }
 
   // Legacy support methods (simplified versions)
+  
+  /**
+   * Get all downward stair positions from the layout
+   */
+  private static getDownwardStairPositions(layout: ServerFloorLayout): CubePosition[] {
+    const stairPositions: CubePosition[] = [];
+    
+    layout.rooms.forEach(room => {
+      if (room.hasDownwardStair && 
+          room.stairLocationX !== undefined && 
+          room.stairLocationY !== undefined) {
+        stairPositions.push({
+          x: room.position.x + room.stairLocationX,
+          y: room.position.y + room.stairLocationY
+        });
+      }
+    });
+    
+    return stairPositions;
+  }
+
+  /**
+   * Filter out stair positions from an array of floor positions
+   */
+  private static filterOutStairPositions(floorTiles: CubePosition[], stairPositions: CubePosition[]): CubePosition[] {
+    return floorTiles.filter(tile => !this.isStairPosition(tile, stairPositions));
+  }
+
+  /**
+   * Check if a position matches any stair position
+   */
+  private static isStairPosition(position: CubePosition, stairPositions: CubePosition[]): boolean {
+    return stairPositions.some(stair => stair.x === position.x && stair.y === position.y);
+  }
   
   private static getSampleFloorLayout(dungeonDagNodeName: string): ServerFloorLayout {
     const sampleData: DungeonDagData = {
