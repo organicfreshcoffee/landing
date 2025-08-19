@@ -120,7 +120,6 @@ export class SceneManager {
         
     if (!this.serverAddress) {
       console.error('❌ Server address not set. Call setServerAddress() first.');
-      this.loadFallbackScenery();
       return;
     }
 
