@@ -72,6 +72,10 @@ export class FloorRenderer {
   ): Promise<{ layout: ServerFloorLayout; stats: any }> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     
+    // Clear any existing floor elements before rendering new floor
+    console.log('🧹 Clearing previous floor elements...');
+    this.clearFloor(scene);
+    
     // Fetch layout with server tiles
     const layout = await this.getFloorLayout(serverAddress, dungeonDagNodeName);
     
@@ -470,29 +474,85 @@ export class FloorRenderer {
    * Clear all rendered elements
    */
   static clearFloor(scene: THREE.Scene): void {
+    console.log('🧹 Clearing all floor elements from scene...');
+    
+    // Clear CubeFloorRenderer registry first
     CubeFloorRenderer.clearRegistry();
     
-    // Clear walls, stairs, etc.
+    // Find and remove all floor-related objects
     const objectsToRemove: THREE.Object3D[] = [];
     scene.traverse((child) => {
-      if (child.userData.type === 'wall' || child.userData.type === 'stair') {
+      // Check for different types of floor-related objects
+      const shouldRemove = 
+        // Walls and ceilings
+        child.userData.isWall || 
+        child.userData.isCeiling ||
+        child.userData.type === 'wall' || 
+        child.userData.type === 'stair' ||
+        child.userData.type === 'ceiling' ||
+        // Named groups and objects
+        child.name === 'AllFloorCubes' ||
+        child.name === 'Walls' ||
+        child.name === 'Ceiling' ||
+        child.name === 'Stairs' ||
+        // Floor cubes by name pattern
+        (child.name && child.name.startsWith('FloorCube_')) ||
+        // Wall and ceiling by name pattern
+        (child.name && child.name.includes('Wall_')) ||
+        (child.name && child.name.includes('Ceiling_')) ||
+        (child.name && child.name.includes('Stair_'));
+        
+      if (shouldRemove) {
         objectsToRemove.push(child);
       }
     });
     
+    console.log(`🧹 Found ${objectsToRemove.length} floor-related objects to remove`);
+    
+    // Remove all found objects and dispose resources
     objectsToRemove.forEach(obj => {
-      scene.remove(obj);
-      if (obj instanceof THREE.Mesh && obj.geometry) {
-        obj.geometry.dispose();
+      // Remove from parent (which could be scene or a group)
+      if (obj.parent) {
+        obj.parent.remove(obj);
+      } else {
+        scene.remove(obj);
       }
-      if (obj instanceof THREE.Mesh && obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(mat => mat.dispose());
-        } else {
-          obj.material.dispose();
+      
+      // Dispose geometry and materials to prevent memory leaks
+      if (obj instanceof THREE.Mesh) {
+        if (obj.geometry) {
+          obj.geometry.dispose();
+        }
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(mat => mat.dispose());
+          } else {
+            obj.material.dispose();
+          }
         }
       }
+      
+      // If it's a group, recursively dispose its children
+      if (obj instanceof THREE.Group) {
+        obj.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            if (child.geometry) {
+              child.geometry.dispose();
+            }
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach(mat => mat.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          }
+        });
+        obj.clear();
+      }
     });
+    
+    console.log('✅ Floor clearing complete');
   }
 
   // Legacy support methods (simplified versions)
