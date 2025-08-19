@@ -47,6 +47,10 @@ export interface ServerFloorLayout {
   // Hierarchy map for easy lookup
   nodeMap: Map<string, ServerRoom | ServerHallway>;
   rootNode: string;
+  // Server-provided pre-calculated tiles (when available)
+  serverFloorTiles?: Array<{ x: number; y: number }>;
+  serverRoomTiles?: Record<string, Array<{ x: number; y: number }>>;
+  serverHallwayTiles?: Record<string, Array<{ x: number; y: number }>>;
 }
 
 export interface ServerSceneryOptions {

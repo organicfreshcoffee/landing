@@ -1,4 +1,3 @@
 // Re-export all generator modules
-export { FloorGenerator } from './floorGenerator';
-export { HallwayGenerator } from './hallwayGenerator';
+export { FloorRenderer } from '../rendering/floorRenderer';
 export { ServerSceneryGenerator } from './sceneryGenerator';
