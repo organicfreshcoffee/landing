@@ -3,7 +3,6 @@ import { ensureProtocol, isValidUrl } from '../../urlUtils';
 import {
   DungeonNode,
   FloorLayoutResponse,
-  GeneratedFloorResponse,
   GeneratedFloorTilesResponse,
   RoomStairsResponse,
   SpawnLocationResponse,
@@ -25,7 +24,6 @@ const buildDungeonEndpoints = (serverAddress: string) => {
   return {
     playerMovedFloor: () => `${baseUrl}/api/dungeon/player-moved-floor`,
     getFloorLayout: (dungeonDagNodeName: string) => `${baseUrl}/api/dungeon/floor/${dungeonDagNodeName}`,
-    getGeneratedFloor: (floorName: string) => `${baseUrl}/api/dungeon/generated-floor/${floorName}`,
     getGeneratedFloorTiles: (floorName: string) => `${baseUrl}/api/dungeon/generated-floor-tiles/${floorName}`,
     getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
@@ -96,25 +94,6 @@ export class DungeonApi {
             return response.data;
     } catch (error) {
       console.error('❌ Error getting floor layout:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get generated floor data from server (new server-side generation)
-   */
-  static async getGeneratedFloor(serverAddress: string, floorName: string): Promise<GeneratedFloorResponse> {
-    try {
-      const config = await getAuthConfig();
-      const endpoints = buildDungeonEndpoints(serverAddress);
-      const url = endpoints.getGeneratedFloor(floorName);
-      
-            
-      const response = await axios.get(url, config);
-      
-            return response.data;
-    } catch (error) {
-      console.error('❌ Error getting generated floor:', error);
       throw error;
     }
   }

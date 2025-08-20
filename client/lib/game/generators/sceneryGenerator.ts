@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FloorRenderer, DungeonDagData } from '../rendering/floorRenderer';
-import { ServerFloorLayout, ServerSceneryOptions } from '../types/generator';
+import { ServerSceneryOptions } from '../types/generator';
 import { CubeFloorRenderer } from '../rendering/cubeFloorRenderer';
 import { CubeConfig } from '../config/cubeConfig';
 import { DungeonApi } from '../network/dungeonApi';

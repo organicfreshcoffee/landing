@@ -44,15 +44,6 @@ export class ModelLoader {
       // Use SkeletonUtils.clone to properly handle SkinnedMesh and skeleton data
       const freshScene = SkeletonUtils.clone(gltf.scene) as THREE.Group;
       
-            
-      // Debug: Log animation details
-      if (gltf.animations && gltf.animations.length > 0) {
-        gltf.animations.forEach((anim: any, index: number) => {
-                  });
-      } else {
-        console.warn('⚠️ No animations found in stickman.glb!');
-      }
-      
       // Scale the model appropriately for the game - make twice as big
       freshScene.scale.set(0.6, 0.6, 0.6);
       
@@ -79,15 +70,6 @@ export class ModelLoader {
       
       // Reset position to origin for template - individual instances will apply offsets
       freshScene.position.set(0, 0, 0);
-      
-            
-      // Debug: Check for bones/skeleton structure
-      let foundSkeleton = false;
-      freshScene.traverse((child: THREE.Object3D) => {
-        if (child.type === 'Bone' || child.type === 'SkinnedMesh') {
-                    foundSkeleton = true;
-        }
-      });
             
       // Ensure all materials render properly and are visible
       freshScene.traverse((child: THREE.Object3D) => {

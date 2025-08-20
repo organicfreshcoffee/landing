@@ -32,26 +32,6 @@ router.get('/firebase-config', async (req: Request, res: Response) => {
   }
 });
 
-// Debug endpoint to check environment and GCP connectivity
-router.get('/debug/environment', async (req: Request, res: Response) => {
-  try {
-    const envInfo = {
-      NODE_ENV: process.env.NODE_ENV,
-      GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT ? 'SET' : 'NOT SET',
-      GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'SET' : 'NOT SET',
-      timestamp: new Date().toISOString(),
-      platform: process.platform,
-      nodeVersion: process.version
-    };
-    
-    console.log('Debug environment info:', envInfo);
-    res.json(envInfo);
-  } catch (error) {
-    console.error('Error in debug endpoint:', error);
-    res.status(500).json({ error: 'Debug endpoint failed' });
-  }
-});
-
 // Endpoint to record user login
 router.post('/login', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

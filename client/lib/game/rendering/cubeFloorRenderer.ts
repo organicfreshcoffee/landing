@@ -35,7 +35,7 @@ export class CubeFloorRenderer {
    * Clear all registered cubes for a fresh start
    */
   static clearRegistry(): void {
-            this.cubeRegistry.clear();
+    this.cubeRegistry.clear();
     this.excludedCoordinates.clear();
   }
 
@@ -43,18 +43,12 @@ export class CubeFloorRenderer {
    * Set coordinates to exclude from rendering (e.g., for downward stairs)
    */
   static setExcludedCoordinates(coordinates: CubePosition[]): void {
-        this.excludedCoordinates.clear();
+    this.excludedCoordinates.clear();
     coordinates.forEach(coord => {
       const key = this.getCubeKey(coord.x, coord.y);
       this.excludedCoordinates.add(key);
-            
-      // Check if this coordinate is already registered
-      const existing = this.cubeRegistry.get(key);
-      if (existing) {
-              } else {
-              }
     });
-              }
+  }
 
   /**
    * Unregister specific coordinates from the cube registry
@@ -62,10 +56,7 @@ export class CubeFloorRenderer {
   static unregisterCoordinates(coordinates: CubePosition[]): void {
     coordinates.forEach(coord => {
       const key = this.getCubeKey(coord.x, coord.y);
-      const removed = this.cubeRegistry.delete(key);
-      if (removed) {
-              } else {
-              }
+      this.cubeRegistry.delete(key);
     });
   }
 
@@ -97,7 +88,7 @@ export class CubeFloorRenderer {
       
       // Check if this coordinate is excluded (e.g., for downward stairs)
       if (this.excludedCoordinates.has(key)) {
-                excludedCount++;
+        excludedCount++;
         return;
       }
       
@@ -131,18 +122,6 @@ export class CubeFloorRenderer {
     scene: THREE.Scene,
     options: CubeFloorOptions = {}
   ): THREE.Group {
-                
-    // Debug: Log some registry contents
-    if (this.cubeRegistry.size > 0) {
-            let count = 0;
-      this.cubeRegistry.forEach((cubeInfo, key) => {
-        if (count < 5) {
-                    count++;
-        }
-      });
-    } else {
-          }
-
     const {
       cubeSize = CubeConfig.getCubeSize(),
       yOffset = 0
@@ -152,15 +131,14 @@ export class CubeFloorRenderer {
     let sceneGroup = this.sceneGroups.get(scene);
     if (!sceneGroup || !scene.children.includes(sceneGroup)) {
       // Group doesn't exist or was removed from scene during clearing
-            sceneGroup = new THREE.Group();
+      sceneGroup = new THREE.Group();
       sceneGroup.name = 'AllFloorCubes';
       this.sceneGroups.set(scene, sceneGroup);
       scene.add(sceneGroup);
-          } else {
-          }
+    }
 
     // Clear existing cubes
-        sceneGroup.clear();
+    sceneGroup.clear();
         
     // Verify the group is still in the scene
     const isInScene = scene.children.includes(sceneGroup);
@@ -177,7 +155,7 @@ export class CubeFloorRenderer {
     this.cubeRegistry.forEach((cubeInfo, key) => {
       // Skip excluded coordinates
       if (this.excludedCoordinates.has(key)) {
-                return;
+          return;
       }
 
       // Determine the cube type for texturing
@@ -209,18 +187,13 @@ export class CubeFloorRenderer {
         cubeWorldZ
       );
       
-      // Debug logging for cube positioning
-      if (cubeInfo.position.x === 9 && cubeInfo.position.y === 2) {
-                      }
-      
       cube.name = `FloorCube_${cubeInfo.type}_${cubeInfo.position.x}_${cubeInfo.position.y}`;
       cube.castShadow = true;
       cube.receiveShadow = true;
 
       sceneGroup.add(cube);
     });
-
-        console.log(`🔥 DEBUG: Final sceneGroup state:`, {
+      console.log(`🔥 DEBUG: Final sceneGroup state:`, {
       childrenCount: sceneGroup.children.length,
       isInScene: scene.children.includes(sceneGroup),
       groupName: sceneGroup.name,
@@ -231,80 +204,7 @@ export class CubeFloorRenderer {
     return sceneGroup;
   }
 
-  /**
-   * Get coordinates for a rectangular area
-   */
-  static getAreaCoordinates(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number
-  ): CubePosition[] {
-    const coordinates: CubePosition[] = [];
-    for (let x = startX; x <= endX; x++) {
-      for (let y = startY; y <= endY; y++) {
-        coordinates.push({ x, y });
-      }
-    }
-    return coordinates;
-  }
 
-  /**
-   * Generate coordinates along a path between two points
-   */
-  static getPathCoordinates(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-    width: number = 1
-  ): CubePosition[] {
-    const coordinates: CubePosition[] = [];
-    
-    // Calculate direction and length
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const length = Math.sqrt(dx * dx + dy * dy);
-    
-    if (length === 0) {
-      // Single point
-      coordinates.push({ x: Math.round(startX), y: Math.round(startY) });
-      return coordinates;
-    }
-    
-    // Normalize direction
-    const dirX = dx / length;
-    const dirY = dy / length;
-    
-    // Calculate perpendicular for width
-    const perpX = -dirY;
-    const perpY = dirX;
-    
-    // Number of steps along the path
-    const steps = Math.ceil(length) + 1;
-    
-    for (let i = 0; i < steps; i++) {
-      const t = i / (steps - 1);
-      const centerX = startX + dirX * length * t;
-      const centerY = startY + dirY * length * t;
-      
-      // Add cubes for width
-      for (let w = 0; w < width; w++) {
-        const widthOffset = w - Math.floor(width / 2);
-        const finalX = Math.round(centerX + perpX * widthOffset);
-        const finalY = Math.round(centerY + perpY * widthOffset);
-        
-        coordinates.push({ x: finalX, y: finalY });
-      }
-    }
-    
-    // Remove duplicates
-    const uniqueCoords = coordinates.filter((coord, index, arr) => 
-      arr.findIndex(c => c.x === coord.x && c.y === coord.y) === index
-    );
-    
-    return uniqueCoords;
-  }
 
   /**
    * Clean up resources
