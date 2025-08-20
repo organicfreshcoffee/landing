@@ -938,21 +938,9 @@ export class GameManager {
     // Search through all objects in the scene to find stairs for the specified room
     const scene = this.sceneManager.scene;
     let foundStairData: any = null;
-    
-        
-    // Debug: Log all stairs found in scene
-    const allStairs: any[] = [];
+
     scene.traverse((object) => {
-      if (object.userData.type === 'stairs') {
-        allStairs.push({
-          type: object.userData.type,
-          direction: object.userData.direction,
-          roomName: object.userData.roomName,
-          hasUpwardStair: object.userData.hasUpwardStair,
-          hasDownwardStair: object.userData.hasDownwardStair,
-          worldCoords: `(${object.userData.worldX}, ${object.userData.worldY}, ${object.userData.worldZ})`
-        });
-        
+      if (object.userData.type === 'stairs') {        
         if (object.userData.roomName === roomName) {
           const hasTargetStairType = stairType === 'upward' ? object.userData.hasUpwardStair : object.userData.hasDownwardStair;
           if (hasTargetStairType) {
@@ -961,10 +949,9 @@ export class GameManager {
         }
       }
     });
-    
-            
+
     if (foundStairData && typeof foundStairData.worldX === 'number') {
-            return {
+      return {
         x: foundStairData.worldX,
         y: foundStairData.worldY,
         z: foundStairData.worldZ
@@ -1062,12 +1049,7 @@ export class GameManager {
       // Log all stair mappings found
             
       if (matchingStair && matchingRoomName) {
-                        
-        // Log player position before moving
-        if (this.localPlayerRef.current) {
-          const beforePos = this.localPlayerRef.current.position;
-                  }
-        
+
         // Get world coordinates from the rendered stair model
         const stairWorldCoords = this.findStairWorldCoordinates(matchingRoomName, stairType);
         
@@ -1086,11 +1068,10 @@ export class GameManager {
         // Log player position after moving
         if (this.localPlayerRef.current) {
           const afterPos = this.localPlayerRef.current.position;
-                  }
+        }
         
         return;
-      } else {
-              }
+      }
       
       // If no matching stair found, fall back to spawn
       console.warn(`${logPrefix} ⚠️ No ${stairType} stair found on ${targetFloor} that leads back to ${originalFloor}, using spawn`);
