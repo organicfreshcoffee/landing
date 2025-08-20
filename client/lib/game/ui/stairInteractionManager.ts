@@ -90,19 +90,10 @@ export class StairInteractionManager {
   /**
    * Update player position and check for nearby stairs
    */
-  updatePlayerPosition(playerPosition: THREE.Vector3): void {
-    // Debug logging - log every 180 frames (about once per 3 seconds at 60fps)
-    if (Math.random() < 0.0056) { // ~1/180 chance
-                  
-      // Log all stair positions
-      this.stairs.forEach((stair, key) => {
-        const distance = playerPosition.distanceTo(stair.position);
-              });
-    }
-    
+  updatePlayerPosition(playerPosition: THREE.Vector3): void {    
     let closestStair: StairInteractionData | null = null;
     let closestDistance = this.INTERACTION_DISTANCE;
-    
+
     // Check distance to all stairs
     this.stairs.forEach(stair => {
       const distance = playerPosition.distanceTo(stair.position);
@@ -111,11 +102,11 @@ export class StairInteractionManager {
         closestDistance = distance;
       }
     });
-    
+
     // Update nearby stair state
     if (closestStair !== this.nearbyStair) {
       this.nearbyStair = closestStair;
-            this.updateInteractionUI();
+      this.updateInteractionUI();
     }
   }
 

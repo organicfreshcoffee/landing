@@ -99,7 +99,6 @@ export class StairRenderer {
     const stairGroup = new THREE.Group();
     stairGroup.name = 'stairs';
 
-    
     let stairCount = 0;
     // TypeError: tiles is not iterable
     for (const stair of tiles) {
@@ -108,7 +107,7 @@ export class StairRenderer {
         if (stairMesh) {
           stairGroup.add(stairMesh);
           stairCount++;
-                  } else {
+        } else {
           console.warn(`⚠️ Failed to create stairs`);
         }
       } catch (error) {
@@ -116,10 +115,7 @@ export class StairRenderer {
       }
     }
 
-    scene.add(stairGroup);
-            
-    // Debug: Check scene hierarchy
-        
+    scene.add(stairGroup);  
     return stairGroup;
   }
 
