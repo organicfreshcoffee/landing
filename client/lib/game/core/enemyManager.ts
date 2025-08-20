@@ -220,14 +220,19 @@ export class EnemyManager {
     // Update position
     enemy.mesh.position.copy(targetPosition);
 
-    // Update rotation if provided
+    // Don't update mesh rotation from server data - let the facing system handle it
+    // Only store the rotation data for reference if needed
     if (enemyData.rotationY !== undefined) {
-      const newRotationY = THREE.MathUtils.degToRad(enemyData.rotationY);
-      enemy.mesh.rotation.y = newRotationY;
-      console.log('🔄 Updated enemy rotation:', {
+      // Store rotation in enemy data but don't apply to mesh
+      enemy.rotation = {
+        x: 0,
+        y: enemyData.rotationY,
+        z: 0
+      };
+      console.log('🔄 Stored enemy rotation data (not applied to mesh):', {
         id: enemy.id,
         degrees: enemyData.rotationY,
-        radians: newRotationY
+        radians: THREE.MathUtils.degToRad(enemyData.rotationY)
       });
     }
 
@@ -294,22 +299,23 @@ export class EnemyManager {
   }
 
   /**
-   * Make all enemies face the local player
+   * Make all enemies face the local player (similar to player sprite rotation)
    */
   static updateAllEnemiesFacing(localPlayerPosition: THREE.Vector3): void {
     this.spriteMeshReferences.forEach((mesh, enemyId) => {
-      // Calculate direction to player
-      const enemyPosition = mesh.parent?.position || mesh.position;
+      // Get the enemy group (parent of sprite mesh)
+      const enemyGroup = mesh.parent;
+      if (!enemyGroup) return;
+
+      // Calculate direction from enemy to local player
+      const enemyPosition = enemyGroup.position;
       const direction = new THREE.Vector3()
         .subVectors(localPlayerPosition, enemyPosition)
         .normalize();
-      
-      // Make sprite face the player
-      mesh.lookAt(
-        enemyPosition.x + direction.x,
-        enemyPosition.y,
-        enemyPosition.z + direction.z
-      );
+
+      // Calculate angle and make sprite face the local player (only Y rotation)
+      const angle = Math.atan2(direction.x, direction.z);
+      mesh.rotation.y = angle;
     });
   }
 
