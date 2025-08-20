@@ -46,8 +46,8 @@ export class EnemyManager {
     // Create a group to hold the sprite
     const enemyGroup = new THREE.Group();
     
-    // Create the sprite geometry and material - make enemies slightly smaller than players
-    const spriteGeometry = new THREE.PlaneGeometry(0.8, 1.2);
+    // Create the sprite geometry and material
+    const spriteGeometry = new THREE.PlaneGeometry(3.2, 4.8);
     
     // Determine initial direction and frame
     const direction = 'front';
@@ -147,13 +147,14 @@ export class EnemyManager {
     // Set sprite to always face the camera
     spriteMesh.lookAt(new THREE.Vector3(0, 0, 1));
     
-    // Set position slightly above ground - this is important for visibility!
-    spriteMesh.position.y = 0.75; // Half the sprite height to center it
+    // Set position slightly above ground - half the sprite height to center it at ground level
+    spriteMesh.position.y = 1;
     
     console.log('📐 Sprite mesh positioning:', {
       id: enemy.id,
       spriteLocalY: spriteMesh.position.y,
-      spriteSize: { width: 0.8, height: 1.2 }
+      spriteSize: { width: 3.2, height: 4.8 },
+      note: 'Sprite positioned with Y offset to center at ground level'
     });
     
     // Add sprite to group
