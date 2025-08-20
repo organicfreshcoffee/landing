@@ -147,52 +147,8 @@ export class SceneManager {
       // Initialize stair interactions
       const stairManager = StairInteractionManager.getInstance();
       stairManager.initializeStairs(floorResult.floorLayout.data.tiles.upwardStairTiles, floorResult.floorLayout.data.tiles.downwardStairTiles);
-      
-      // Detailed rendering verification
-      this.verifyFloorRendering(floorResult);
     } catch (error) {
       console.error('Error loading scenery from server:', error);
-    }
-  }
-
-  /**
-   * Verify that all floor elements are properly rendered
-   */
-  private verifyFloorRendering(floorResult: any): void {
-                                    
-    // Count rendered objects in scene
-    let floorCubes = 0;
-    let wallCubes = 0;
-    let totalMeshes = 0;
-    
-    this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        totalMeshes++;
-        if (object.name.includes('FloorCube')) {
-          floorCubes++;
-        } else if (object.name.includes('Wall')) {
-          wallCubes++;
-        }
-      }
-    });
-    
-                    
-    // Warn if there are discrepancies
-    if (floorCubes < floorResult.totalArea) {
-      console.warn(`⚠️ Potential rendering issue: Expected ${floorResult.totalArea} floor cubes, but only ${floorCubes} found in scene`);
-    }
-    
-    // Check camera distance to ensure everything is within render range
-    const cameraPos = this.camera.position;
-    const bounds = floorResult.floorLayout.bounds;
-    const maxDistance = Math.max(
-      Math.abs(bounds.width * CubeConfig.getCubeSize()),
-      Math.abs(bounds.height * CubeConfig.getCubeSize())
-    );
-    
-                    
-    if (maxDistance > this.camera.far * 0.8) {
-      console.warn(`⚠️ Potential clipping issue: Floor extends to ${maxDistance.toFixed(1)} units, camera far plane is ${this.camera.far}`);
     }
   }
 
@@ -223,7 +179,7 @@ export class SceneManager {
    */
   async refreshCurrentFloor(): Promise<void> {
     if (this.currentFloorName && this.serverAddress) {
-            await this.loadScenery(this.currentFloorName);
+      await this.loadScenery(this.currentFloorName);
     } else {
       console.warn('⚠️ Cannot refresh floor: no current floor or server address');
     }
