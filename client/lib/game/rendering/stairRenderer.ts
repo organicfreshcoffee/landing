@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { ModelLoader } from '../utils/modelLoader';
-import { ServerRoom } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
 import { CubePosition } from './cubeFloorRenderer';
 import { StairTile } from '../types/api';
@@ -158,7 +157,6 @@ export class StairRenderer {
       const scaledModelBottomOffset = -scaledBox.min.y;
 
       // Position the stairs at the specified location
-      // Use the same coordinate calculation as in getExcludedFloorCoordinates()
       const gridX = tile.x;
       const gridY = tile.y;
       const worldX = gridX * cubeSize + cubeSize / 2;
@@ -209,72 +207,6 @@ export class StairRenderer {
       console.error(`Failed to create stairs:`, error);
       return null;
     }
-  }
-
-  /**
-   * Check if a room has stairs
-   */
-  private static hasStairs(room: ServerRoom): boolean {
-    const hasStairs = room.hasUpwardStair || room.hasDownwardStair;
-    if (hasStairs) {
-          }
-    return hasStairs;
-  }
-
-  /**
-   * Get statistics about rendered stairs
-   */
-  static getStairStats(rooms: ServerRoom[]): {
-    totalRooms: number;
-    roomsWithStairs: number;
-    upwardStairs: number;
-    downwardStairs: number;
-    percentage: number;
-  } {
-    const totalRooms = rooms.length;
-    let roomsWithStairs = 0;
-    let upwardStairs = 0;
-    let downwardStairs = 0;
-
-    rooms.forEach(room => {
-      if (this.hasStairs(room)) {
-        roomsWithStairs++;
-        if (room.hasUpwardStair) upwardStairs++;
-        if (room.hasDownwardStair) downwardStairs++;
-      }
-    });
-
-    return {
-      totalRooms,
-      roomsWithStairs,
-      upwardStairs,
-      downwardStairs,
-      percentage: totalRooms > 0 ? (roomsWithStairs / totalRooms) * 100 : 0
-    };
-  }
-
-  /**
-   * Get stair coordinates that should be excluded from floor cube rendering
-   * (for downward stairs only)
-   */
-  static getExcludedFloorCoordinates(rooms: ServerRoom[]): CubePosition[] {
-    const excludedCoords: CubePosition[] = [];
-    
-        
-    rooms.forEach(room => {
-            
-      if (room.hasDownwardStair && 
-          room.stairLocationX !== undefined && 
-          room.stairLocationY !== undefined) {
-        const coord = {
-          x: room.position.x + room.stairLocationX,
-          y: room.position.y + room.stairLocationY
-        };
-        excludedCoords.push(coord);
-              }
-    });
-    
-        return excludedCoords;
   }
 
   /**

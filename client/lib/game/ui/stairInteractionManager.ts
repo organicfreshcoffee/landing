@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { ServerRoom } from '../types/generator';
 import { CubeConfig } from '../config/cubeConfig';
 import { StairTile } from '../types/api';
 

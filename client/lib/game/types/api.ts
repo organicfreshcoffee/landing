@@ -52,28 +52,12 @@ export interface ServerGeneratedHallway {
   }>;
 }
 
-export interface ServerGeneratedFloorData {
-  dungeonDagNodeName: string;
-  rooms: ServerGeneratedRoom[];
-  hallways: ServerGeneratedHallway[];
-  bounds: { width: number; height: number };
-  rootNode: string;
-  floorTiles: Array<{ x: number; y: number }>;
-  roomTiles: Record<string, Array<{ x: number; y: number }>>;
-  hallwayTiles: Record<string, Array<{ x: number; y: number }>>;
-}
-
 export interface FloorLayoutResponse {
   success: boolean;
   data: {
     dungeonDagNodeName: string;
     nodes: DungeonNode[];
   };
-}
-
-export interface GeneratedFloorResponse {
-  success: boolean;
-  data: ServerGeneratedFloorData;
 }
 
 export interface FloorTile {

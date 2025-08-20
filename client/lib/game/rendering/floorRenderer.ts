@@ -2,17 +2,10 @@ import * as THREE from 'three';
 import { DungeonApi } from '../network/dungeonApi';
 import { 
   DungeonNode, 
-  GeneratedFloorResponse,
   GeneratedFloorTilesResponse,
-  ServerGeneratedFloorData,
   StairTile,
   WallTile
 } from '../types/api';
-import {
-  ServerRoom,
-  ServerHallway,
-  ServerFloorLayout
-} from '../types/generator';
 import { CubeFloorRenderer, CubePosition } from './cubeFloorRenderer';
 import { WallGenerator } from '../generators/wallGenerator';
 import { StairRenderer } from './stairRenderer';
@@ -121,7 +114,7 @@ export class FloorRenderer {
     }
 
     // Actually render all the registered cubes to the scene
-        CubeFloorRenderer.renderAllCubes(scene, {
+    CubeFloorRenderer.renderAllCubes(scene, {
       cubeSize: opts.cubeSize,
       yOffset: opts.yOffset
     });
