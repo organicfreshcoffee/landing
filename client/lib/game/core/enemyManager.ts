@@ -37,6 +37,12 @@ export class EnemyManager {
       throw new Error('Enemy must have enemyTypeName for sprite rendering');
     }
 
+    console.log('🎨 Creating sprite model for enemy:', {
+      id: enemy.id,
+      enemyTypeName: enemyTypeName,
+      position: enemy.position
+    });
+
     // Create a group to hold the sprite
     const enemyGroup = new THREE.Group();
     
@@ -53,22 +59,42 @@ export class EnemyManager {
     const frame2Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_2.png`;
     const frame3Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_3.png`;
     
+    console.log('🖼️ Loading enemy textures:', {
+      id: enemy.id,
+      frame1Path,
+      frame2Path,
+      frame3Path
+    });
+    
     const frame1Texture = textureLoader.load(frame1Path, 
-      () => console.log(`✅ Loaded enemy frame 1: ${frame1Path}`),
+      (texture) => {
+        console.log(`✅ Loaded enemy frame 1: ${frame1Path} for ${enemy.id}`);
+        console.log('📏 Texture dimensions:', { width: texture.image?.width, height: texture.image?.height });
+      },
       undefined,
-      (error) => console.error(`❌ Failed to load enemy frame 1: ${frame1Path}`, error)
+      (error) => {
+        console.error(`❌ Failed to load enemy frame 1: ${frame1Path} for ${enemy.id}`, error);
+      }
     );
     
     const frame2Texture = textureLoader.load(frame2Path, 
-      () => console.log(`✅ Loaded enemy frame 2: ${frame2Path}`),
+      (texture) => {
+        console.log(`✅ Loaded enemy frame 2: ${frame2Path} for ${enemy.id}`);
+      },
       undefined,
-      (error) => console.error(`❌ Failed to load enemy frame 2: ${frame2Path}`, error)
+      (error) => {
+        console.error(`❌ Failed to load enemy frame 2: ${frame2Path} for ${enemy.id}`, error);
+      }
     );
 
     const frame3Texture = textureLoader.load(frame3Path, 
-      () => console.log(`✅ Loaded enemy frame 3: ${frame3Path}`),
+      (texture) => {
+        console.log(`✅ Loaded enemy frame 3: ${frame3Path} for ${enemy.id}`);
+      },
       undefined,
-      (error) => console.error(`❌ Failed to load enemy frame 3: ${frame3Path}`, error)
+      (error) => {
+        console.error(`❌ Failed to load enemy frame 3: ${frame3Path} for ${enemy.id}`, error);
+      }
     );
     
     // Configure textures
@@ -97,17 +123,38 @@ export class EnemyManager {
       side: THREE.DoubleSide // Show sprite from both sides
     });
     
+    console.log('🎨 Created sprite material:', {
+      id: enemy.id,
+      hasTexture: !!spriteMaterial.map,
+      transparent: spriteMaterial.transparent,
+      alphaTest: spriteMaterial.alphaTest,
+      side: spriteMaterial.side
+    });
+    
     // Create the sprite mesh
     const spriteMesh = new THREE.Mesh(spriteGeometry, spriteMaterial);
     
     // Store mesh reference for texture updates
     this.spriteMeshReferences.set(enemy.id, spriteMesh);
     
+    console.log('🔗 Stored sprite mesh reference:', {
+      id: enemy.id,
+      meshUuid: spriteMesh.uuid,
+      geometryType: spriteMesh.geometry.type,
+      materialType: spriteMesh.material.type
+    });
+    
     // Set sprite to always face the camera
     spriteMesh.lookAt(new THREE.Vector3(0, 0, 1));
     
-    // Set position slightly above ground
+    // Set position slightly above ground - this is important for visibility!
     spriteMesh.position.y = 0.75; // Half the sprite height to center it
+    
+    console.log('📐 Sprite mesh positioning:', {
+      id: enemy.id,
+      spriteLocalY: spriteMesh.position.y,
+      spriteSize: { width: 0.8, height: 1.2 }
+    });
     
     // Add sprite to group
     enemyGroup.add(spriteMesh);
@@ -119,6 +166,13 @@ export class EnemyManager {
       enemyType: enemy.enemyTypeName,
       enemyTypeID: enemy.enemyTypeID
     };
+    
+    console.log('✨ Created enemy group:', {
+      id: enemy.id,
+      groupChildren: enemyGroup.children.length,
+      userData: enemyGroup.userData,
+      groupPosition: enemyGroup.position
+    });
     
     // Initialize sprite animation state
     this.spriteAnimations.set(enemy.id, {
@@ -140,24 +194,55 @@ export class EnemyManager {
    * Update enemy position and rotation
    */
   static updateEnemyPosition(enemy: Enemy, enemyData: EnemyUpdate): void {
-    if (!enemy.mesh) return;
+    if (!enemy.mesh) {
+      console.warn('⚠️ Cannot update enemy position - no mesh:', enemy.id);
+      return;
+    }
 
     const targetPosition = new THREE.Vector3(
-      enemyData.positionX,
-      0, // Keep enemies on the ground
-      enemyData.positionY
+      enemyData.positionX,   // X coordinate from server
+      enemy.position.y,      // Use the Y coordinate from the enemy object (set to player's ground level)
+      enemyData.positionY    // Server's positionY maps to Three.js Z-axis
     );
+
+    console.log('🎯 Updating enemy position:', {
+      id: enemy.id,
+      oldPosition: {
+        x: enemy.mesh.position.x,
+        y: enemy.mesh.position.y,
+        z: enemy.mesh.position.z
+      },
+      newTargetPosition: targetPosition,
+      serverCoords: { x: enemyData.positionX, y: enemyData.positionY }
+    });
 
     // Update position
     enemy.mesh.position.copy(targetPosition);
 
     // Update rotation if provided
     if (enemyData.rotationY !== undefined) {
-      enemy.mesh.rotation.y = THREE.MathUtils.degToRad(enemyData.rotationY);
+      const newRotationY = THREE.MathUtils.degToRad(enemyData.rotationY);
+      enemy.mesh.rotation.y = newRotationY;
+      console.log('🔄 Updated enemy rotation:', {
+        id: enemy.id,
+        degrees: enemyData.rotationY,
+        radians: newRotationY
+      });
     }
 
     // Update movement state
     enemy.isMoving = enemyData.isMoving;
+
+    console.log('✅ Enemy position updated:', {
+      id: enemy.id,
+      finalPosition: {
+        x: enemy.mesh.position.x,
+        y: enemy.mesh.position.y,
+        z: enemy.mesh.position.z
+      },
+      isMoving: enemy.isMoving,
+      meshVisible: enemy.mesh.visible
+    });
 
     // Update sprite animation based on movement
     this.updateEnemyAnimation(enemy.id, enemyData);
