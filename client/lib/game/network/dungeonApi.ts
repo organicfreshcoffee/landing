@@ -3,7 +3,6 @@ import { ensureProtocol, isValidUrl } from '../../urlUtils';
 import {
   DungeonNode,
   FloorLayoutResponse,
-  GeneratedFloorResponse,
   GeneratedFloorTilesResponse,
   RoomStairsResponse,
   SpawnLocationResponse,
