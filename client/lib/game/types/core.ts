@@ -68,3 +68,23 @@ export interface SpellActionData {
   casterPosition?: { x: number; y: number; z: number };
   spellRadius?: number;
 }
+
+export interface Enemy {
+  id: string;
+  enemyTypeID: number;
+  enemyTypeName: string;
+  position: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
+  isMoving: boolean;
+  mesh?: THREE.Object3D;
+}
+
+export interface EnemyUpdate {
+  id: string;
+  enemyTypeID: number;
+  enemyTypeName: string;
+  positionX: number;
+  positionY: number;
+  rotationY?: number;
+  isMoving: boolean;
+}
