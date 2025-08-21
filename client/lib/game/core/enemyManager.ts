@@ -24,6 +24,9 @@ export class EnemyManager {
   // Store current sprite direction for each enemy
   private static spriteDirections = new Map<string, 'front' | 'back' | 'left' | 'right'>();
 
+  // Store enemy references for accessing enemy data
+  private static enemyReferences = new Map<string, Enemy>();
+
   /**
    * Create sprite-based enemy model using enemy type data
    */
@@ -175,6 +178,9 @@ export class EnemyManager {
       groupPosition: enemyGroup.position
     });
     
+    // Store enemy reference for later access
+    this.enemyReferences.set(enemy.id, enemy);
+    
     // Initialize sprite animation state
     this.spriteAnimations.set(enemy.id, {
       mixer: new THREE.AnimationMixer(enemyGroup),
@@ -194,7 +200,7 @@ export class EnemyManager {
   /**
    * Update enemy position and rotation
    */
-  static updateEnemyPosition(enemy: Enemy, enemyData: EnemyUpdate): void {
+  static updateEnemyPosition(enemy: Enemy, enemyData: EnemyUpdate, localPlayerPosition?: THREE.Vector3): void {
     if (!enemy.mesh) {
       console.warn('⚠️ Cannot update enemy position - no mesh:', enemy.id);
       return;
@@ -234,6 +240,16 @@ export class EnemyManager {
         degrees: enemyData.rotationY,
         radians: THREE.MathUtils.degToRad(enemyData.rotationY)
       });
+
+      // Update sprite direction based on rotation and local player position
+      if (localPlayerPosition) {
+        this.updateEnemySpriteDirection(
+          enemy.id,
+          targetPosition,
+          enemyData.rotationY,
+          localPlayerPosition
+        );
+      }
     }
 
     // Update movement state
@@ -255,7 +271,7 @@ export class EnemyManager {
   }
 
   /**
-   * Update enemy sprite animation based on movement state
+   * Update enemy sprite animation based on movement state and direction
    */
   static updateEnemyAnimation(enemyId: string, enemyData: EnemyUpdate): void {
     const animState = this.spriteAnimations.get(enemyId);
@@ -275,27 +291,148 @@ export class EnemyManager {
       animState.currentFrame = (animState.currentFrame % 3) + 1; // Cycle 1, 2, 3, 1, 2, 3...
       animState.lastFrameTime = now;
       
-      // Update texture based on current frame
-      const material = spriteMesh.material as THREE.MeshBasicMaterial;
-      switch (animState.currentFrame) {
-        case 1:
-          material.map = textures.frame1;
-          break;
-        case 2:
-          material.map = textures.frame2;
-          break;
-        case 3:
-          material.map = textures.frame3;
-          break;
-      }
-      material.needsUpdate = true;
+      // Update texture based on current frame and direction
+      this.updateEnemySpriteTexture(enemyId, animState.currentFrame, animState.direction);
     } else if (!animState.isMoving) {
       // Reset to frame 1 when not moving
       animState.currentFrame = 1;
-      const material = spriteMesh.material as THREE.MeshBasicMaterial;
-      material.map = textures.frame1;
-      material.needsUpdate = true;
+      this.updateEnemySpriteTexture(enemyId, 1, animState.direction);
     }
+  }
+
+  /**
+   * Update enemy sprite direction based on rotation and local player position
+   */
+  static updateEnemySpriteDirection(
+    enemyId: string,
+    enemyPosition: THREE.Vector3,
+    enemyRotationY: number,
+    localPlayerPosition: THREE.Vector3
+  ): void {
+    const animState = this.spriteAnimations.get(enemyId);
+    if (!animState) return;
+
+    // Calculate sprite direction similar to player system
+    const newDirection = this.calculateEnemySpriteDirection(enemyPosition, enemyRotationY, localPlayerPosition);
+    
+    if (newDirection !== animState.direction) {
+      console.log('🔄 Enemy sprite direction changed:', {
+        enemyId,
+        oldDirection: animState.direction,
+        newDirection,
+        enemyRotation: enemyRotationY
+      });
+      
+      animState.direction = newDirection;
+      this.spriteDirections.set(enemyId, newDirection);
+      
+      // Reload textures for new direction
+      this.loadEnemySpriteTextures(enemyId, newDirection);
+      
+      // Update current texture immediately
+      this.updateEnemySpriteTexture(enemyId, animState.currentFrame, newDirection);
+    }
+  }
+
+  /**
+   * Calculate enemy sprite direction based on rotation and local player position
+   */
+  static calculateEnemySpriteDirection(
+    enemyPosition: THREE.Vector3,
+    enemyRotationY: number,
+    localPlayerPosition: THREE.Vector3
+  ): 'front' | 'back' | 'left' | 'right' {
+    // Calculate direction from enemy to local player
+    const toLocalPlayer = new THREE.Vector3()
+      .subVectors(localPlayerPosition, enemyPosition)
+      .normalize();
+    
+    // Convert to angle
+    const toLocalPlayerAngle = Math.atan2(toLocalPlayer.x, toLocalPlayer.z);
+    
+    // Calculate the relative angle between where the enemy is facing and where the local player is
+    const enemyFacingAngle = THREE.MathUtils.degToRad(enemyRotationY);
+    let relativeAngle = toLocalPlayerAngle - enemyFacingAngle;
+    
+    // Normalize angle to [-π, π]
+    while (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
+    while (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
+    
+    // Determine sprite direction based on relative angle
+    const absAngle = Math.abs(relativeAngle);
+    
+    if (absAngle <= Math.PI / 4) {
+      return 'back'; // Enemy facing towards local player (back view)
+    } else if (relativeAngle > Math.PI / 4 && relativeAngle <= 3 * Math.PI / 4) {
+      return 'right'; // Local player is to the right
+    } else if (absAngle > 3 * Math.PI / 4) {
+      return 'front'; // Enemy facing away from local player (front view)
+    } else {
+      return 'left'; // Local player is to the left
+    }
+  }
+
+  /**
+   * Load textures for a specific enemy sprite direction
+   */
+  static loadEnemySpriteTextures(enemyId: string, direction: 'front' | 'back' | 'left' | 'right'): void {
+    const enemy = this.getEnemyFromSpriteId(enemyId);
+    if (!enemy) return;
+
+    const textureLoader = new THREE.TextureLoader();
+    const frame1Path = `/assets/sprites/stendhal_animals/frames/${enemy.enemyTypeName}_${direction}_1.png`;
+    const frame2Path = `/assets/sprites/stendhal_animals/frames/${enemy.enemyTypeName}_${direction}_2.png`;
+    const frame3Path = `/assets/sprites/stendhal_animals/frames/${enemy.enemyTypeName}_${direction}_3.png`;
+    
+    const frame1Texture = textureLoader.load(frame1Path);
+    const frame2Texture = textureLoader.load(frame2Path);
+    const frame3Texture = textureLoader.load(frame3Path);
+    
+    // Configure textures
+    [frame1Texture, frame2Texture, frame3Texture].forEach(texture => {
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+    });
+    
+    // Update stored textures
+    this.spriteTextures.set(enemyId, {
+      frame1: frame1Texture,
+      frame2: frame2Texture,
+      frame3: frame3Texture
+    });
+  }
+
+  /**
+   * Update enemy sprite texture based on frame and direction
+   */
+  static updateEnemySpriteTexture(enemyId: string, frame: number, direction: 'front' | 'back' | 'left' | 'right'): void {
+    const spriteMesh = this.spriteMeshReferences.get(enemyId);
+    const textures = this.spriteTextures.get(enemyId);
+    
+    if (!spriteMesh || !textures) return;
+
+    const material = spriteMesh.material as THREE.MeshBasicMaterial;
+    switch (frame) {
+      case 1:
+        material.map = textures.frame1;
+        break;
+      case 2:
+        material.map = textures.frame2;
+        break;
+      case 3:
+        material.map = textures.frame3;
+        break;
+    }
+    material.needsUpdate = true;
+  }
+
+  /**
+   * Helper to get enemy data from sprite ID
+   */
+  static getEnemyFromSpriteId(enemyId: string): Enemy | null {
+    return this.enemyReferences.get(enemyId) || null;
   }
 
   /**
@@ -340,6 +477,9 @@ export class EnemyManager {
     
     // Clean up direction
     this.spriteDirections.delete(enemyId);
+    
+    // Clean up enemy reference
+    this.enemyReferences.delete(enemyId);
   }
 
   /**

@@ -562,7 +562,7 @@ export class GameManager {
 
       // Update position and animation
       try {
-        EnemyManager.updateEnemyPosition(existingEnemy, enemyData);
+        EnemyManager.updateEnemyPosition(existingEnemy, enemyData, this.localPlayerRef.current?.position);
         
         // Log final mesh position after update
         if (existingEnemy.mesh) {
