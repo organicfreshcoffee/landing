@@ -673,4 +673,18 @@ export class MovementController {
       isGrounded: this.isGrounded
     };
   }
+
+  /**
+   * Get the current real-time player position
+   */
+  getCurrentPlayerPosition(): THREE.Vector3 | null {
+    return this.localPlayerRef.current?.position || null;
+  }
+
+  /**
+   * Get a copy of the current real-time player position
+   */
+  getCurrentPlayerPositionClone(): THREE.Vector3 | null {
+    return this.localPlayerRef.current?.position.clone() || null;
+  }
 }
