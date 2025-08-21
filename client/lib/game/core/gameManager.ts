@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData, PlayerActionData, SpellActionData } from '../types';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData, PlayerActionData, SpellActionData, Enemy, EnemyUpdate } from '../types';
 import { PlayerManager } from './playerManager';
+import { EnemyManager } from './enemyManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
 import { SceneManager, ParticleSystem } from '../rendering';
@@ -21,6 +22,7 @@ export class GameManager {
   
   private players = new Map<string, Player>();
   private playersAnimations = new Map<string, PlayerAnimationData>();
+  private enemies = new Map<string, Enemy>();
   
   // Store current player ID to avoid inconsistencies
   private currentPlayerId: string;
@@ -84,6 +86,9 @@ export class GameManager {
           
           // Make other players face the local player
           PlayerManager.updateAllOtherPlayersFacing(this.localPlayerRef.current.position);
+          
+          // Make enemies face the local player
+          EnemyManager.updateAllEnemiesFacing(this.localPlayerRef.current.position);
         }
       }
       
@@ -316,6 +321,61 @@ export class GameManager {
           console.warn('⚠️ Invalid respawn_success message data:', message.data);
         }
         break;
+
+      case 'enemy-moved':
+        if (message.data && message.data.enemies && Array.isArray(message.data.enemies)) {
+          console.log('📨 Received enemy-moved message:', {
+            floorName: message.data.floorName,
+            timestamp: message.data.timestamp,
+            enemyCount: message.data.enemies.length,
+            enemies: message.data.enemies
+          });
+          
+          // Log local player position for comparison
+          if (this.localPlayerRef.current) {
+            console.log('👤 Local player position for comparison:', {
+              x: this.localPlayerRef.current.position.x,
+              y: this.localPlayerRef.current.position.y,
+              z: this.localPlayerRef.current.position.z
+            });
+          }
+
+          // Log camera position for reference
+          console.log('📹 Camera position for reference:', {
+            x: this.sceneManager.camera.position.x,
+            y: this.sceneManager.camera.position.y,
+            z: this.sceneManager.camera.position.z
+          });
+          
+          message.data.enemies.forEach((enemyData: EnemyUpdate) => {
+            console.log('🐾 Processing enemy data:', {
+              id: enemyData.id,
+              enemyType: enemyData.enemyTypeName,
+              serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
+              worldPosition: { x: enemyData.positionX, y: this.localPlayerRef.current?.position.y || 0, z: enemyData.positionY },
+              rotation: enemyData.rotationY,
+              isMoving: enemyData.isMoving
+            });
+            this.updateEnemy(enemyData).catch(console.error);
+          });
+        } else {
+          console.warn('⚠️ Invalid enemy-moved message data:', message.data);
+        }
+        break;
+
+      case 'enemy-despawned':
+        if (message.data && message.data.enemyId) {
+          console.log('💀 Received enemy-despawned message:', {
+            enemyId: message.data.enemyId,
+            floorName: message.data.floorName
+          });
+          
+          // Remove the enemy from the scene
+          this.removeEnemy(message.data.enemyId);
+        } else {
+          console.warn('⚠️ Invalid enemy-despawned message data:', message.data);
+        }
+        break;
     }
   }
 
@@ -464,6 +524,164 @@ export class GameManager {
         // Clean up any partial state
         this.players.delete(playerData.id);
         this.playersAnimations.delete(playerData.id);
+      }
+    }
+  }
+
+  private async updateEnemy(enemyData: EnemyUpdate): Promise<void> {
+    const existingEnemy = this.enemies.get(enemyData.id);
+
+    if (existingEnemy) {
+      // Update existing enemy
+      console.log('🦌 Updating existing enemy:', {
+        id: enemyData.id,
+        enemyType: enemyData.enemyTypeName,
+        oldPosition: existingEnemy.position,
+        newServerPosition: { x: enemyData.positionX, y: enemyData.positionY },
+        newWorldPosition: { x: enemyData.positionX, y: this.localPlayerRef.current?.position.y || 0, z: enemyData.positionY },
+        isMoving: enemyData.isMoving,
+        rotation: enemyData.rotationY
+      });
+
+      // Update enemy data
+      existingEnemy.position = {
+        x: enemyData.positionX,
+        y: this.localPlayerRef.current?.position.y || 0, // Use player's ground level for Y-axis (vertical)
+        z: enemyData.positionY // Server's positionY maps to Three.js Z-axis
+      };
+      
+      if (enemyData.rotationY !== undefined) {
+        existingEnemy.rotation = {
+          x: 0,
+          y: enemyData.rotationY,
+          z: 0
+        };
+      }
+      
+      existingEnemy.isMoving = enemyData.isMoving;
+
+      // Update position and animation
+      try {
+        EnemyManager.updateEnemyPosition(existingEnemy, enemyData);
+        
+        // Log final mesh position after update
+        if (existingEnemy.mesh) {
+          console.log('🎯 Enemy mesh position after update:', {
+            id: enemyData.id,
+            meshPosition: {
+              x: existingEnemy.mesh.position.x,
+              y: existingEnemy.mesh.position.y,
+              z: existingEnemy.mesh.position.z
+            },
+            meshVisible: existingEnemy.mesh.visible,
+            meshInScene: existingEnemy.mesh.parent !== null
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error updating enemy position:', enemyData.id, error);
+      }
+    } else {
+      // Create new enemy
+      console.log('🆕 Creating new enemy:', {
+        id: enemyData.id,
+        enemyType: enemyData.enemyTypeName,
+        enemyTypeID: enemyData.enemyTypeID,
+        serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
+        worldPosition: { x: enemyData.positionX, y: this.localPlayerRef.current?.position.y || 0, z: enemyData.positionY },
+        rotation: enemyData.rotationY,
+        isMoving: enemyData.isMoving
+      });
+
+      try {
+        const newEnemy: Enemy = {
+          id: enemyData.id,
+          enemyTypeID: enemyData.enemyTypeID,
+          enemyTypeName: enemyData.enemyTypeName,
+          position: {
+            x: enemyData.positionX,
+            y: this.localPlayerRef.current?.position.y || 0, // Use player's ground level for Y-axis (vertical)
+            z: enemyData.positionY // Server's positionY maps to Three.js Z-axis
+          },
+          rotation: {
+            x: 0,
+            y: enemyData.rotationY || 0,
+            z: 0
+          },
+          isMoving: enemyData.isMoving
+        };
+
+        const enemyResult = EnemyManager.createSpriteEnemyModel(newEnemy);
+        if (!enemyResult || !enemyResult.model) {
+          console.error('❌ Failed to create sprite enemy model for:', enemyData.id);
+          return;
+        }
+
+        newEnemy.mesh = enemyResult.model;
+
+        // Position the enemy
+        enemyResult.model.position.set(
+          enemyData.positionX,                               // X coordinate from server
+          this.localPlayerRef.current?.position.y || 0,     // Use player's ground level for Y-axis (vertical)
+          enemyData.positionY                                // Server's positionY maps to Three.js Z-axis
+        );
+
+        console.log('📍 Positioning new enemy mesh:', {
+          id: enemyData.id,
+          setPosition: { 
+            x: enemyData.positionX, 
+            y: this.localPlayerRef.current?.position.y || 0, 
+            z: enemyData.positionY 
+          },
+          actualMeshPosition: {
+            x: enemyResult.model.position.x,
+            y: enemyResult.model.position.y,
+            z: enemyResult.model.position.z
+          },
+          playerGroundLevel: this.localPlayerRef.current?.position.y || 'unknown'
+        });
+
+        // Set rotation if provided
+        if (enemyData.rotationY !== undefined) {
+          enemyResult.model.rotation.y = THREE.MathUtils.degToRad(enemyData.rotationY);
+          console.log('🔄 Set enemy rotation:', {
+            id: enemyData.id,
+            rotationDegrees: enemyData.rotationY,
+            rotationRadians: enemyResult.model.rotation.y
+          });
+        }
+
+        // Mark as enemy for scene preservation during floor changes
+        enemyResult.model.userData.isEnemy = true;
+
+        this.sceneManager.addToScene(enemyResult.model);
+
+        console.log('✅ Successfully created and added new enemy:', {
+          id: enemyData.id,
+          meshId: enemyResult.model.uuid,
+          finalMeshPosition: {
+            x: enemyResult.model.position.x,
+            y: enemyResult.model.position.y,
+            z: enemyResult.model.position.z
+          },
+          visible: enemyResult.model.visible,
+          enemyType: enemyData.enemyTypeName,
+          inScene: enemyResult.model.parent !== null,
+          sceneChildren: this.sceneManager.scene.children.length
+        });
+
+        this.enemies.set(enemyData.id, newEnemy);
+
+        // Log current state of all enemies for debugging
+        console.log('📊 Current enemies in scene:', {
+          totalEnemies: this.enemies.size,
+          enemyIds: Array.from(this.enemies.keys()),
+          sceneObjectCount: this.sceneManager.scene.children.length
+        });
+
+      } catch (error) {
+        console.error('❌ Error creating new enemy:', enemyData.id, error);
+        // Clean up any partial state
+        this.enemies.delete(enemyData.id);
       }
     }
   }
@@ -681,6 +899,33 @@ export class GameManager {
       this.players.delete(playerId);
       this.playersAnimations.delete(playerId);
           }
+  }
+
+  private removeEnemy(enemyId: string): void {
+    console.log('🗑️ Removing enemy:', enemyId);
+    
+    const enemy = this.enemies.get(enemyId);
+    
+    if (enemy && enemy.mesh) {
+      try {
+        this.sceneManager.removeFromScene(enemy.mesh);
+        EnemyManager.disposeEnemyMesh(enemy.mesh);
+        EnemyManager.removeEnemy(enemyId);
+        this.enemies.delete(enemyId);
+        
+        console.log('✅ Successfully removed enemy:', enemyId);
+      } catch (error) {
+        console.error('❌ Error removing enemy:', enemyId, error);
+        // Force cleanup even if error occurs
+        this.enemies.delete(enemyId);
+        EnemyManager.removeEnemy(enemyId);
+      }
+    } else {
+      // Clean up any orphaned data
+      this.enemies.delete(enemyId);
+      EnemyManager.removeEnemy(enemyId);
+      console.log('🧹 Cleaned up orphaned enemy data:', enemyId);
+    }
   }
 
   private setupVisibilityHandler(): void {
@@ -1273,6 +1518,15 @@ export class GameManager {
       }
     });
     this.players.clear();
+
+    // Clean up enemies
+    this.enemies.forEach((enemy) => {
+      if (enemy.mesh) {
+        EnemyManager.disposeEnemyMesh(enemy.mesh);
+      }
+      EnemyManager.removeEnemy(enemy.id);
+    });
+    this.enemies.clear();
 
     if (this.localPlayerRef.current) {
       PlayerManager.disposePlayerMesh(this.localPlayerRef.current);
