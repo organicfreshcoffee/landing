@@ -336,39 +336,40 @@ export class EnemyManager {
 
   /**
    * Calculate enemy sprite direction based on rotation and local player position
+   * Using same logic as player system for consistency
    */
   static calculateEnemySpriteDirection(
     enemyPosition: THREE.Vector3,
     enemyRotationY: number,
     localPlayerPosition: THREE.Vector3
   ): 'front' | 'back' | 'left' | 'right' {
-    // Calculate direction from enemy to local player
+    // Calculate direction from enemy to local player (same as player system)
     const toLocalPlayer = new THREE.Vector3()
       .subVectors(localPlayerPosition, enemyPosition)
       .normalize();
     
-    // Convert to angle
+    // Convert to angle (same calculation as player system)
     const toLocalPlayerAngle = Math.atan2(toLocalPlayer.x, toLocalPlayer.z);
     
-    // Calculate the relative angle between where the enemy is facing and where the local player is
-    const enemyFacingAngle = THREE.MathUtils.degToRad(enemyRotationY);
+    // Enemy facing angle - convert rotation to radians
+    const enemyFacingAngle = enemyRotationY  // THREE.MathUtils.degToRad(enemyRotationY);
+    
+    // Calculate relative angle (same as player system)
     let relativeAngle = toLocalPlayerAngle - enemyFacingAngle;
     
-    // Normalize angle to [-π, π]
+    // Normalize angle to [-π, π] range (same as player system)
     while (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
     while (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
     
-    // Determine sprite direction based on relative angle
-    const absAngle = Math.abs(relativeAngle);
-    
-    if (absAngle <= Math.PI / 4) {
-      return 'back'; // Enemy facing towards local player (back view)
-    } else if (relativeAngle > Math.PI / 4 && relativeAngle <= 3 * Math.PI / 4) {
-      return 'right'; // Local player is to the right
-    } else if (absAngle > 3 * Math.PI / 4) {
-      return 'front'; // Enemy facing away from local player (front view)
+    // Determine sprite direction using same logic as player system
+    if (relativeAngle >= -Math.PI / 4 && relativeAngle < Math.PI / 4) {
+      return 'back'; // Player is in front of enemy (enemy shows back)
+    } else if (relativeAngle >= Math.PI / 4 && relativeAngle < 3 * Math.PI / 4) {
+      return 'left'; // Player is to the left from enemy's perspective
+    } else if (relativeAngle >= 3 * Math.PI / 4 || relativeAngle < -3 * Math.PI / 4) {
+      return 'front'; // Player is behind enemy (enemy shows front)
     } else {
-      return 'left'; // Local player is to the left
+      return 'right'; // Player is to the right from enemy's perspective
     }
   }
 
