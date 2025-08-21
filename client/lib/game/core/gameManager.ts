@@ -332,11 +332,12 @@ export class GameManager {
           });
           
           // Log local player position for comparison
-          if (this.localPlayerRef.current) {
+          const currentPlayerPosition = this.movementController.getCurrentPlayerPosition();
+          if (currentPlayerPosition) {
             console.log('👤 Local player position for comparison:', {
-              x: this.localPlayerRef.current.position.x,
-              y: this.localPlayerRef.current.position.y,
-              z: this.localPlayerRef.current.position.z
+              x: currentPlayerPosition.x,
+              y: currentPlayerPosition.y,
+              z: currentPlayerPosition.z
             });
           }
 
@@ -352,7 +353,7 @@ export class GameManager {
               id: enemyData.id,
               enemyType: enemyData.enemyTypeName,
               serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
-              worldPosition: { x: enemyData.positionX, y: this.localPlayerRef.current?.position.y || 0, z: enemyData.positionY },
+              worldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
               rotation: enemyData.rotationY,
               isMoving: enemyData.isMoving
             });
@@ -538,7 +539,7 @@ export class GameManager {
         enemyType: enemyData.enemyTypeName,
         oldPosition: existingEnemy.position,
         newServerPosition: { x: enemyData.positionX, y: enemyData.positionY },
-        newWorldPosition: { x: enemyData.positionX, y: this.localPlayerRef.current?.position.y || 0, z: enemyData.positionY },
+        newWorldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
         isMoving: enemyData.isMoving,
         rotation: enemyData.rotationY
       });
@@ -546,7 +547,7 @@ export class GameManager {
       // Update enemy data
       existingEnemy.position = {
         x: enemyData.positionX,
-        y: this.localPlayerRef.current?.position.y || 0, // Use player's ground level for Y-axis (vertical)
+        y: this.movementController.getCurrentPlayerPosition()?.y || 0, // Use player's real-time ground level for Y-axis (vertical)
         z: enemyData.positionY // Server's positionY maps to Three.js Z-axis
       };
       
@@ -562,7 +563,7 @@ export class GameManager {
 
       // Update position and animation
       try {
-        EnemyManager.updateEnemyPosition(existingEnemy, enemyData);
+        EnemyManager.updateEnemyPosition(existingEnemy, enemyData, this.movementController.getCurrentPlayerPosition() || undefined);
         
         // Log final mesh position after update
         if (existingEnemy.mesh) {
@@ -587,7 +588,7 @@ export class GameManager {
         enemyType: enemyData.enemyTypeName,
         enemyTypeID: enemyData.enemyTypeID,
         serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
-        worldPosition: { x: enemyData.positionX, y: this.localPlayerRef.current?.position.y || 0, z: enemyData.positionY },
+        worldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
         rotation: enemyData.rotationY,
         isMoving: enemyData.isMoving
       });
@@ -599,7 +600,7 @@ export class GameManager {
           enemyTypeName: enemyData.enemyTypeName,
           position: {
             x: enemyData.positionX,
-            y: this.localPlayerRef.current?.position.y || 0, // Use player's ground level for Y-axis (vertical)
+            y: this.movementController.getCurrentPlayerPosition()?.y || 0, // Use player's real-time ground level for Y-axis (vertical)
             z: enemyData.positionY // Server's positionY maps to Three.js Z-axis
           },
           rotation: {
@@ -620,16 +621,16 @@ export class GameManager {
 
         // Position the enemy
         enemyResult.model.position.set(
-          enemyData.positionX,                               // X coordinate from server
-          this.localPlayerRef.current?.position.y || 0,     // Use player's ground level for Y-axis (vertical)
-          enemyData.positionY                                // Server's positionY maps to Three.js Z-axis
+          enemyData.positionX,                                              // X coordinate from server
+          this.movementController.getCurrentPlayerPosition()?.y || 0,      // Use player's real-time ground level for Y-axis (vertical)
+          enemyData.positionY                                               // Server's positionY maps to Three.js Z-axis
         );
 
         console.log('📍 Positioning new enemy mesh:', {
           id: enemyData.id,
           setPosition: { 
             x: enemyData.positionX, 
-            y: this.localPlayerRef.current?.position.y || 0, 
+            y: this.movementController.getCurrentPlayerPosition()?.y || 0, 
             z: enemyData.positionY 
           },
           actualMeshPosition: {
@@ -637,7 +638,7 @@ export class GameManager {
             y: enemyResult.model.position.y,
             z: enemyResult.model.position.z
           },
-          playerGroundLevel: this.localPlayerRef.current?.position.y || 'unknown'
+          playerGroundLevel: this.movementController.getCurrentPlayerPosition()?.y || 'unknown'
         });
 
         // Set rotation if provided
