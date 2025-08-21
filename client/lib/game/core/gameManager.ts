@@ -362,6 +362,20 @@ export class GameManager {
           console.warn('⚠️ Invalid enemy-moved message data:', message.data);
         }
         break;
+
+      case 'enemy-despawned':
+        if (message.data && message.data.enemyId) {
+          console.log('💀 Received enemy-despawned message:', {
+            enemyId: message.data.enemyId,
+            floorName: message.data.floorName
+          });
+          
+          // Remove the enemy from the scene
+          this.removeEnemy(message.data.enemyId);
+        } else {
+          console.warn('⚠️ Invalid enemy-despawned message data:', message.data);
+        }
+        break;
     }
   }
 
