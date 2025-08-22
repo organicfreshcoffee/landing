@@ -5,6 +5,7 @@ import { initializeFirebaseAdmin } from './config/firebase';
 import { connectToDatabase } from './config/database';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
+import dungeonRoutes from './routes/dungeon';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -101,6 +102,7 @@ async function setupServer() {
   
   app.use('/api', authRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/dungeon', dungeonRoutes);
 
   // Health check endpoint
   app.get('/health', (req, res) => {

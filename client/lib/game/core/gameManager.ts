@@ -44,7 +44,8 @@ export class GameManager {
     }) => void,
     private onFloorChange?: (floorName: string) => void,
     private onHealthUpdate?: (health: { health: number; maxHealth: number; isAlive: boolean }) => void,
-    private onPlayerDeath?: () => void
+    private onPlayerDeath?: () => void,
+    private onOpenGraphViewer?: () => void
   ) {
     this.currentPlayerId = user?.uid || 'local';
     this.sceneManager = new SceneManager(canvas);
@@ -61,7 +62,8 @@ export class GameManager {
       this.selectedCharacter,
       (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos),
       (action, data, target) => this.sendPlayerAction(action, data, target),
-      () => this.handleDebugDeath()
+      () => this.handleDebugDeath(),
+      this.onOpenGraphViewer
     );
 
     this.initializeGame();

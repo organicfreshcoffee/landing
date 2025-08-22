@@ -6,7 +6,9 @@ import { ensureProtocol } from '../lib/urlUtils';
 import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
 import HealthHUD from '../components/HealthHUD';
+import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
+import { VisitedNode } from '../lib/game/types/api';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -41,6 +43,8 @@ export default function Game() {
     toFloor: ''
   });
   const [currentFloor, setCurrentFloor] = useState<string>('Unknown');
+  const [showGraphViewer, setShowGraphViewer] = useState<boolean>(false);
+  const [visitedNodes, setVisitedNodes] = useState<VisitedNode[]>([]);
 
   // Handle authentication
   useEffect(() => {
@@ -114,7 +118,8 @@ export default function Game() {
         setFloorTransition, // Pass floor transition state setter
         setCurrentFloor, // Pass current floor state setter
         setPlayerHealth, // Pass health update callback
-        () => setIsRespawning(true) // Pass death callback
+        () => setIsRespawning(true), // Pass death callback
+        handleOpenGraphViewer // Pass graph viewer callback
       );
       gameManagerRef.current = gameManager;
       
@@ -189,6 +194,26 @@ export default function Game() {
     
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
         gameManagerRef.current.manualReconnect(serverAddress);
+  };
+
+  const handleOpenGraphViewer = async () => {
+    if (!server) return;
+    
+    try {
+      const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+      const response = await DungeonApi.getVisitedNodes(serverAddress);
+      
+      if (response.success) {
+        setVisitedNodes(response.data);
+        setShowGraphViewer(true);
+      }
+    } catch (error) {
+      console.error('Error fetching visited nodes:', error);
+    }
+  };
+
+  const handleCloseGraphViewer = () => {
+    setShowGraphViewer(false);
   };
 
   // Render connection status with quality information
@@ -324,7 +349,7 @@ export default function Game() {
 
         {gameState.connected && (
           <div className={styles.controls}>
-            <div>Controls: WASD to move, Tab for Admin mode, 9 for Debug death</div>
+            <div>Controls: WASD to move, Tab for Admin mode, 9 for Debug death, P for Dungeon Graph</div>
             <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
             <div>Players online: {gameManagerRef.current?.playersCount || 1}</div>
           </div>
@@ -340,6 +365,13 @@ export default function Game() {
         direction={floorTransition.direction}
         fromFloor={floorTransition.fromFloor}
         toFloor={floorTransition.toFloor}
+      />
+
+      {/* Dungeon Graph Viewer */}
+      <DungeonGraphViewer
+        nodes={visitedNodes}
+        isVisible={showGraphViewer}
+        onClose={handleCloseGraphViewer}
       />
     </div>
   );
