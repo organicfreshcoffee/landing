@@ -50,7 +50,8 @@ export class MovementController {
     private selectedCharacter: CharacterData,
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
     private sendPlayerAction?: (action: string, data?: any, target?: string) => void,
-    private onDebugDeath?: () => void
+    private onDebugDeath?: () => void,
+    private onOpenGraphViewer?: () => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -75,6 +76,15 @@ export class MovementController {
       if (event.code === 'Tab') {
         event.preventDefault();
         this.toggleAdminMode();
+        return;
+      }
+
+      // Handle graph viewer (key "P")
+      if (event.code === 'KeyP') {
+        event.preventDefault();
+        if (this.onOpenGraphViewer) {
+          this.onOpenGraphViewer();
+        }
         return;
       }
 

@@ -162,3 +162,17 @@ export interface CurrentStatusResponse {
     isAlive: boolean;
   };
 }
+
+export interface VisitedNode {
+  _id: string;
+  name: string;
+  children: string[];
+  isDownwardsFromParent: boolean;
+  isBossLevel: boolean;
+  visitedBy: boolean;
+}
+
+export interface VisitedNodesResponse {
+  success: boolean;
+  data: VisitedNode[];
+}

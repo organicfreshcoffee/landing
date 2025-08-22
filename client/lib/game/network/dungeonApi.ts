@@ -8,7 +8,8 @@ import {
   SpawnLocationResponse,
   PlayerMovedFloorResponse,
   CurrentFloorResponse,
-  CurrentStatusResponse
+  CurrentStatusResponse,
+  VisitedNodesResponse
 } from '../types/api';
 
 /**
@@ -28,6 +29,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getRoomStairs: (floorDagNodeName: string) => `${baseUrl}/api/dungeon/room-stairs/${floorDagNodeName}`,
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
     getCurrentStatus: () => `${baseUrl}/api/dungeon/current-status`,
+    getVisitedNodes: () => `${baseUrl}/api/dungeon/visited-nodes`,
   };
 };
 
@@ -203,6 +205,24 @@ export class DungeonApi {
       };
     } catch (error) {
       console.error('❌ Error getting current floor:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get visited nodes for the player
+   */
+  static async getVisitedNodes(serverAddress: string): Promise<VisitedNodesResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const url = endpoints.getVisitedNodes();
+      
+      const response = await axios.get(url, config);
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting visited nodes:', error);
       throw error;
     }
   }
