@@ -35,16 +35,44 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
   useEffect(() => {
     if (!nodes.length) return;
 
-    // Create a map for quick lookup
-    const nodeMap = new Map(nodes.map(node => [node.name, node]));
+    // Create a map for quick lookup of visited nodes
+    const visitedNodeMap = new Map(nodes.map(node => [node.name, node]));
+    
+    // Build complete node list including unvisited children
+    const allNodes = new Map<string, VisitedNode>();
+    
+    // Add all visited nodes
+    nodes.forEach(node => {
+      allNodes.set(node.name, node);
+    });
+    
+    // Add unvisited children as placeholder nodes
+    nodes.forEach(node => {
+      node.children.forEach(childName => {
+        if (!allNodes.has(childName)) {
+          // Create a placeholder for unvisited child
+          allNodes.set(childName, {
+            _id: `unvisited_${childName}`,
+            name: childName,
+            children: [], // Unvisited nodes don't have known children
+            isDownwardsFromParent: true, // Assume children are downward
+            isBossLevel: false, // Unknown, assume false
+            visitedBy: false
+          });
+        }
+      });
+    });
+    
+    // Convert to array for processing
+    const allNodesArray = Array.from(allNodes.values());
     
     // Build the graph structure and calculate positions
     const layoutNodes: GraphNode[] = [];
     const positioned = new Set<string>();
     
     // Find root nodes (nodes with no parents)
-    const children = new Set(nodes.flatMap(node => node.children));
-    const rootNodes = nodes.filter(node => !children.has(node.name));
+    const children = new Set(allNodesArray.flatMap(node => node.children));
+    const rootNodes = allNodesArray.filter(node => !children.has(node.name));
     
     // Level-based layout
     const levels: string[][] = [];
@@ -59,7 +87,7 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
       if (!levels[level]) levels[level] = [];
       levels[level].push(name);
       
-      const node = nodeMap.get(name);
+      const node = allNodes.get(name);
       if (node) {
         node.children.forEach(childName => {
           if (!positioned.has(childName)) {
@@ -78,7 +106,7 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
       const startX = -(levelNodes.length - 1) * nodeWidth / 2;
       
       levelNodes.forEach((nodeName, nodeIndex) => {
-        const node = nodeMap.get(nodeName);
+        const node = allNodes.get(nodeName);
         if (node) {
           layoutNodes.push({
             ...node,
@@ -116,12 +144,26 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
       node.children.forEach(childName => {
         const childNode = graphNodes.find(n => n.name === childName);
         if (childNode) {
-          ctx.strokeStyle = '#444';
-          ctx.lineWidth = 2;
+          // Different line styles for visited vs unvisited connections
+          if (node.visitedBy && childNode.visitedBy) {
+            ctx.strokeStyle = '#4ecdc4';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([]);
+          } else if (node.visitedBy && !childNode.visitedBy) {
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]); // Dashed line to unvisited
+          } else {
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]); // Shorter dashes for unknown connections
+          }
+          
           ctx.beginPath();
-          ctx.moveTo(node.position.x, node.position.y + 40);
-          ctx.lineTo(childNode.position.x, childNode.position.y - 40);
+          ctx.moveTo(node.position.x, node.position.y + 30);
+          ctx.lineTo(childNode.position.x, childNode.position.y - 30);
           ctx.stroke();
+          ctx.setLineDash([]); // Reset line dash
         }
       });
     });
@@ -134,32 +176,42 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
       if (node.visitedBy) {
         ctx.fillStyle = node.isBossLevel ? '#ff6b6b' : '#4ecdc4';
       } else {
-        ctx.fillStyle = '#888';
+        ctx.fillStyle = '#555'; // Darker gray for unvisited
       }
       
       ctx.fillRect(x - 50, y - 30, 100, 60);
       
       // Node border
-      ctx.strokeStyle = node.visitedBy ? '#fff' : '#666';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = node.visitedBy ? '#fff' : '#999';
+      ctx.lineWidth = node.visitedBy ? 2 : 1;
       ctx.strokeRect(x - 50, y - 30, 100, 60);
       
+      // Add dashed border for unvisited nodes
+      if (!node.visitedBy) {
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#777';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 50, y - 30, 100, 60);
+        ctx.setLineDash([]); // Reset line dash
+      }
+      
       // Node text
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = node.visitedBy ? '#fff' : '#ccc';
       ctx.font = '14px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(node.name, x, y - 5);
       
       // Boss indicator
-      if (node.isBossLevel) {
+      if (node.isBossLevel && node.visitedBy) {
         ctx.font = '10px monospace';
+        ctx.fillStyle = '#fff';
         ctx.fillText('BOSS', x, y + 10);
       }
       
-      // Visited indicator
+      // Unvisited indicator
       if (!node.visitedBy) {
         ctx.font = '10px monospace';
-        ctx.fillStyle = '#ccc';
+        ctx.fillStyle = '#999';
         ctx.fillText('UNVISITED', x, y + 15);
       }
     });

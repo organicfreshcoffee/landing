@@ -8,11 +8,12 @@ const router = Router();
 // In a real implementation, this would come from your dungeon/game database
 const generateMockVisitedNodes = (userId: string) => {
   // This is a mock implementation - replace with actual database queries
+  // The key point is that we return ALL nodes the player knows about (visited + their unvisited children)
   return [
     {
       "_id": "689cd43618066bd377eac777",
       "name": "A",
-      "children": ["AA", "AB"],
+      "children": ["AA", "AB"], // Player knows these children exist
       "isDownwardsFromParent": false,
       "isBossLevel": false,
       "visitedBy": true
@@ -20,43 +21,29 @@ const generateMockVisitedNodes = (userId: string) => {
     {
       "_id": "689cd43618066bd377eac778",
       "name": "AA",
-      "children": ["AAA"],
+      "children": ["AAA", "AAB"], // Player can see these children from this visited node
       "isDownwardsFromParent": true,
       "isBossLevel": false,
       "visitedBy": true
     },
     {
-      "_id": "689cd43618066bd377eac779",
+      "_id": "689cd43618066bd377eac779", 
       "name": "AB",
-      "children": ["ABA", "ABB"],
+      "children": ["ABA"], // Only one child visible from this node
       "isDownwardsFromParent": true,
       "isBossLevel": false,
-      "visitedBy": false
+      "visitedBy": true
     },
     {
       "_id": "689cd43618066bd377eac780",
       "name": "AAA",
-      "children": [],
+      "children": [], // Dead end or no visible children
       "isDownwardsFromParent": true,
       "isBossLevel": true,
-      "visitedBy": false
-    },
-    {
-      "_id": "689cd43618066bd377eac781",
-      "name": "ABA",
-      "children": [],
-      "isDownwardsFromParent": true,
-      "isBossLevel": false,
-      "visitedBy": false
-    },
-    {
-      "_id": "689cd43618066bd377eac782",
-      "name": "ABB",
-      "children": [],
-      "isDownwardsFromParent": true,
-      "isBossLevel": true,
-      "visitedBy": false
+      "visitedBy": true // Player has been here
     }
+    // Note: AAB, ABA are not included in the response because they haven't been visited
+    // But the graph will show them as unvisited children based on the "children" arrays above
   ];
 };
 
