@@ -7,6 +7,15 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     outputFileTracingRoot: undefined,
+    esmExternals: 'loose',
+  },
+  transpilePackages: ['@strudel/core', '@strudel/mini', '@strudel/tonal', '@strudel/web'],
+  webpack: (config) => {
+    config.resolve.extensionAlias = {
+      '.js': ['.js', '.ts', '.tsx'],
+      '.mjs': ['.mjs', '.js', '.ts', '.tsx'],
+    };
+    return config;
   },
 }
 

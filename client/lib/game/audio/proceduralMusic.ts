@@ -3,21 +3,29 @@
  * Generates music based on dungeon data (layout, tiles, floor names)
  */
 
-import { mini } from '@strudel/mini';
-import { initStrudel } from '@strudel/web';
 import { DungeonNode, FloorLayoutResponse, GeneratedFloorTilesResponse, FloorTile, WallTile } from '../types/api';
+import { simpleProceduralMusic } from './simpleMusic';
 
-// Initialize Strudel when the module loads
+// Dynamic imports to avoid build-time issues
 let strudelInitialized = false;
+let mini: any = null;
+let initStrudel: any = null;
 
 /**
  * Initialize Strudel if not already initialized
  */
-async function ensureStrudelInitialized(): Promise<void> {
+async function ensureStrudelInitialized(): Promise<boolean> {
   if (!strudelInitialized) {
-    await initStrudel();
-    strudelInitialized = true;
+    try {
+      console.warn('⚠️ Strudel integration temporarily disabled due to module resolution issues');
+      console.log('🎵 Using simple audio fallback system');
+      return false;
+    } catch (error) {
+      console.warn('⚠️ Failed to initialize Strudel, falling back to simple audio:', error);
+      return false;
+    }
   }
+  return true;
 }
 
 /**
@@ -195,12 +203,16 @@ export class ProceduralMusicManager {
   private currentPattern: any = null;
   private isPlaying: boolean = false;
   private currentFloor: string | null = null;
+  private useStrudel: boolean = false;
   
   /**
    * Initialize the music manager
    */
   async initialize(): Promise<void> {
-    await ensureStrudelInitialized();
+    this.useStrudel = await ensureStrudelInitialized();
+    if (!this.useStrudel) {
+      await simpleProceduralMusic.initialize();
+    }
   }
   
   /**
@@ -223,6 +235,15 @@ export class ProceduralMusicManager {
       }
       
       await this.initialize();
+      
+      if (!this.useStrudel) {
+        // Fall back to simple music
+        const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
+        await simpleProceduralMusic.playFloorMusic(floorName, roomCount);
+        this.isPlaying = true;
+        this.currentFloor = floorName;
+        return;
+      }
       
       // Analyze dungeon data and generate music parameters
       const musicParams = analyzeDungeonData(floorLayout, floorTiles, floorName);
@@ -251,7 +272,9 @@ export class ProceduralMusicManager {
    */
   async stopMusic(): Promise<void> {
     try {
-      if (this.currentPattern) {
+      if (!this.useStrudel) {
+        await simpleProceduralMusic.stopMusic();
+      } else if (this.currentPattern) {
         this.currentPattern.stop();
         this.currentPattern = null;
       }
@@ -269,9 +292,16 @@ export class ProceduralMusicManager {
    * Pause/resume music
    */
   async toggleMusic(): Promise<void> {
-    if (!this.currentPattern) return;
-    
     try {
+      if (!this.useStrudel) {
+        await simpleProceduralMusic.toggleMusic();
+        const status = simpleProceduralMusic.getStatus();
+        this.isPlaying = status.isPlaying;
+        return;
+      }
+      
+      if (!this.currentPattern) return;
+      
       if (this.isPlaying) {
         this.currentPattern.stop();
         this.isPlaying = false;
