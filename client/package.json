@@ -17,6 +17,10 @@
     "test:manual": "npx ts-node lib/game/test-spawn-endpoint.ts"
   },
   "dependencies": {
+    "@strudel/core": "^1.2.3",
+    "@strudel/mini": "^1.2.3",
+    "@strudel/tonal": "^1.2.3",
+    "@strudel/web": "^1.2.3",
     "@types/jszip": "^3.4.0",
     "@types/three": "^0.179.0",
     "axios": "^1.6.2",

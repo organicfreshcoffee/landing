@@ -9,6 +9,7 @@ import { StairInteractionManager, StairInteractionData } from '../ui/stairIntera
 import { DungeonApi } from '../network/dungeonApi';
 import { StairInfo } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
+import { proceduralMusic } from '../audio/proceduralMusic';
 
 export class GameManager {
   private sceneManager: SceneManager;
@@ -1427,7 +1428,10 @@ export class GameManager {
         this.onFloorChange(currentFloor);
       }
       
-          } catch (error) {
+      // Generate and play procedural music for the floor
+      await this.generateFloorMusic(currentFloor);
+      
+    } catch (error) {
       console.error('Error loading floor:', error);
       throw error;
     }
@@ -1489,6 +1493,44 @@ export class GameManager {
       totalPlayersInMap: this.players.size,
       totalAnimationsTracked: this.playersAnimations.size
     };
+  }
+
+  /**
+   * Generate and play procedural music for the current floor
+   */
+  private async generateFloorMusic(floorName: string | null): Promise<void> {
+    if (!floorName) {
+      console.log('🎵 No floor name provided, skipping music generation');
+      return;
+    }
+
+    try {
+      // Get server address from scene manager
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.log('🎵 No server address available, skipping music generation');
+        return;
+      }
+
+      console.log('🎵 Generating procedural music for floor:', floorName);
+
+      // Get floor layout data
+      const floorLayout = await DungeonApi.getFloorLayout(serverAddress, floorName);
+      
+      // Try to get generated floor tiles (optional)
+      let floorTiles = null;
+      try {
+        floorTiles = await DungeonApi.getGeneratedFloorTiles(serverAddress, floorName);
+      } catch (error) {
+        console.log('🎵 Floor tiles not available, using layout only for music generation');
+      }
+
+      // Generate and play music
+      await proceduralMusic.playFloorMusic(floorName, floorLayout, floorTiles);
+    } catch (error) {
+      console.error('🎵 Error generating floor music:', error);
+      // Don't throw error - music failure shouldn't break the game
+    }
   }
 
   cleanup(): void {

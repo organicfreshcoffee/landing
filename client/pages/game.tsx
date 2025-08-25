@@ -6,6 +6,7 @@ import { ensureProtocol } from '../lib/urlUtils';
 import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
 import HealthHUD from '../components/HealthHUD';
+import { MusicControls } from '../components/MusicControls';
 import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
 import { VisitedNode } from '../lib/game/types/api';
@@ -355,6 +356,9 @@ export default function Game() {
           </div>
         )}
       </div>
+
+      {/* Music Controls */}
+      <MusicControls currentFloor={currentFloor} />
 
       {/* Game Canvas */}
       <canvas ref={canvasRef} className={styles.gameCanvas} />
