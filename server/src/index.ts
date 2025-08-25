@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { initializeFirebaseAdmin } from './config/firebase';
 import { connectToDatabase } from './config/database';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
@@ -63,19 +62,6 @@ app.use(express.json());
 // Initialize services before starting the server
 async function initializeServices() {
   try {
-    // Initialize Firebase Admin SDK first
-    console.log('Initializing Firebase Admin SDK...');
-    try {
-      await initializeFirebaseAdmin();
-    } catch (firebaseError) {
-      console.error('Firebase initialization failed:', firebaseError);
-      console.warn('Server will start without Firebase functionality');
-      // Don't exit - allow server to start without Firebase in development
-      if (process.env.NODE_ENV === 'production') {
-        throw firebaseError;
-      }
-    }
-    
     // Connect to Database
     console.log('Connecting to database...');
     try {

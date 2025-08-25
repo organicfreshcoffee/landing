@@ -29,10 +29,7 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - MONGODB_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/landing?authSource=admin
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
-    volumes:
-      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/service-account-key.json:ro
+      - AUTH_SERVER_URL=${AUTH_SERVER_URL}
     depends_on:
       - mongodb
     networks:
@@ -49,7 +46,7 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - NEXT_PUBLIC_AUTH_SERVER_URL=${AUTH_SERVER_URL}
     depends_on:
       - server
     networks:

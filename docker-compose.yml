@@ -29,12 +29,10 @@ services:
       - NODE_ENV=development
       - PORT=3001
       - MONGODB_URI=mongodb://admin:password@mongodb:27017/landing?authSource=admin
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
+      - AUTH_SERVER_URL=${AUTH_SERVER_URL:-http://localhost:3002}
     volumes:
       - ./server:/app
       - /app/node_modules
-      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/service-account-key.json
     depends_on:
       - mongodb
     networks:
@@ -52,7 +50,7 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:3001
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - NEXT_PUBLIC_AUTH_SERVER_URL=${AUTH_SERVER_URL:-http://localhost:3002}
     volumes:
       - ./client:/app
       - /app/node_modules

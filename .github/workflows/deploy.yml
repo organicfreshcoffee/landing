@@ -98,7 +98,7 @@ jobs:
       run: |
         docker build -f client/Dockerfile.prod \
           --build-arg SERVER_URL=${{ secrets.SERVER_URL_STAGING }} \
-          --build-arg GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }} \
+          --build-arg AUTH_SERVER_URL=${{ secrets.AUTH_SERVER_URL_STAGING }} \
           -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }} \
           -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:latest \
           ./client
@@ -182,7 +182,7 @@ jobs:
           --max-instances 10 \
           --concurrency 1000 \
           --timeout 3600 \
-          --set-env-vars NODE_ENV=staging,MONGODB_URI=${{ secrets.MONGODB_URI_STAGING }},CLIENT_URL=${{ secrets.CLIENT_URL_STAGING }},GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}
+          --set-env-vars NODE_ENV=staging,MONGODB_URI=${{ secrets.MONGODB_URI_STAGING }},CLIENT_URL=${{ secrets.CLIENT_URL_STAGING }},AUTH_SERVER_URL=${{ secrets.AUTH_SERVER_URL_STAGING }}
           
     - name: Get Staging Server URL
       run: |
@@ -218,7 +218,7 @@ jobs:
       run: |
         docker build -f client/Dockerfile.prod \
           --build-arg SERVER_URL=${{ secrets.SERVER_URL }} \
-          --build-arg GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }} \
+          --build-arg AUTH_SERVER_URL=${{ secrets.AUTH_SERVER_URL }} \
           -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:${{ github.sha }} \
           -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.CLIENT_SERVICE_NAME }}:latest \
           ./client
@@ -299,7 +299,7 @@ jobs:
           --max-instances 10 \
           --concurrency 1000 \
           --timeout 3600 \
-          --set-env-vars NODE_ENV=production,MONGODB_URI=${{ secrets.MONGODB_URI }},CLIENT_URL=${{ secrets.CLIENT_URL }},GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}
+          --set-env-vars NODE_ENV=production,MONGODB_URI=${{ secrets.MONGODB_URI }},CLIENT_URL=${{ secrets.CLIENT_URL }},AUTH_SERVER_URL=${{ secrets.AUTH_SERVER_URL }}
           
     - name: Get Server URL
       run: |
