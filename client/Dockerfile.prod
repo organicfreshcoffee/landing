@@ -4,11 +4,11 @@ WORKDIR /app
 
 # Accept build arguments
 ARG SERVER_URL
-ARG GOOGLE_CLOUD_PROJECT
+ARG AUTH_SERVER_URL
 
 # Set environment variables for build
 ENV SERVER_URL=${SERVER_URL}
-ENV GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+ENV AUTH_SERVER_URL=${AUTH_SERVER_URL}
 
 # Copy package files and install dependencies
 COPY package*.json ./

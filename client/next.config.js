@@ -2,7 +2,7 @@
 const nextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.SERVER_URL || process.env.NEXT_PUBLIC_API_URL,
-    GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT,
+    NEXT_PUBLIC_AUTH_SERVER_URL: process.env.AUTH_SERVER_URL || process.env.NEXT_PUBLIC_AUTH_SERVER_URL,
   },
   output: 'standalone',
   experimental: {

@@ -18,14 +18,26 @@ export const getApiUrl = (): string => {
   return apiUrl;
 };
 
+// Get the Auth Server URL from environment variables
+export const getAuthServerUrl = (): string => {
+  const authServerUrl = process.env.NEXT_PUBLIC_AUTH_SERVER_URL;
+  
+  if (!authServerUrl) {
+    console.warn('NEXT_PUBLIC_AUTH_SERVER_URL not set, falling back to localhost');
+    return 'http://localhost:3002';
+  }
+  
+  return authServerUrl;
+};
+
 // API endpoint builders
 export const apiEndpoints = {
-  // Auth endpoints
-  login: () => `${getApiUrl()}/api/login`,
-  verify: () => `${getApiUrl()}/api/verify`, 
-  firebaseConfig: () => `${getApiUrl()}/api/firebase-config`,
+  // Auth endpoints (now point to auth server)
+  verify: () => `${getAuthServerUrl()}/api/verify`, 
+  firebaseConfig: () => `${getAuthServerUrl()}/api/firebase-config`,
   
-  // Server endpoints
+  // Server endpoints (main app server)
+  login: () => `${getApiUrl()}/api/login`,
   servers: () => `${getApiUrl()}/api/servers`,
   
   // User data endpoints
