@@ -12,7 +12,7 @@ import * as SimpleMusicModule from './simpleMusic';
 console.log('🔍 Debug: SimpleMusicModule:', SimpleMusicModule);
 console.log('🔍 Debug: SimpleMusicModule.simpleProceduralMusic:', SimpleMusicModule.simpleProceduralMusic);
 
-const simpleProceduralMusic = SimpleMusicModule.simpleProceduralMusic;
+const simpleProceduralMusic = SimpleMusicModule.simpleProceduralMusic as any;
 
 // Dynamic imports to avoid build-time issues
 let strudelInitialized = false;
@@ -317,6 +317,61 @@ export class ProceduralMusicManager {
       console.log('🔇 Stopped procedural music');
     } catch (error) {
       console.error('❌ Error stopping music:', error);
+    }
+  }
+
+  /**
+   * Completely clear music state (for floor changes)
+   */
+  async clearMusic(): Promise<void> {
+    try {
+      if (!this.useStrudel) {
+        if (simpleProceduralMusic && typeof simpleProceduralMusic.stopMusic === 'function') {
+          await simpleProceduralMusic.stopMusic();
+        }
+      } else if (this.currentPattern) {
+        this.currentPattern.stop();
+        this.currentPattern = null;
+      }
+      
+      this.isPlaying = false;
+      this.currentFloor = null;
+      
+      console.log('🗑️ Cleared music state');
+    } catch (error) {
+      console.error('❌ Error clearing music:', error);
+    }
+  }
+  
+  /**
+   * Pause/resume music
+   */
+  async toggleMusic(): Promise<void> {
+    try {
+      if (!this.useStrudel) {
+        if (simpleProceduralMusic && typeof simpleProceduralMusic.toggleMusic === 'function') {
+          await simpleProceduralMusic.toggleMusic();
+          if (typeof simpleProceduralMusic.getStatus === 'function') {
+            const status = simpleProceduralMusic.getStatus();
+            this.isPlaying = status.isPlaying;
+          }
+        }
+        return;
+      }
+      
+      if (!this.currentPattern) return;
+      
+      if (this.isPlaying) {
+        this.currentPattern.stop();
+        this.isPlaying = false;
+        console.log('⏸️ Paused music');
+      } else {
+        this.currentPattern.play();
+        this.isPlaying = true;
+        console.log('▶️ Resumed music');
+      }
+    } catch (error) {
+      console.error('❌ Error toggling music:', error);
     }
   }
 
