@@ -212,17 +212,6 @@ export class EnemyManager {
       enemyData.positionY    // Server's positionY maps to Three.js Z-axis
     );
 
-    console.log('🎯 Updating enemy position:', {
-      id: enemy.id,
-      oldPosition: {
-        x: enemy.mesh.position.x,
-        y: enemy.mesh.position.y,
-        z: enemy.mesh.position.z
-      },
-      newTargetPosition: targetPosition,
-      serverCoords: { x: enemyData.positionX, y: enemyData.positionY }
-    });
-
     // Update position
     enemy.mesh.position.copy(targetPosition);
 
@@ -254,17 +243,6 @@ export class EnemyManager {
 
     // Update movement state
     enemy.isMoving = enemyData.isMoving;
-
-    console.log('✅ Enemy position updated:', {
-      id: enemy.id,
-      finalPosition: {
-        x: enemy.mesh.position.x,
-        y: enemy.mesh.position.y,
-        z: enemy.mesh.position.z
-      },
-      isMoving: enemy.isMoving,
-      meshVisible: enemy.mesh.visible
-    });
 
     // Update sprite animation based on movement
     this.updateEnemyAnimation(enemy.id, enemyData);

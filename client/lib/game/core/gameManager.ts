@@ -162,7 +162,7 @@ export class GameManager {
     this.sceneManager.addToScene(localPlayerScene);
     this.localPlayerRef.current = localPlayerScene;
     
-      }
+  }
 
   async connectToServer(serverAddress: string): Promise<void> {
         
@@ -170,7 +170,7 @@ export class GameManager {
     this.sceneManager.setServerAddress(serverAddress);
     
     // Load initial scenery from server
-        await this.sceneManager.loadScenery();
+    await this.sceneManager.loadScenery();
     
     // Update collision data after loading scenery
     this.movementController.updateCollisionData(this.sceneManager.scene);
@@ -183,8 +183,7 @@ export class GameManager {
       try {
         const position = JSON.parse(storedPosition);
         const rotation = JSON.parse(storedRotation);
-        
-                        
+                
         // Set position
         this.localPlayerRef.current.position.set(position.x, position.y, position.z);
         
@@ -198,8 +197,7 @@ export class GameManager {
         // Clear stored data after using it
         sessionStorage.removeItem('playerPosition');
         sessionStorage.removeItem('playerRotation');
-        
-              } catch (error) {
+      } catch (error) {
         console.error('❌ Error parsing stored position/rotation, falling back to ground positioning:', error);
         this.positionPlayerOnGround();
       }
@@ -223,8 +221,7 @@ export class GameManager {
     switch (message.type) {
       case 'player_joined':
         // Handle new player joining with full player data
-        if (message.data.id && message.data.position && message.data.character) {
-                    
+        if (message.data.id && message.data.position && message.data.character) {      
           this.updatePlayer({
             id: message.data.id,
             position: message.data.position,
@@ -241,20 +238,7 @@ export class GameManager {
       case 'player_moved':
         // Handle both new players joining and existing players moving
         // Character data is included in all movement messages
-        if (message.data.playerId && message.data.position) {
-          // Only log character data for new players
-          const isNewPlayer = !this.players.has(message.data.playerId);
-          if (isNewPlayer && message.data.character) {
-                      }
-          
-          console.log('📨 Received player_moved for:', message.data.playerId, {
-            isNewPlayer,
-            hasCharacter: !!message.data.character,
-            characterName: message.data.character?.name,
-            position: message.data.position,
-            currentPlayerCount: this.players.size
-          });
-          
+        if (message.data.playerId && message.data.position) {          
           this.updatePlayer({
             id: message.data.playerId,
             position: message.data.position,
@@ -286,7 +270,7 @@ export class GameManager {
 
       case 'player_action':
         if (message.data.playerId && message.data.action) {
-                    this.handlePlayerAction(message.data);
+          this.handlePlayerAction(message.data);
         } else {
           console.warn('⚠️ Invalid player_action message data:', message.data);
         }
@@ -298,7 +282,7 @@ export class GameManager {
           message.data.players.forEach((playerData: PlayerUpdate) => {
             // Skip local player
             if (playerData.id !== this.user?.uid) {
-                            this.updatePlayer(playerData).catch((error) => {
+                this.updatePlayer(playerData).catch((error) => {
                 console.error('❌ Error updating player from list:', playerData.id, error);
               });
             }
@@ -310,7 +294,7 @@ export class GameManager {
 
       case 'health_update':
         if (message.data.health !== undefined && message.data.maxHealth !== undefined) {
-                    this.handleHealthUpdate(message.data);
+          this.handleHealthUpdate(message.data);
         } else {
           console.warn('⚠️ Invalid health_update message data:', message.data);
         }
@@ -318,7 +302,7 @@ export class GameManager {
 
       case 'respawn_success':
         if (message.data.player) {
-                    this.handleRespawnSuccess(message.data.player);
+          this.handleRespawnSuccess(message.data.player);
         } else {
           console.warn('⚠️ Invalid respawn_success message data:', message.data);
         }
@@ -326,39 +310,7 @@ export class GameManager {
 
       case 'enemy-moved':
         if (message.data && message.data.enemies && Array.isArray(message.data.enemies)) {
-          console.log('📨 Received enemy-moved message:', {
-            floorName: message.data.floorName,
-            timestamp: message.data.timestamp,
-            enemyCount: message.data.enemies.length,
-            enemies: message.data.enemies
-          });
-          
-          // Log local player position for comparison
-          const currentPlayerPosition = this.movementController.getCurrentPlayerPosition();
-          if (currentPlayerPosition) {
-            console.log('👤 Local player position for comparison:', {
-              x: currentPlayerPosition.x,
-              y: currentPlayerPosition.y,
-              z: currentPlayerPosition.z
-            });
-          }
-
-          // Log camera position for reference
-          console.log('📹 Camera position for reference:', {
-            x: this.sceneManager.camera.position.x,
-            y: this.sceneManager.camera.position.y,
-            z: this.sceneManager.camera.position.z
-          });
-          
           message.data.enemies.forEach((enemyData: EnemyUpdate) => {
-            console.log('🐾 Processing enemy data:', {
-              id: enemyData.id,
-              enemyType: enemyData.enemyTypeName,
-              serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
-              worldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
-              rotation: enemyData.rotationY,
-              isMoving: enemyData.isMoving
-            });
             this.updateEnemy(enemyData).catch(console.error);
           });
         } else {
@@ -367,12 +319,7 @@ export class GameManager {
         break;
 
       case 'enemy-despawned':
-        if (message.data && message.data.enemyId) {
-          console.log('💀 Received enemy-despawned message:', {
-            enemyId: message.data.enemyId,
-            floorName: message.data.floorName
-          });
-          
+        if (message.data && message.data.enemyId) {          
           // Remove the enemy from the scene
           this.removeEnemy(message.data.enemyId);
         } else {
@@ -535,17 +482,6 @@ export class GameManager {
     const existingEnemy = this.enemies.get(enemyData.id);
 
     if (existingEnemy) {
-      // Update existing enemy
-      console.log('🦌 Updating existing enemy:', {
-        id: enemyData.id,
-        enemyType: enemyData.enemyTypeName,
-        oldPosition: existingEnemy.position,
-        newServerPosition: { x: enemyData.positionX, y: enemyData.positionY },
-        newWorldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
-        isMoving: enemyData.isMoving,
-        rotation: enemyData.rotationY
-      });
-
       // Update enemy data
       existingEnemy.position = {
         x: enemyData.positionX,
@@ -566,35 +502,10 @@ export class GameManager {
       // Update position and animation
       try {
         EnemyManager.updateEnemyPosition(existingEnemy, enemyData, this.movementController.getCurrentPlayerPosition() || undefined);
-        
-        // Log final mesh position after update
-        if (existingEnemy.mesh) {
-          console.log('🎯 Enemy mesh position after update:', {
-            id: enemyData.id,
-            meshPosition: {
-              x: existingEnemy.mesh.position.x,
-              y: existingEnemy.mesh.position.y,
-              z: existingEnemy.mesh.position.z
-            },
-            meshVisible: existingEnemy.mesh.visible,
-            meshInScene: existingEnemy.mesh.parent !== null
-          });
-        }
       } catch (error) {
         console.error('❌ Error updating enemy position:', enemyData.id, error);
       }
     } else {
-      // Create new enemy
-      console.log('🆕 Creating new enemy:', {
-        id: enemyData.id,
-        enemyType: enemyData.enemyTypeName,
-        enemyTypeID: enemyData.enemyTypeID,
-        serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
-        worldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
-        rotation: enemyData.rotationY,
-        isMoving: enemyData.isMoving
-      });
-
       try {
         const newEnemy: Enemy = {
           id: enemyData.id,
@@ -628,29 +539,9 @@ export class GameManager {
           enemyData.positionY                                               // Server's positionY maps to Three.js Z-axis
         );
 
-        console.log('📍 Positioning new enemy mesh:', {
-          id: enemyData.id,
-          setPosition: { 
-            x: enemyData.positionX, 
-            y: this.movementController.getCurrentPlayerPosition()?.y || 0, 
-            z: enemyData.positionY 
-          },
-          actualMeshPosition: {
-            x: enemyResult.model.position.x,
-            y: enemyResult.model.position.y,
-            z: enemyResult.model.position.z
-          },
-          playerGroundLevel: this.movementController.getCurrentPlayerPosition()?.y || 'unknown'
-        });
-
         // Set rotation if provided
         if (enemyData.rotationY !== undefined) {
           enemyResult.model.rotation.y = THREE.MathUtils.degToRad(enemyData.rotationY);
-          console.log('🔄 Set enemy rotation:', {
-            id: enemyData.id,
-            rotationDegrees: enemyData.rotationY,
-            rotationRadians: enemyResult.model.rotation.y
-          });
         }
 
         // Mark as enemy for scene preservation during floor changes
@@ -658,29 +549,7 @@ export class GameManager {
 
         this.sceneManager.addToScene(enemyResult.model);
 
-        console.log('✅ Successfully created and added new enemy:', {
-          id: enemyData.id,
-          meshId: enemyResult.model.uuid,
-          finalMeshPosition: {
-            x: enemyResult.model.position.x,
-            y: enemyResult.model.position.y,
-            z: enemyResult.model.position.z
-          },
-          visible: enemyResult.model.visible,
-          enemyType: enemyData.enemyTypeName,
-          inScene: enemyResult.model.parent !== null,
-          sceneChildren: this.sceneManager.scene.children.length
-        });
-
         this.enemies.set(enemyData.id, newEnemy);
-
-        // Log current state of all enemies for debugging
-        console.log('📊 Current enemies in scene:', {
-          totalEnemies: this.enemies.size,
-          enemyIds: Array.from(this.enemies.keys()),
-          sceneObjectCount: this.sceneManager.scene.children.length
-        });
-
       } catch (error) {
         console.error('❌ Error creating new enemy:', enemyData.id, error);
         // Clean up any partial state

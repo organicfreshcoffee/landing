@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import { GameManager, GameState } from '../lib/game';
 import { ensureProtocol } from '../lib/urlUtils';
 import CharacterSelection, { CharacterData } from '../components/CharacterSelection';
+import ServerConnectionError from '../components/ServerConnectionError';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
 import HealthHUD from '../components/HealthHUD';
 import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
@@ -18,8 +19,12 @@ export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameManagerRef = useRef<GameManager | null>(null);
   
+  // Connection state - tracks the initial server connection
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'failed'>('connecting');
+  const [connectionError, setConnectionError] = useState<string>('');
+  
   const [selectedCharacter, setSelectedCharacter] = useState<CharacterData | null>(null);
-  const [checkingExistingCharacter, setCheckingExistingCharacter] = useState<boolean>(true);
+  const [checkingExistingCharacter, setCheckingExistingCharacter] = useState<boolean>(false);
   const [playerHealth, setPlayerHealth] = useState<{ health: number; maxHealth: number; isAlive: boolean }>({
     health: 100,
     maxHealth: 100,
@@ -53,61 +58,22 @@ export default function Game() {
     }
   }, [user, authLoading, router]);
 
-  // Check for existing character on mount
+  // Initial server connection check
   useEffect(() => {
     if (!server || !user || authLoading) return;
-
-    const checkExistingCharacter = async () => {
-      try {
-        setCheckingExistingCharacter(true);
-        const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-                
-        const statusResponse = await DungeonApi.getCurrentStatus(serverAddress);
-        
-        if (statusResponse.success && statusResponse.data.isAlive) {
-                    
-          // Set the character from server response
-          setSelectedCharacter({
-            type: statusResponse.data.character.type,
-            style: statusResponse.data.character.style,
-            name: statusResponse.data.character.name
-          });
-
-          // Set the health from server response
-          setPlayerHealth({
-            health: statusResponse.data.health,
-            maxHealth: 100, // Assuming max health is 100, but this could come from server too
-            isAlive: statusResponse.data.isAlive
-          });
-
-          // Store the player position and rotation for later use
-          const playerPosition = statusResponse.data.position;
-          const playerRotation = statusResponse.data.rotation;
-                    
-          // Store these in sessionStorage so GameManager can use them
-          sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
-          sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
-        } else {
-                  }
-      } catch (error) {
-        if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
-                  } else {
-          console.error('❌ Error checking for existing character:', error);
-        }
-      } finally {
-        setCheckingExistingCharacter(false);
-      }
-    };
-
-    checkExistingCharacter();
-  }, [server, user, authLoading, router]);
+    
+    // Reset state when server/user changes
+    setConnectionState('connecting');
+    setConnectionError('');
+    setSelectedCharacter(null);
+  }, [server, user, authLoading]);
 
   // Initialize game when component mounts and server is available
   useEffect(() => {
-    if (!server || !user || !canvasRef.current || !selectedCharacter) return;
+    if (!server || !user || !canvasRef.current || !selectedCharacter || connectionState !== 'connected') return;
 
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-            
+    
     // Initialize game manager
     const initGame = async () => {
       const gameManager = new GameManager(
@@ -146,7 +112,7 @@ export default function Game() {
         gameManagerRef.current = null;
       }
     };
-  }, [server, user, selectedCharacter]);
+  }, [server, user, selectedCharacter, connectionState]);
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
@@ -157,6 +123,98 @@ export default function Game() {
     setSelectedCharacter(null);
     router.push('/dashboard');
   };
+
+  // Handle connection retry
+  const handleConnectionRetry = () => {
+    // If we already have a selected character, use GameManager's reconnect instead
+    if (selectedCharacter && gameManagerRef.current) {
+      const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+      gameManagerRef.current.manualReconnect(serverAddress);
+    } else {
+      // Only reset connection state if we're in initial connection phase
+      setConnectionState('connecting');
+      setConnectionError('');
+    }
+  };
+
+  // Trigger a re-run of the connection check when retrying
+  useEffect(() => {
+    if (connectionState === 'connecting' && server && user && !authLoading) {
+      const checkServerConnection = async () => {
+        try {
+          const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+          
+          console.log('🔗 Checking server connection to:', serverAddress);
+          
+          const statusResponse = await DungeonApi.getCurrentStatus(serverAddress);
+          
+          console.log('✅ Server connection successful:', statusResponse);
+          setConnectionState('connected');
+          
+          if (statusResponse.success && statusResponse.data.isAlive) {
+            console.log('🎮 Player has live character, loading directly into game');
+            
+            // Set the character from server response
+            setSelectedCharacter({
+              type: statusResponse.data.character.type,
+              style: statusResponse.data.character.style,
+              name: statusResponse.data.character.name
+            });
+
+            // Set the health from server response
+            setPlayerHealth({
+              health: statusResponse.data.health,
+              maxHealth: 100,
+              isAlive: statusResponse.data.isAlive
+            });
+
+            // Store the player position and rotation for later use
+            const playerPosition = statusResponse.data.position;
+            const playerRotation = statusResponse.data.rotation;
+            
+            // Store these in sessionStorage so GameManager can use them
+            sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
+            sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
+          } else {
+            console.log('🏗️ Player needs to create/select character');
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
+            console.log('💀 Player is dead, will show character selection');
+            setConnectionState('connected');
+          } else {
+            console.error('❌ Server connection failed:', error);
+            setConnectionState('failed');
+            
+            // Extract useful error message
+            let errorMessage = 'Unknown connection error';
+            if (error instanceof Error) {
+              errorMessage = error.message;
+            } else if (typeof error === 'object' && error !== null && 'message' in error) {
+              errorMessage = (error as any).message;
+            }
+            
+            setConnectionError(errorMessage);
+          }
+        }
+      };
+
+      // Small delay to show the connecting state
+      const timer = setTimeout(checkServerConnection, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [connectionState, server, user, authLoading]);
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('🔄 State update:', { 
+      connectionState, 
+      hasSelectedCharacter: !!selectedCharacter,
+      gameStateConnected: gameState.connected,
+      gameStateLoading: gameState.loading,
+      gameStateError: gameState.error 
+    });
+  }, [connectionState, selectedCharacter, gameState]);
 
   // Handle character selection
   const handleCharacterSelected = (character: CharacterData) => {
@@ -193,7 +251,7 @@ export default function Game() {
     if (!server || !gameManagerRef.current) return;
     
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-        gameManagerRef.current.manualReconnect(serverAddress);
+    gameManagerRef.current.manualReconnect(serverAddress);
   };
 
   const handleOpenGraphViewer = async () => {
@@ -262,23 +320,30 @@ export default function Game() {
     );
   }
 
-  // Show character selection if no character is selected yet or if respawning
-  if (!selectedCharacter || isRespawning) {
-    if (checkingExistingCharacter && !isRespawning) {
-      return (
-        <div className={styles.loading}>
-          <h2>Checking for existing character...</h2>
-          <p>Please wait while we check if you already have a character on this server.</p>
-        </div>
-      );
-    }
-    
+  // Show connection error screen (only for initial connection before we've ever connected)
+  if (connectionState === 'failed' && !selectedCharacter) {
+    return (
+      <ServerConnectionError
+        serverAddress={ensureProtocol(decodeURIComponent(server as string))}
+        error={connectionError}
+        onRetry={handleConnectionRetry}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
+
+  // Show character selection if connection is established but no character is selected yet or if respawning
+  if (connectionState === 'connected' && (!selectedCharacter || isRespawning)) {
     return (
       <CharacterSelection 
         onCharacterSelected={handleCharacterSelected}
         onBack={handleBackFromCharacterSelection}
       />
     );
+  }
+
+  if (!selectedCharacter) {
+    return (<div className={styles.gameContainer}></div>);
   }
 
   return (
@@ -310,12 +375,6 @@ export default function Game() {
             {renderConnectionStatus()}
           </div>
         </div>
-
-        {gameState.loading && (
-          <div className={styles.centerMessage}>
-            <div className={styles.loading}>Connecting to server...</div>
-          </div>
-        )}
 
         {gameState.error && (
           <div className={styles.centerMessage}>
