@@ -59,18 +59,18 @@ export class WebSocketManager {
         wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(authToken)}`;
       }
 
-            const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
       this.ws = ws;
 
       // Connection timeout
       const connectionTimeout = setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
-                    ws.close();
+          ws.close();
         }
       }, 10000);
 
       ws.onopen = () => {
-                clearTimeout(connectionTimeout);
+        clearTimeout(connectionTimeout);
         this.reconnectAttempts = 0;
         this.isReconnecting = false;
         this.lastPongTime = Date.now();
@@ -128,7 +128,7 @@ export class WebSocketManager {
       };
 
       ws.onclose = (event) => {
-                clearTimeout(connectionTimeout);
+        clearTimeout(connectionTimeout);
         this.stopHeartbeat();
         this.stopConnectionHealthCheck();
         
@@ -208,7 +208,7 @@ export class WebSocketManager {
   private attemptReconnection(serverAddress: string, user: any, characterData?: CharacterData): void {
     if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-                this.onStateChange({
+        this.onStateChange({
           connected: false,
           error: 'Connection lost. Please refresh to reconnect.',
           loading: false

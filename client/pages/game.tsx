@@ -70,10 +70,10 @@ export default function Game() {
 
   // Initialize game when component mounts and server is available
   useEffect(() => {
-    if (!server || !user || !canvasRef.current || !selectedCharacter) return;
+    if (!server || !user || !canvasRef.current || !selectedCharacter || connectionState !== 'connected') return;
 
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-            
+    
     // Initialize game manager
     const initGame = async () => {
       const gameManager = new GameManager(
@@ -112,7 +112,7 @@ export default function Game() {
         gameManagerRef.current = null;
       }
     };
-  }, [server, user, selectedCharacter]);
+  }, [server, user, selectedCharacter, connectionState]);
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
@@ -126,10 +126,15 @@ export default function Game() {
 
   // Handle connection retry
   const handleConnectionRetry = () => {
-    // Reset connection state and trigger a retry
-    setConnectionState('connecting');
-    setConnectionError('');
-    // The useEffect will automatically retry when connectionState changes
+    // If we already have a selected character, use GameManager's reconnect instead
+    if (selectedCharacter && gameManagerRef.current) {
+      const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+      gameManagerRef.current.manualReconnect(serverAddress);
+    } else {
+      // Only reset connection state if we're in initial connection phase
+      setConnectionState('connecting');
+      setConnectionError('');
+    }
   };
 
   // Trigger a re-run of the connection check when retrying
@@ -200,6 +205,17 @@ export default function Game() {
     }
   }, [connectionState, server, user, authLoading]);
 
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('🔄 State update:', { 
+      connectionState, 
+      hasSelectedCharacter: !!selectedCharacter,
+      gameStateConnected: gameState.connected,
+      gameStateLoading: gameState.loading,
+      gameStateError: gameState.error 
+    });
+  }, [connectionState, selectedCharacter, gameState]);
+
   // Handle character selection
   const handleCharacterSelected = (character: CharacterData) => {
         
@@ -235,7 +251,7 @@ export default function Game() {
     if (!server || !gameManagerRef.current) return;
     
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
-        gameManagerRef.current.manualReconnect(serverAddress);
+    gameManagerRef.current.manualReconnect(serverAddress);
   };
 
   const handleOpenGraphViewer = async () => {
@@ -304,19 +320,8 @@ export default function Game() {
     );
   }
 
-  // Show connecting screen
-  if (connectionState === 'connecting') {
-    return (
-      <div className={styles.loading}>
-        <h2>Connecting to Server</h2>
-        <p>Establishing connection to {ensureProtocol(decodeURIComponent(server as string))}...</p>
-        <div className={styles.spinner}></div>
-      </div>
-    );
-  }
-
-  // Show connection error screen
-  if (connectionState === 'failed') {
+  // Show connection error screen (only for initial connection before we've ever connected)
+  if (connectionState === 'failed' && !selectedCharacter) {
     return (
       <ServerConnectionError
         serverAddress={ensureProtocol(decodeURIComponent(server as string))}
@@ -327,14 +332,18 @@ export default function Game() {
     );
   }
 
-  // Show character selection if no character is selected yet or if respawning
-  if (!selectedCharacter || isRespawning) {
+  // Show character selection if connection is established but no character is selected yet or if respawning
+  if (connectionState === 'connected' && (!selectedCharacter || isRespawning)) {
     return (
       <CharacterSelection 
         onCharacterSelected={handleCharacterSelected}
         onBack={handleBackFromCharacterSelection}
       />
     );
+  }
+
+  if (!selectedCharacter) {
+    return (<div className={styles.gameContainer}></div>);
   }
 
   return (
@@ -366,12 +375,6 @@ export default function Game() {
             {renderConnectionStatus()}
           </div>
         </div>
-
-        {gameState.loading && (
-          <div className={styles.centerMessage}>
-            <div className={styles.loading}>Connecting to server...</div>
-          </div>
-        )}
 
         {gameState.error && (
           <div className={styles.centerMessage}>
