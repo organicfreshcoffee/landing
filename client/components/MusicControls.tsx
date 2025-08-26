@@ -12,9 +12,9 @@ export const MusicControls: React.FC<MusicControlsProps> = ({ currentFloor }) =>
 
   useEffect(() => {
     // Update music status when component mounts or floor changes
-    const updateStatus = async () => {
+    const updateStatus = () => {
       try {
-        const status = await proceduralMusic.getStatus();
+        const status = proceduralMusic.getStatus();
         setIsPlaying(status.isPlaying);
         setCurrentFloorName(status.currentFloor);
       } catch (error) {

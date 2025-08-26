@@ -5,23 +5,14 @@
 
 import { DungeonNode, FloorLayoutResponse, GeneratedFloorTilesResponse, FloorTile, WallTile } from '../types/api';
 
-// Use dynamic import to avoid compilation issues
-let simpleProceduralMusic: any = null;
+// Try different import approaches
+import * as SimpleMusicModule from './simpleMusic';
 
-/**
- * Load the simple music module dynamically
- */
-async function loadSimpleMusic() {
-  if (!simpleProceduralMusic) {
-    try {
-      const module = await import('./simpleMusic');
-      simpleProceduralMusic = module.simpleProceduralMusic;
-    } catch (error) {
-      console.error('❌ Failed to load simple music module:', error);
-    }
-  }
-  return simpleProceduralMusic;
-}
+// Debug logging
+console.log('🔍 Debug: SimpleMusicModule:', SimpleMusicModule);
+console.log('🔍 Debug: SimpleMusicModule.simpleProceduralMusic:', SimpleMusicModule.simpleProceduralMusic);
+
+const simpleProceduralMusic = SimpleMusicModule.simpleProceduralMusic;
 
 // Dynamic imports to avoid build-time issues
 let strudelInitialized = false;
@@ -231,9 +222,8 @@ export class ProceduralMusicManager {
     
     this.useStrudel = await ensureStrudelInitialized();
     if (!this.useStrudel) {
-      const simpleMusicManager = await loadSimpleMusic();
-      if (simpleMusicManager && typeof simpleMusicManager.initialize === 'function') {
-        await simpleMusicManager.initialize();
+      if (simpleProceduralMusic && typeof simpleProceduralMusic.initialize === 'function') {
+        await simpleProceduralMusic.initialize();
       } else {
         console.error('❌ simpleProceduralMusic not available for initialization');
       }
@@ -264,13 +254,12 @@ export class ProceduralMusicManager {
       
       if (!this.useStrudel) {
         // Fall back to simple music
-        const simpleMusicManager = await loadSimpleMusic();
-        if (simpleMusicManager && typeof simpleMusicManager.playFloorMusic === 'function') {
+        if (simpleProceduralMusic && typeof simpleProceduralMusic.playFloorMusic === 'function') {
           const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
-          await simpleMusicManager.playFloorMusic(floorName, roomCount);
+          await simpleProceduralMusic.playFloorMusic(floorName, roomCount);
           // Update our local status to match the simple music manager
-          if (typeof simpleMusicManager.getStatus === 'function') {
-            const status = simpleMusicManager.getStatus();
+          if (typeof simpleProceduralMusic.getStatus === 'function') {
+            const status = simpleProceduralMusic.getStatus();
             this.isPlaying = status.isPlaying;
             this.currentFloor = status.currentFloor;
           } else {
@@ -314,9 +303,8 @@ export class ProceduralMusicManager {
   async stopMusic(): Promise<void> {
     try {
       if (!this.useStrudel) {
-        const simpleMusicManager = await loadSimpleMusic();
-        if (simpleMusicManager && typeof simpleMusicManager.stopMusic === 'function') {
-          await simpleMusicManager.stopMusic();
+        if (simpleProceduralMusic && typeof simpleProceduralMusic.stopMusic === 'function') {
+          await simpleProceduralMusic.stopMusic();
         }
       } else if (this.currentPattern) {
         this.currentPattern.stop();
@@ -335,13 +323,12 @@ export class ProceduralMusicManager {
   /**
    * Get current music status
    */
-  async getStatus(): Promise<{ isPlaying: boolean; currentFloor: string | null }> {
+  getStatus(): { isPlaying: boolean; currentFloor: string | null } {
     // If not initialized, always return simple music status
     if (!this.initialized || !this.useStrudel) {
-      const simpleMusicManager = await loadSimpleMusic();
       // Check if simpleProceduralMusic is available
-      if (simpleMusicManager && typeof simpleMusicManager.getStatus === 'function') {
-        const status = simpleMusicManager.getStatus();
+      if (simpleProceduralMusic && typeof simpleProceduralMusic.getStatus === 'function') {
+        const status = simpleProceduralMusic.getStatus();
         return {
           isPlaying: status.isPlaying,
           currentFloor: status.currentFloor
