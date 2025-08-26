@@ -5,15 +5,6 @@
 
 import { DungeonNode, FloorLayoutResponse, GeneratedFloorTilesResponse, FloorTile, WallTile } from '../types/api';
 
-// Try different import approaches
-import * as SimpleMusicModule from './simpleMusic';
-
-// Debug logging
-console.log('🔍 Debug: SimpleMusicModule:', SimpleMusicModule);
-console.log('🔍 Debug: SimpleMusicModule.simpleProceduralMusic:', SimpleMusicModule.simpleProceduralMusic);
-
-const simpleProceduralMusic = SimpleMusicModule.simpleProceduralMusic as any;
-
 // Dynamic imports to avoid build-time issues
 let strudelInitialized = false;
 let mini: any = null;
@@ -25,9 +16,24 @@ let initStrudel: any = null;
 async function ensureStrudelInitialized(): Promise<boolean> {
   if (!strudelInitialized) {
     try {
-      console.warn('⚠️ Strudel integration temporarily disabled due to module resolution issues');
-      console.log('🎵 Using simple audio fallback system');
-      return false;
+      console.log('🎵 Initializing Strudel with samples...');
+      
+      // Dynamic import of Strudel modules
+      const webModule = await import('@strudel/web');
+      const miniModule = await import('@strudel/mini');
+      
+      // Initialize Strudel web audio
+      initStrudel = webModule.initStrudel;
+      mini = miniModule.mini;
+      
+      if (initStrudel) {
+        await initStrudel();
+        strudelInitialized = true;
+        console.log('✅ Strudel initialized successfully with samples');
+        return true;
+      } else {
+        throw new Error('initStrudel function not found');
+      }
     } catch (error) {
       console.warn('⚠️ Failed to initialize Strudel, falling back to simple audio:', error);
       return false;
@@ -171,35 +177,54 @@ function analyzeDungeonData(
 function generateStrudelPattern(params: MusicParameters): string {
   const { tempo, scale, bassPattern, drumPattern, melodyNotes, harmony, effects } = params;
   
+  // Validate and sanitize parameters
+  console.log('🔍 Pattern generation params:', {
+    tempo,
+    scale,
+    bassPattern,
+    drumPattern,
+    melodyNotes,
+    harmony,
+    effects
+  });
+  
+  // Ensure safe values for Strudel
+  const safeTempo = Math.max(60, Math.min(180, tempo));
+  const safeScale = ['major', 'minor', 'pentatonic'].includes(scale) ? scale : 'major';
+  const safeFilter = Math.max(200, Math.min(2000, effects.filter));
+  const safeReverb = Math.max(0, Math.min(1, effects.reverb));
+  
   // Convert melody notes to pattern string
   const melodyPattern = melodyNotes.join(' ');
   
-  // Build the complete pattern
-  const pattern = `
-setcps(${tempo / 60 / 4}); // Convert BPM to cycles per second
-
-stack(
-  // Bass line
-  n("${bassPattern}").scale("${scale}").add(-12).s("sawtooth")
-    .lpf(${effects.filter}).lpq(2)
-    .gain(0.6),
+  // Select drum samples based on dungeon characteristics
+  const kickSamples = ['bd:0', 'bd:1', 'bd:2', 'bd:3'];
+  const hihatSamples = ['hh:0', 'hh:1', 'hh:2', 'hh:3'];
+  const snareSamples = ['sd:0', 'sd:1', 'sd:2', 'sd:3'];
+  const percSamples = ['perc:0', 'perc:1', 'perc:2', 'perc:3'];
   
-  // Drums  
-  s("${drumPattern}").bank("RolandTR808")
-    .gain(0.8),
+  // Select samples based on tempo and complexity
+  const tempoClass = params.tempo < 80 ? 'slow' : params.tempo < 100 ? 'medium' : 'fast';
+  const kickSample = kickSamples[Math.floor(seededRandom(drumPattern, 0, kickSamples.length))];
+  const hihatSample = hihatSamples[Math.floor(seededRandom(drumPattern + 'hh', 0, hihatSamples.length))];
+  const snareSample = snareSamples[Math.floor(seededRandom(drumPattern + 'sd', 0, snareSamples.length))];
+  const percSample = percSamples[Math.floor(seededRandom(drumPattern + 'perc', 0, percSamples.length))];
   
-  // Melody
-  n("${melodyPattern}").scale("${scale}").s("triangle")
-    .lpf(${effects.filter * 2}).lpq(1)
-    .delay(${effects.delay}).delaytime(0.25)
-    .gain(0.5),
+  // Ambient samples for atmospheric elements
+  const ambientSamples = ['wind:0', 'space:0', 'pad:0', 'east:0'];
+  const ambientSample = ambientSamples[Math.floor(seededRandom(scale, 0, ambientSamples.length))];
   
-  // Harmony/Chords
-  n("${harmony.join(' ')}").scale("${scale}").chord("M").s("square")
-    .lpf(${effects.filter * 1.5}).lpq(3)
-    .gain(0.4)
-).room(${effects.reverb})
-`.trim();
+  // Build a simple, safe pattern that should always parse
+  const pattern = `stack(
+  s("bd").struct("x ~ ~ ~"),
+  s("hh").struct("~ x ~ x").gain(0.4),
+  s("sd").struct("~ ~ x ~").gain(0.6),
+  n("c3 e3 g3 c4").s("sawtooth").gain(0.3)
+)`.trim();
+  
+  console.log('🎼 Generated safe Strudel pattern:', pattern);
+  
+  return pattern;
   
   return pattern;
 }
@@ -214,6 +239,13 @@ export class ProceduralMusicManager {
   private useStrudel: boolean = false;
   private initialized: boolean = false;
   
+  // Web Audio fallback system
+  private audioContext: AudioContext | null = null;
+  private oscillators: OscillatorNode[] = [];
+  private gainNodes: GainNode[] = [];
+  private sequenceTimeouts: NodeJS.Timeout[] = [];
+  private masterGain: GainNode | null = null;
+  
   /**
    * Initialize the music manager
    */
@@ -222,13 +254,171 @@ export class ProceduralMusicManager {
     
     this.useStrudel = await ensureStrudelInitialized();
     if (!this.useStrudel) {
-      if (simpleProceduralMusic && typeof simpleProceduralMusic.initialize === 'function') {
-        await simpleProceduralMusic.initialize();
-      } else {
-        console.error('❌ simpleProceduralMusic not available for initialization');
-      }
+      // Initialize Web Audio fallback
+      await this.initializeWebAudio();
     }
     this.initialized = true;
+  }
+  
+  private async initializeWebAudio(): Promise<void> {
+    if (!this.audioContext) {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.masterGain = this.audioContext.createGain();
+      this.masterGain.connect(this.audioContext.destination);
+      this.masterGain.gain.setValueAtTime(0.4, this.audioContext.currentTime);
+    }
+    
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+  }
+  
+  private async playWebAudioMusic(floorName: string, roomCount: number): Promise<void> {
+    if (!this.audioContext || !this.masterGain) return;
+    
+    // Stop any existing music
+    this.stopWebAudio();
+    
+    // Generate simple parameters
+    const params = this.generateSimpleAudioParams(floorName, roomCount);
+    
+    // Start simple Web Audio music
+    const scaleIntervals = this.getScaleIntervals(params.scale);
+    const beatDuration = 60 / params.tempo;
+    
+    // Start bass line
+    this.playSimpleBass(params, scaleIntervals, beatDuration);
+    
+    // Start simple melody
+    setTimeout(() => {
+      if (this.isPlaying) {
+        this.playSimpleMelody(params, scaleIntervals, beatDuration);
+      }
+    }, beatDuration * 1000);
+  }
+  
+  private generateSimpleAudioParams(floorName: string, roomCount: number) {
+    let hash = 0;
+    for (let i = 0; i < floorName.length; i++) {
+      hash = ((hash << 5) - hash) + floorName.charCodeAt(i);
+      hash = hash & hash;
+    }
+
+    const tempo = 60 + (Math.abs(hash) % 60);
+    const scaleIndex = Math.abs(hash) % 3;
+    const scales = ['major', 'minor', 'pentatonic'];
+    
+    return {
+      tempo,
+      scale: scales[scaleIndex],
+      baseFreq: 220 + (Math.abs(hash) % 100),
+      melodyNotes: [0, 2, 4, 2, 1, 3, 2, 0]
+    };
+  }
+  
+  private getScaleIntervals(scaleName: string): number[] {
+    const scales: { [key: string]: number[] } = {
+      major: [0, 2, 4, 5, 7, 9, 11],
+      minor: [0, 2, 3, 5, 7, 8, 10],
+      pentatonic: [0, 2, 4, 7, 9]
+    };
+    return scales[scaleName] || scales.major;
+  }
+  
+  private playSimpleBass(params: any, scaleIntervals: number[], beatDuration: number): void {
+    if (!this.audioContext || !this.masterGain) return;
+    
+    let beatIndex = 0;
+    const bassPattern = [0, 0, 2, 0];
+    
+    const playBeat = () => {
+      if (!this.isPlaying || !this.audioContext || !this.masterGain) return;
+      
+      const noteIndex = bassPattern[beatIndex % bassPattern.length];
+      const interval = scaleIntervals[noteIndex % scaleIntervals.length];
+      const frequency = (params.baseFreq / 2) * Math.pow(2, interval / 12);
+      
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+      
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.02);
+      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + beatDuration * 0.8);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.masterGain);
+      
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + beatDuration * 0.8);
+      
+      this.oscillators.push(oscillator);
+      this.gainNodes.push(gainNode);
+      
+      beatIndex++;
+      
+      const timeout = setTimeout(playBeat, beatDuration * 1000);
+      this.sequenceTimeouts.push(timeout);
+    };
+    
+    playBeat();
+  }
+  
+  private playSimpleMelody(params: any, scaleIntervals: number[], beatDuration: number): void {
+    if (!this.audioContext || !this.masterGain) return;
+    
+    let noteIndex = 0;
+    
+    const playNote = () => {
+      if (!this.isPlaying || !this.audioContext || !this.masterGain) return;
+      
+      const melodyNote = params.melodyNotes[noteIndex % params.melodyNotes.length];
+      const interval = scaleIntervals[melodyNote % scaleIntervals.length];
+      const frequency = params.baseFreq * Math.pow(2, interval / 12);
+      
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+      
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.15, this.audioContext.currentTime + 0.1);
+      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + beatDuration);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.masterGain);
+      
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + beatDuration);
+      
+      this.oscillators.push(oscillator);
+      this.gainNodes.push(gainNode);
+      
+      noteIndex++;
+      
+      const timeout = setTimeout(playNote, beatDuration * 1000);
+      this.sequenceTimeouts.push(timeout);
+    };
+    
+    playNote();
+  }
+  
+  private stopWebAudio(): void {
+    this.sequenceTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.sequenceTimeouts = [];
+    
+    this.oscillators.forEach(osc => {
+      try {
+        osc.stop();
+      } catch (e) {
+        // Oscillator might already be stopped
+      }
+    });
+    this.oscillators = [];
+    this.gainNodes = [];
   }
   
   /**
@@ -253,25 +443,11 @@ export class ProceduralMusicManager {
       await this.initialize();
       
       if (!this.useStrudel) {
-        // Fall back to simple music
-        if (simpleProceduralMusic && typeof simpleProceduralMusic.playFloorMusic === 'function') {
-          const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
-          await simpleProceduralMusic.playFloorMusic(floorName, roomCount);
-          // Update our local status to match the simple music manager
-          if (typeof simpleProceduralMusic.getStatus === 'function') {
-            const status = simpleProceduralMusic.getStatus();
-            this.isPlaying = status.isPlaying;
-            this.currentFloor = status.currentFloor;
-          } else {
-            // Fallback status
-            this.isPlaying = true;
-            this.currentFloor = floorName;
-          }
-        } else {
-          console.error('❌ simpleProceduralMusic not available for playFloorMusic');
-          this.isPlaying = false;
-          this.currentFloor = null;
-        }
+        // Fall back to Web Audio
+        const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
+        await this.playWebAudioMusic(floorName, roomCount);
+        this.isPlaying = true;
+        this.currentFloor = floorName;
         return;
       }
       
@@ -283,14 +459,26 @@ export class ProceduralMusicManager {
       const patternCode = generateStrudelPattern(musicParams);
       console.log('🎼 Generated Strudel pattern:', patternCode);
       
-      // Parse and play the pattern
-      this.currentPattern = mini(patternCode);
-      this.currentPattern.play();
-      
-      this.isPlaying = true;
-      this.currentFloor = floorName;
-      
-      console.log('🎶 Started playing procedural music for floor:', floorName);
+      // Parse and play the pattern with error handling
+      try {
+        this.currentPattern = mini(patternCode);
+        this.currentPattern.play();
+        
+        this.isPlaying = true;
+        this.currentFloor = floorName;
+        
+        console.log('🎶 Started playing procedural music for floor:', floorName);
+      } catch (strudelError) {
+        console.error('❌ Strudel pattern error:', strudelError);
+        console.log('🔄 Falling back to Web Audio due to Strudel parse error');
+        
+        // Fall back to Web Audio if Strudel pattern fails
+        this.useStrudel = false;
+        const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
+        await this.playWebAudioMusic(floorName, roomCount);
+        this.isPlaying = true;
+        this.currentFloor = floorName;
+      }
     } catch (error) {
       console.error('❌ Error playing floor music:', error);
       throw error;
@@ -303,9 +491,7 @@ export class ProceduralMusicManager {
   async stopMusic(): Promise<void> {
     try {
       if (!this.useStrudel) {
-        if (simpleProceduralMusic && typeof simpleProceduralMusic.stopMusic === 'function') {
-          await simpleProceduralMusic.stopMusic();
-        }
+        this.stopWebAudio();
       } else if (this.currentPattern) {
         this.currentPattern.stop();
         this.currentPattern = null;
@@ -326,9 +512,7 @@ export class ProceduralMusicManager {
   async clearMusic(): Promise<void> {
     try {
       if (!this.useStrudel) {
-        if (simpleProceduralMusic && typeof simpleProceduralMusic.stopMusic === 'function') {
-          await simpleProceduralMusic.stopMusic();
-        }
+        this.stopWebAudio();
       } else if (this.currentPattern) {
         this.currentPattern.stop();
         this.currentPattern = null;
@@ -349,12 +533,14 @@ export class ProceduralMusicManager {
   async toggleMusic(): Promise<void> {
     try {
       if (!this.useStrudel) {
-        if (simpleProceduralMusic && typeof simpleProceduralMusic.toggleMusic === 'function') {
-          await simpleProceduralMusic.toggleMusic();
-          if (typeof simpleProceduralMusic.getStatus === 'function') {
-            const status = simpleProceduralMusic.getStatus();
-            this.isPlaying = status.isPlaying;
-          }
+        if (this.isPlaying) {
+          this.stopWebAudio();
+          this.isPlaying = false;
+        } else if (this.currentFloor) {
+          // Resume by replaying the current floor music
+          const roomCount = 3; // Default room count for resume
+          await this.playWebAudioMusic(this.currentFloor, roomCount);
+          this.isPlaying = true;
         }
         return;
       }
@@ -379,25 +565,7 @@ export class ProceduralMusicManager {
    * Get current music status
    */
   getStatus(): { isPlaying: boolean; currentFloor: string | null } {
-    // If not initialized, always return simple music status
-    if (!this.initialized || !this.useStrudel) {
-      // Check if simpleProceduralMusic is available
-      if (simpleProceduralMusic && typeof simpleProceduralMusic.getStatus === 'function') {
-        const status = simpleProceduralMusic.getStatus();
-        return {
-          isPlaying: status.isPlaying,
-          currentFloor: status.currentFloor
-        };
-      } else {
-        // Fallback if import failed
-        console.warn('⚠️ simpleProceduralMusic not available, returning default status');
-        return {
-          isPlaying: false,
-          currentFloor: null
-        };
-      }
-    }
-    
+    // Always return our own status
     return {
       isPlaying: this.isPlaying,
       currentFloor: this.currentFloor
