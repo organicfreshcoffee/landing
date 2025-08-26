@@ -431,6 +431,7 @@ export default function Game() {
         nodes={visitedNodes}
         isVisible={showGraphViewer}
         onClose={handleCloseGraphViewer}
+        currentFloor={currentFloor}
       />
     </div>
   );
