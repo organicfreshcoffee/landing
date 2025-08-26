@@ -204,10 +204,16 @@ class SimpleFallbackMusicManager {
   private currentFloor: string | null = null;
   private oscillators: OscillatorNode[] = [];
   private gainNodes: GainNode[] = [];
+  private sequenceTimeouts: NodeJS.Timeout[] = [];
+  private masterGain: GainNode | null = null;
 
   async initialize(): Promise<void> {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Create master gain for overall volume control
+      this.masterGain = this.audioContext.createGain();
+      this.masterGain.connect(this.audioContext.destination);
+      this.masterGain.gain.setValueAtTime(0.4, this.audioContext.currentTime);
     }
     
     if (this.audioContext.state === 'suspended') {
@@ -222,71 +228,212 @@ class SimpleFallbackMusicManager {
       hash = hash & hash;
     }
 
-    const tempo = 60 + (Math.abs(hash) % 40);
-    const scaleIndex = Math.abs(hash) % 4;
-    const scales = ['major', 'minor', 'dorian', 'pentatonic'];
+    const tempo = 60 + (Math.abs(hash) % 60); // 60-120 BPM
+    const scaleIndex = Math.abs(hash) % 5;
+    const scales = ['major', 'minor', 'dorian', 'pentatonic', 'blues'];
+    
+    // Generate melody pattern with up/down movement based on room count and floor hash
+    const melodyLength = Math.min(8, Math.max(4, roomCount));
+    const melody: number[] = [];
+    
+    // Create melodic patterns that move up and down
+    const patternType = Math.abs(hash) % 4;
+    let currentNote = 2; // Start in middle of scale
+    
+    for (let i = 0; i < melodyLength; i++) {
+      melody.push(currentNote);
+      
+      // Add directional movement based on pattern type
+      switch (patternType) {
+        case 0: // Ascending then descending arc
+          if (i < melodyLength / 2) {
+            currentNote = Math.min(6, currentNote + 1);
+          } else {
+            currentNote = Math.max(0, currentNote - 1);
+          }
+          break;
+        case 1: // Wave pattern (up-down-up-down)
+          currentNote = i % 2 === 0 ? 
+            Math.min(5, currentNote + 1) : 
+            Math.max(1, currentNote - 2);
+          break;
+        case 2: // Step pattern with leaps
+          const direction = ((hash + i) % 3) - 1; // -1, 0, or 1
+          const stepSize = ((hash + i * 3) % 2) + 1; // 1 or 2 steps
+          currentNote = Math.max(0, Math.min(6, currentNote + (direction * stepSize)));
+          break;
+        case 3: // Descending then ascending
+          if (i < melodyLength / 2) {
+            currentNote = Math.max(0, currentNote - 1);
+          } else {
+            currentNote = Math.min(6, currentNote + 1);
+          }
+          break;
+      }
+    }
     
     return {
       tempo,
       scale: scales[scaleIndex],
       complexity: Math.min(10, roomCount),
-      baseFreq: 220 + (Math.abs(hash) % 100)
+      baseFreq: 220 + (Math.abs(hash) % 100), // A3 + variation
+      melody,
+      bassPattern: this.generateBassPattern(hash, roomCount)
     };
+  }
+
+  private generateBassPattern(hash: number, roomCount: number): number[] {
+    // Simple bass patterns based on room count
+    const patterns = [
+      [0, 0, 0, 0], // Simple root
+      [0, 4, 0, 4], // Root and fifth
+      [0, 2, 4, 2], // I-iii-V-iii
+      [0, 4, 7, 4], // I-V-octave-V
+    ];
+    const patternIndex = Math.min(patterns.length - 1, Math.floor(roomCount / 2));
+    return patterns[patternIndex];
   }
 
   async playFloorMusic(floorName: string, roomCount: number): Promise<void> {
     await this.initialize();
     
     if (this.isPlaying) {
-      this.stopAllOscillators();
+      this.stopAllMusic();
     }
 
     const params = this.generateSimpleAudioParams(floorName, roomCount);
-    this.createSimpleMusic(params);
+    this.startMusicalSequence(params);
     
     this.isPlaying = true;
     this.currentFloor = floorName;
     
-    console.log('🎵 Started simple fallback music for floor:', floorName);
+    console.log('🎵 Started procedural melody for floor:', floorName, 'with params:', params);
   }
 
-  private createSimpleMusic(params: any): void {
-    if (!this.audioContext) return;
+  private startMusicalSequence(params: any): void {
+    if (!this.audioContext || !this.masterGain) return;
 
     const scaleIntervals = this.getScaleIntervals(params.scale);
+    const beatDuration = 60 / params.tempo; // seconds per beat
+    const noteDuration = beatDuration * 0.8; // 80% of beat duration
     
-    // Create a simple bass note
-    const bass = this.audioContext.createOscillator();
-    const bassGain = this.audioContext.createGain();
-    bass.type = 'sawtooth';
-    bass.frequency.setValueAtTime(params.baseFreq / 2, this.audioContext.currentTime);
-    bassGain.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-    bass.connect(bassGain);
-    bassGain.connect(this.audioContext.destination);
-    bass.start();
+    // Start bass line
+    this.playBassLine(params, scaleIntervals, beatDuration);
     
-    this.oscillators.push(bass);
-    this.gainNodes.push(bassGain);
-    
-    // Create a simple melody
-    scaleIntervals.slice(0, Math.min(4, params.complexity)).forEach((interval, index) => {
-      const freq = params.baseFreq * Math.pow(2, interval / 12);
-      const osc = this.audioContext!.createOscillator();
-      const gain = this.audioContext!.createGain();
+    // Start melody after a short delay
+    setTimeout(() => {
+      if (this.isPlaying) {
+        this.playMelodyLine(params, scaleIntervals, beatDuration, noteDuration);
+      }
+    }, beatDuration * 1000); // Start melody after one beat
+  }
+
+  private playBassLine(params: any, scaleIntervals: number[], beatDuration: number): void {
+    if (!this.audioContext || !this.masterGain) return;
+
+    const bassFreq = params.baseFreq / 2; // One octave lower
+    let bassIndex = 0;
+
+    const playBassNote = () => {
+      if (!this.isPlaying || !this.audioContext || !this.masterGain) return;
+
+      const noteIndex = params.bassPattern[bassIndex % params.bassPattern.length];
+      const interval = scaleIntervals[noteIndex % scaleIntervals.length];
+      const frequency = bassFreq * Math.pow(2, interval / 12);
+
+      // Create bass note
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
       
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, this.audioContext!.currentTime);
-      gain.gain.setValueAtTime(0.1, this.audioContext!.currentTime);
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
       
-      osc.connect(gain);
-      gain.connect(this.audioContext!.destination);
+      // Envelope: quick attack, sustain, quick release
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.02);
+      gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime + beatDuration * 0.7);
+      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + beatDuration);
       
-      // Start with delay
-      osc.start(this.audioContext!.currentTime + index * 0.5);
+      oscillator.connect(gainNode);
+      gainNode.connect(this.masterGain);
       
-      this.oscillators.push(osc);
-      this.gainNodes.push(gain);
-    });
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + beatDuration);
+      
+      this.oscillators.push(oscillator);
+      this.gainNodes.push(gainNode);
+      
+      bassIndex++;
+      
+      // Schedule next bass note
+      const timeout = setTimeout(playBassNote, beatDuration * 1000);
+      this.sequenceTimeouts.push(timeout);
+    };
+
+    playBassNote();
+  }
+
+  private playMelodyLine(params: any, scaleIntervals: number[], beatDuration: number, noteDuration: number): void {
+    if (!this.audioContext || !this.masterGain) return;
+
+    let melodyIndex = 0;
+
+    const playMelodyNote = () => {
+      if (!this.isPlaying || !this.audioContext || !this.masterGain) return;
+
+      const noteIndex = params.melody[melodyIndex % params.melody.length];
+      const interval = scaleIntervals[noteIndex % scaleIntervals.length];
+      
+      // Add octave variation for more dramatic pitch movement
+      let octaveShift = 0;
+      const melodyPosition = melodyIndex % params.melody.length;
+      
+      // Higher notes in higher octave, lower notes in lower octave
+      if (noteIndex >= 5) {
+        octaveShift = 12; // One octave up for high notes
+      } else if (noteIndex <= 1) {
+        octaveShift = -12; // One octave down for low notes
+      }
+      
+      // Add some rhythmic octave jumps for excitement
+      if (melodyIndex % 4 === 3) {
+        octaveShift += 12; // Jump up an octave every 4th note
+      }
+      
+      const frequency = params.baseFreq * Math.pow(2, (interval + octaveShift) / 12);
+
+      // Create melody note
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+      
+      // Envelope: smooth attack and release
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.15, this.audioContext.currentTime + 0.05);
+      gainNode.gain.setValueAtTime(0.15, this.audioContext.currentTime + noteDuration * 0.8);
+      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + noteDuration);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.masterGain);
+      
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + noteDuration);
+      
+      this.oscillators.push(oscillator);
+      this.gainNodes.push(gainNode);
+      
+      melodyIndex++;
+      
+      // Schedule next melody note (sometimes skip beats for rhythm variation)
+      const skipBeat = melodyIndex % 8 === 7; // Skip every 8th beat for variation
+      const nextBeatTime = skipBeat ? beatDuration * 2 : beatDuration;
+      const timeout = setTimeout(playMelodyNote, nextBeatTime * 1000);
+      this.sequenceTimeouts.push(timeout);
+    };
+
+    playMelodyNote();
   }
 
   private getScaleIntervals(scaleName: string): number[] {
@@ -294,12 +441,18 @@ class SimpleFallbackMusicManager {
       major: [0, 2, 4, 5, 7, 9, 11],
       minor: [0, 2, 3, 5, 7, 8, 10],
       dorian: [0, 2, 3, 5, 7, 9, 10],
-      pentatonic: [0, 2, 4, 7, 9]
+      pentatonic: [0, 2, 4, 7, 9],
+      blues: [0, 3, 5, 6, 7, 10]
     };
     return scales[scaleName] || scales.major;
   }
 
-  private stopAllOscillators(): void {
+  private stopAllMusic(): void {
+    // Clear all timeouts
+    this.sequenceTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.sequenceTimeouts = [];
+    
+    // Stop all oscillators
     this.oscillators.forEach(osc => {
       try {
         osc.stop();
@@ -312,7 +465,7 @@ class SimpleFallbackMusicManager {
   }
 
   async stopMusic(): Promise<void> {
-    this.stopAllOscillators();
+    this.stopAllMusic();
     this.isPlaying = false;
   }
 
@@ -320,7 +473,7 @@ class SimpleFallbackMusicManager {
     if (this.isPlaying) {
       await this.stopMusic();
     } else if (this.currentFloor) {
-      // Simple resume - just restart the music
+      // Resume by replaying the current floor
       await this.playFloorMusic(this.currentFloor, 3);
     }
   }
