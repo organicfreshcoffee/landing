@@ -503,42 +503,69 @@ export class ProceduralMusicManager {
         
         // Now try to play the pattern using the available scheduler
         if (this.currentPattern && typeof this.currentPattern.query === 'function') {
-          // Check what's available in the global scope for scheduling
-          const globalScheduler = (globalThis as any).scheduler;
+          // The global scheduler seems to be the browser Scheduler API, not Strudel's
+          // Let's look for Strudel-specific objects more carefully
           
-          console.log('🔍 Global scheduler available:', !!globalScheduler);
+          console.log('🔍 Looking for Strudel audio system...');
           
-          if (globalScheduler) {
-            // Let's examine what methods the scheduler has
-            console.log('🔍 Scheduler methods:', Object.getOwnPropertyNames(globalScheduler));
-            console.log('🔍 Scheduler prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(globalScheduler)));
-            
-            // Try different ways to set the pattern on the scheduler
-            if (typeof globalScheduler.setPattern === 'function') {
-              globalScheduler.setPattern(this.currentPattern);
-              console.log('✅ Pattern set using scheduler.setPattern()');
-            } else if (typeof globalScheduler.pattern === 'object' || globalScheduler.pattern === undefined) {
-              globalScheduler.pattern = this.currentPattern;
-              console.log('✅ Pattern set directly on scheduler.pattern');
-            } else if (typeof globalScheduler.evaluate === 'function') {
-              // Try using evaluate method with the pattern code
-              await globalScheduler.evaluate(patternCode);
-              console.log('✅ Pattern evaluated using scheduler.evaluate()');
-            } else if (typeof globalScheduler.start === 'function') {
-              // Maybe we need to start the scheduler first
-              globalScheduler.start();
-              console.log('✅ Scheduler started');
-              // Try setting pattern again after starting
-              if (typeof globalScheduler.setPattern === 'function') {
-                globalScheduler.setPattern(this.currentPattern);
-                console.log('✅ Pattern set after starting scheduler');
-              }
+          // Check all global objects that might be Strudel-related
+          const allGlobals = Object.getOwnPropertyNames(globalThis);
+          const strudelObjects = allGlobals.filter(key => 
+            key.toLowerCase().includes('strudel') || 
+            key.includes('repl') ||
+            key.includes('audio') ||
+            key.includes('pattern') ||
+            key.includes('player') ||
+            key.includes('sound')
+          );
+          console.log('🔍 Potential Strudel objects:', strudelObjects);
+          
+          // Look for functions that might control playback
+          const controlFunctions = allGlobals.filter(key => {
+            const obj = (globalThis as any)[key];
+            return typeof obj === 'function' && (
+              key.toLowerCase().includes('play') ||
+              key.toLowerCase().includes('start') ||
+              key.toLowerCase().includes('set') ||
+              key.toLowerCase().includes('eval')
+            );
+          });
+          console.log('🔍 Potential control functions:', controlFunctions);
+          
+          // Try to find the actual Strudel REPL or player
+          let strudelRepl = null;
+          
+          // Check if there's a global repl object
+          if ((globalThis as any).repl) {
+            strudelRepl = (globalThis as any).repl;
+            console.log('🔍 Found global repl object');
+          }
+          
+          // Try evaluating the pattern string directly in Strudel's context
+          // This might be the key - instead of using the pattern object, use the string
+          try {
+            if (strudelRepl && typeof strudelRepl.evaluate === 'function') {
+              await strudelRepl.evaluate(patternCode);
+              console.log('✅ Pattern evaluated using repl.evaluate()');
+            } else if ((globalThis as any).eval && typeof (globalThis as any).s === 'function') {
+              // If we have Strudel's s() function available globally, try evaluating the pattern
+              console.log('🔍 Strudel s() function available, trying direct evaluation');
+              (globalThis as any).eval(`(${patternCode})`);
+              console.log('✅ Pattern evaluated in global context with s() available');
             } else {
-              console.warn('⚠️ Could not find a way to play pattern on scheduler');
-              console.log('🔍 Available scheduler properties:', Object.keys(globalScheduler));
+              console.warn('⚠️ No Strudel evaluation mechanism found');
+              console.log('🔍 Available s function:', typeof (globalThis as any).s);
+              console.log('🔍 Available mini function:', typeof (globalThis as any).mini);
+              
+              // Last resort: try to find any object with an evaluate method
+              const evaluators = allGlobals.filter(key => {
+                const obj = (globalThis as any)[key];
+                return obj && typeof obj.evaluate === 'function';
+              });
+              console.log('🔍 Objects with evaluate method:', evaluators);
             }
-          } else {
-            console.warn('⚠️ No global scheduler found');
+          } catch (evalError) {
+            console.warn('⚠️ Pattern evaluation failed:', evalError);
           }
         } else {
           throw new Error('Pattern does not have expected Strudel methods');
