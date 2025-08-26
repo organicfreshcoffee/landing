@@ -224,11 +224,6 @@ export class EnemyManager {
         y: enemyData.rotationY,
         z: 0
       };
-      console.log('🔄 Stored enemy rotation data (not applied to mesh):', {
-        id: enemy.id,
-        degrees: enemyData.rotationY,
-        radians: THREE.MathUtils.degToRad(enemyData.rotationY)
-      });
 
       // Update sprite direction based on rotation and local player position
       if (localPlayerPosition) {
@@ -293,14 +288,7 @@ export class EnemyManager {
     // Calculate sprite direction similar to player system
     const newDirection = this.calculateEnemySpriteDirection(enemyPosition, enemyRotationY, localPlayerPosition);
     
-    if (newDirection !== animState.direction) {
-      console.log('🔄 Enemy sprite direction changed:', {
-        enemyId,
-        oldDirection: animState.direction,
-        newDirection,
-        enemyRotation: enemyRotationY
-      });
-      
+    if (newDirection !== animState.direction) {      
       animState.direction = newDirection;
       this.spriteDirections.set(enemyId, newDirection);
       
