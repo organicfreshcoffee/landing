@@ -9,6 +9,8 @@ import { DungeonNode, FloorLayoutResponse, GeneratedFloorTilesResponse, FloorTil
 let strudelInitialized = false;
 let mini: any = null;
 let initStrudel: any = null;
+let hush: any = null;
+let strudelRepl: any = null;
 
 /**
  * Initialize Strudel if not already initialized
@@ -25,11 +27,25 @@ async function ensureStrudelInitialized(): Promise<boolean> {
       // Initialize Strudel web audio
       initStrudel = webModule.initStrudel;
       mini = miniModule.mini;
+      hush = webModule.hush;
       
       if (initStrudel) {
         await initStrudel();
         strudelInitialized = true;
         console.log('✅ Strudel initialized successfully with samples');
+        
+        // Check if we have access to any global scheduling functions
+        console.log('🔍 Checking for global Strudel functions...');
+        const globalKeys = Object.keys(globalThis);
+        const strudelFunctions = globalKeys.filter(key => 
+          key.toLowerCase().includes('strudel') || 
+          key.includes('setCps') || 
+          key.includes('setPattern') ||
+          key.includes('scheduler') ||
+          key.includes('repl')
+        );
+        console.log('🔍 Found Strudel-related globals:', strudelFunctions);
+        
         return true;
       } else {
         throw new Error('initStrudel function not found');
@@ -477,20 +493,57 @@ export class ProceduralMusicManager {
       
       // Parse and play the pattern with error handling
       try {
-        this.currentPattern = mini(patternCode);
-        console.log('🔍 Current pattern object:', this.currentPattern);
-        console.log('🔍 Available methods:', Object.getOwnPropertyNames(this.currentPattern));
+        console.log('🎼 Generated Strudel pattern:', patternCode);
         
-        // In Strudel, patterns need to be started with the global player
-        // The mini() function returns a Pattern object, not a player
-        // We need to use the pattern with Strudel's scheduler
-        if (this.currentPattern && typeof this.currentPattern.query === 'function') {
-          // Start the pattern by querying and scheduling it
-          // This is how Strudel patterns work - they get scheduled automatically
-          console.log('🎵 Pattern created and will be scheduled by Strudel');
+        // Instead of using mini() directly, try to evaluate the pattern in global context
+        // This might be the key - Strudel patterns need to be evaluated in the global scope
+        // where the scheduler and audio system are available
+        
+        try {
+          // Method 1: Try direct evaluation in global context
+          console.log('🎵 Attempting direct pattern evaluation...');
+          const evaluatedPattern = (globalThis as any).eval(`(${patternCode})`);
+          console.log('🔍 Evaluated pattern result:', evaluatedPattern);
           
-          // The pattern should start playing automatically once created with mini()
-          // We don't need to explicitly call play() in Strudel mini
+          if (evaluatedPattern && typeof evaluatedPattern.query === 'function') {
+            this.currentPattern = evaluatedPattern;
+            console.log('✅ Pattern evaluated and stored');
+          } else {
+            throw new Error('Evaluated pattern is not valid');
+          }
+        } catch (evalError) {
+          console.warn('⚠️ Direct evaluation failed:', evalError);
+          
+          // Method 2: Fallback to mini() approach
+          console.log('🎵 Falling back to mini() approach...');
+          this.currentPattern = mini(patternCode);
+          console.log('🔍 Pattern created with mini():', this.currentPattern);
+          console.log('🔍 Available methods:', Object.getOwnPropertyNames(this.currentPattern));
+        }
+        
+        // Now try to play the pattern
+        if (this.currentPattern && typeof this.currentPattern.query === 'function') {
+          // Check what's available in the global scope for scheduling
+          const globalScheduler = (globalThis as any).scheduler;
+          const globalPlayer = (globalThis as any).player;
+          const setCps = (globalThis as any).setCps;
+          const setPattern = (globalThis as any).setPattern;
+          
+          console.log('🔍 Global scheduler available:', !!globalScheduler);
+          console.log('🔍 Global player available:', !!globalPlayer);
+          console.log('🔍 setCps function available:', !!setCps);
+          console.log('🔍 setPattern function available:', !!setPattern);
+          
+          if (setPattern) {
+            setPattern(this.currentPattern);
+            console.log('✅ Pattern set using global setPattern function');
+          } else if (globalScheduler && typeof globalScheduler.setPattern === 'function') {
+            globalScheduler.setPattern(this.currentPattern);
+            console.log('✅ Pattern set on global scheduler');
+          } else {
+            console.warn('⚠️ No pattern scheduling mechanism found');
+            console.log('� The pattern was created but cannot be played without a scheduler');
+          }
         } else {
           throw new Error('Pattern does not have expected Strudel methods');
         }
