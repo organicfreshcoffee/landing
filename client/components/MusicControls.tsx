@@ -12,10 +12,16 @@ export const MusicControls: React.FC<MusicControlsProps> = ({ currentFloor }) =>
 
   useEffect(() => {
     // Update music status when component mounts or floor changes
-    const updateStatus = () => {
-      const status = proceduralMusic.getStatus();
-      setIsPlaying(status.isPlaying);
-      setCurrentFloorName(status.currentFloor);
+    const updateStatus = async () => {
+      try {
+        const status = await proceduralMusic.getStatus();
+        setIsPlaying(status.isPlaying);
+        setCurrentFloorName(status.currentFloor);
+      } catch (error) {
+        console.error('Error getting music status:', error);
+        setIsPlaying(false);
+        setCurrentFloorName(null);
+      }
     };
 
     updateStatus();
@@ -25,26 +31,6 @@ export const MusicControls: React.FC<MusicControlsProps> = ({ currentFloor }) =>
     
     return () => clearInterval(interval);
   }, [currentFloor]);
-
-  const handleToggleMusic = async () => {
-    try {
-      await proceduralMusic.toggleMusic();
-      const status = proceduralMusic.getStatus();
-      setIsPlaying(status.isPlaying);
-    } catch (error) {
-      console.error('Error toggling music:', error);
-    }
-  };
-
-  const handleStopMusic = async () => {
-    try {
-      await proceduralMusic.stopMusic();
-      setIsPlaying(false);
-      setCurrentFloorName(null);
-    } catch (error) {
-      console.error('Error stopping music:', error);
-    }
-  };
 
   return (
     <div className={styles.musicControls}>
@@ -56,26 +42,6 @@ export const MusicControls: React.FC<MusicControlsProps> = ({ currentFloor }) =>
         <span className={styles.playStatus}>
           {isPlaying ? '▶️ Playing' : '⏸️ Paused'}
         </span>
-      </div>
-      
-      <div className={styles.controls}>
-        <button 
-          className={styles.button}
-          onClick={handleToggleMusic}
-          disabled={!currentFloorName}
-          title={isPlaying ? 'Pause Music' : 'Resume Music'}
-        >
-          {isPlaying ? '⏸️' : '▶️'}
-        </button>
-        
-        <button 
-          className={styles.button}
-          onClick={handleStopMusic}
-          disabled={!currentFloorName}
-          title="Stop Music"
-        >
-          🔇
-        </button>
       </div>
     </div>
   );

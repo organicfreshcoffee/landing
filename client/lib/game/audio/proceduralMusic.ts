@@ -4,7 +4,24 @@
  */
 
 import { DungeonNode, FloorLayoutResponse, GeneratedFloorTilesResponse, FloorTile, WallTile } from '../types/api';
-import { simpleProceduralMusic } from './simpleMusic';
+
+// Use dynamic import to avoid compilation issues
+let simpleProceduralMusic: any = null;
+
+/**
+ * Load the simple music module dynamically
+ */
+async function loadSimpleMusic() {
+  if (!simpleProceduralMusic) {
+    try {
+      const module = await import('./simpleMusic');
+      simpleProceduralMusic = module.simpleProceduralMusic;
+    } catch (error) {
+      console.error('❌ Failed to load simple music module:', error);
+    }
+  }
+  return simpleProceduralMusic;
+}
 
 // Dynamic imports to avoid build-time issues
 let strudelInitialized = false;
@@ -204,15 +221,24 @@ export class ProceduralMusicManager {
   private isPlaying: boolean = false;
   private currentFloor: string | null = null;
   private useStrudel: boolean = false;
+  private initialized: boolean = false;
   
   /**
    * Initialize the music manager
    */
   async initialize(): Promise<void> {
+    if (this.initialized) return;
+    
     this.useStrudel = await ensureStrudelInitialized();
     if (!this.useStrudel) {
-      await simpleProceduralMusic.initialize();
+      const simpleMusicManager = await loadSimpleMusic();
+      if (simpleMusicManager && typeof simpleMusicManager.initialize === 'function') {
+        await simpleMusicManager.initialize();
+      } else {
+        console.error('❌ simpleProceduralMusic not available for initialization');
+      }
     }
+    this.initialized = true;
   }
   
   /**
@@ -238,10 +264,25 @@ export class ProceduralMusicManager {
       
       if (!this.useStrudel) {
         // Fall back to simple music
-        const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
-        await simpleProceduralMusic.playFloorMusic(floorName, roomCount);
-        this.isPlaying = true;
-        this.currentFloor = floorName;
+        const simpleMusicManager = await loadSimpleMusic();
+        if (simpleMusicManager && typeof simpleMusicManager.playFloorMusic === 'function') {
+          const roomCount = floorLayout.data.nodes.filter(node => node.isRoom).length;
+          await simpleMusicManager.playFloorMusic(floorName, roomCount);
+          // Update our local status to match the simple music manager
+          if (typeof simpleMusicManager.getStatus === 'function') {
+            const status = simpleMusicManager.getStatus();
+            this.isPlaying = status.isPlaying;
+            this.currentFloor = status.currentFloor;
+          } else {
+            // Fallback status
+            this.isPlaying = true;
+            this.currentFloor = floorName;
+          }
+        } else {
+          console.error('❌ simpleProceduralMusic not available for playFloorMusic');
+          this.isPlaying = false;
+          this.currentFloor = null;
+        }
         return;
       }
       
@@ -273,53 +314,48 @@ export class ProceduralMusicManager {
   async stopMusic(): Promise<void> {
     try {
       if (!this.useStrudel) {
-        await simpleProceduralMusic.stopMusic();
+        const simpleMusicManager = await loadSimpleMusic();
+        if (simpleMusicManager && typeof simpleMusicManager.stopMusic === 'function') {
+          await simpleMusicManager.stopMusic();
+        }
       } else if (this.currentPattern) {
         this.currentPattern.stop();
         this.currentPattern = null;
       }
       
       this.isPlaying = false;
-      this.currentFloor = null;
+      // Don't clear this.currentFloor - keep it for resuming
       
       console.log('🔇 Stopped procedural music');
     } catch (error) {
       console.error('❌ Error stopping music:', error);
     }
   }
-  
-  /**
-   * Pause/resume music
-   */
-  async toggleMusic(): Promise<void> {
-    try {
-      if (!this.useStrudel) {
-        await simpleProceduralMusic.toggleMusic();
-        const status = simpleProceduralMusic.getStatus();
-        this.isPlaying = status.isPlaying;
-        return;
-      }
-      
-      if (!this.currentPattern) return;
-      
-      if (this.isPlaying) {
-        this.currentPattern.stop();
-        this.isPlaying = false;
-        console.log('⏸️ Paused music');
-      } else {
-        this.currentPattern.play();
-        this.isPlaying = true;
-        console.log('▶️ Resumed music');
-      }
-    } catch (error) {
-      console.error('❌ Error toggling music:', error);
-    }
-  }
-  
+
   /**
    * Get current music status
    */
-  getStatus(): { isPlaying: boolean; currentFloor: string | null } {
+  async getStatus(): Promise<{ isPlaying: boolean; currentFloor: string | null }> {
+    // If not initialized, always return simple music status
+    if (!this.initialized || !this.useStrudel) {
+      const simpleMusicManager = await loadSimpleMusic();
+      // Check if simpleProceduralMusic is available
+      if (simpleMusicManager && typeof simpleMusicManager.getStatus === 'function') {
+        const status = simpleMusicManager.getStatus();
+        return {
+          isPlaying: status.isPlaying,
+          currentFloor: status.currentFloor
+        };
+      } else {
+        // Fallback if import failed
+        console.warn('⚠️ simpleProceduralMusic not available, returning default status');
+        return {
+          isPlaying: false,
+          currentFloor: null
+        };
+      }
+    }
+    
     return {
       isPlaying: this.isPlaying,
       currentFloor: this.currentFloor

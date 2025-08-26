@@ -327,39 +327,7 @@ export class GameManager {
 
       case 'enemy-moved':
         if (message.data && message.data.enemies && Array.isArray(message.data.enemies)) {
-          console.log('📨 Received enemy-moved message:', {
-            floorName: message.data.floorName,
-            timestamp: message.data.timestamp,
-            enemyCount: message.data.enemies.length,
-            enemies: message.data.enemies
-          });
-          
-          // Log local player position for comparison
-          const currentPlayerPosition = this.movementController.getCurrentPlayerPosition();
-          if (currentPlayerPosition) {
-            console.log('👤 Local player position for comparison:', {
-              x: currentPlayerPosition.x,
-              y: currentPlayerPosition.y,
-              z: currentPlayerPosition.z
-            });
-          }
-
-          // Log camera position for reference
-          console.log('📹 Camera position for reference:', {
-            x: this.sceneManager.camera.position.x,
-            y: this.sceneManager.camera.position.y,
-            z: this.sceneManager.camera.position.z
-          });
-          
           message.data.enemies.forEach((enemyData: EnemyUpdate) => {
-            console.log('🐾 Processing enemy data:', {
-              id: enemyData.id,
-              enemyType: enemyData.enemyTypeName,
-              serverPosition: { x: enemyData.positionX, y: enemyData.positionY },
-              worldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
-              rotation: enemyData.rotationY,
-              isMoving: enemyData.isMoving
-            });
             this.updateEnemy(enemyData).catch(console.error);
           });
         } else {
@@ -536,17 +504,6 @@ export class GameManager {
     const existingEnemy = this.enemies.get(enemyData.id);
 
     if (existingEnemy) {
-      // Update existing enemy
-      console.log('🦌 Updating existing enemy:', {
-        id: enemyData.id,
-        enemyType: enemyData.enemyTypeName,
-        oldPosition: existingEnemy.position,
-        newServerPosition: { x: enemyData.positionX, y: enemyData.positionY },
-        newWorldPosition: { x: enemyData.positionX, y: this.movementController.getCurrentPlayerPosition()?.y || 0, z: enemyData.positionY },
-        isMoving: enemyData.isMoving,
-        rotation: enemyData.rotationY
-      });
-
       // Update enemy data
       existingEnemy.position = {
         x: enemyData.positionX,
@@ -567,20 +524,6 @@ export class GameManager {
       // Update position and animation
       try {
         EnemyManager.updateEnemyPosition(existingEnemy, enemyData, this.movementController.getCurrentPlayerPosition() || undefined);
-        
-        // Log final mesh position after update
-        if (existingEnemy.mesh) {
-          console.log('🎯 Enemy mesh position after update:', {
-            id: enemyData.id,
-            meshPosition: {
-              x: existingEnemy.mesh.position.x,
-              y: existingEnemy.mesh.position.y,
-              z: existingEnemy.mesh.position.z
-            },
-            meshVisible: existingEnemy.mesh.visible,
-            meshInScene: existingEnemy.mesh.parent !== null
-          });
-        }
       } catch (error) {
         console.error('❌ Error updating enemy position:', enemyData.id, error);
       }
@@ -629,29 +572,9 @@ export class GameManager {
           enemyData.positionY                                               // Server's positionY maps to Three.js Z-axis
         );
 
-        console.log('📍 Positioning new enemy mesh:', {
-          id: enemyData.id,
-          setPosition: { 
-            x: enemyData.positionX, 
-            y: this.movementController.getCurrentPlayerPosition()?.y || 0, 
-            z: enemyData.positionY 
-          },
-          actualMeshPosition: {
-            x: enemyResult.model.position.x,
-            y: enemyResult.model.position.y,
-            z: enemyResult.model.position.z
-          },
-          playerGroundLevel: this.movementController.getCurrentPlayerPosition()?.y || 'unknown'
-        });
-
         // Set rotation if provided
         if (enemyData.rotationY !== undefined) {
           enemyResult.model.rotation.y = THREE.MathUtils.degToRad(enemyData.rotationY);
-          console.log('🔄 Set enemy rotation:', {
-            id: enemyData.id,
-            rotationDegrees: enemyData.rotationY,
-            rotationRadians: enemyResult.model.rotation.y
-          });
         }
 
         // Mark as enemy for scene preservation during floor changes
