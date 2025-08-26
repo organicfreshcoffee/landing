@@ -214,10 +214,33 @@ function generateStrudelPattern(params: MusicParameters): string {
   const ambientSamples = ['wind:0', 'space:0', 'pad:0', 'east:0'];
   const ambientSample = ambientSamples[Math.floor(seededRandom(scale, 0, ambientSamples.length))];
   
-  // Build the simplest possible pattern that will parse
-  const pattern = `bd`;
+  // Build a pattern using mini notation syntax based on dungeon characteristics
+  // Mini notation: sample names, brackets for grouping, * for repetition, ~ for silence
+  // Examples: "bd", "bd hh", "[bd sd] hh*2", "bd ~ sd ~", etc.
   
-  console.log('🎼 Generated simple Strudel pattern:', pattern);
+  // Create a drum pattern based on room count and complexity
+  let drumBase = "bd";
+  if (params.melodyNotes.length > 4) {
+    drumBase = "bd ~ sd ~";
+  }
+  if (params.melodyNotes.length > 6) {
+    drumBase = "[bd bd] sd [~ bd]";
+  }
+  
+  // Add hi-hats based on tempo
+  let hihatPattern = "";
+  if (params.tempo > 100) {
+    hihatPattern = " hh*8";
+  } else if (params.tempo > 80) {
+    hihatPattern = " hh*4";
+  } else {
+    hihatPattern = " hh*2";
+  }
+  
+  // Combine patterns
+  const pattern = drumBase + hihatPattern;
+  
+  console.log('🎼 Generated Strudel pattern:', pattern);
   
   return pattern;
 }
