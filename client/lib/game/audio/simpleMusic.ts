@@ -232,41 +232,51 @@ class SimpleFallbackMusicManager {
     const scaleIndex = Math.abs(hash) % 5;
     const scales = ['major', 'minor', 'dorian', 'pentatonic', 'blues'];
     
-    // Generate melody pattern with up/down movement based on room count and floor hash
+    // Generate melody pattern with smooth up/down movement
     const melodyLength = Math.min(8, Math.max(4, roomCount));
     const melody: number[] = [];
     
-    // Create melodic patterns that move up and down
+    // Create smoother melodic patterns that move gradually
     const patternType = Math.abs(hash) % 4;
     let currentNote = 2; // Start in middle of scale
     
     for (let i = 0; i < melodyLength; i++) {
       melody.push(currentNote);
       
-      // Add directional movement based on pattern type
+      // Add smooth directional movement (mostly stepwise)
       switch (patternType) {
-        case 0: // Ascending then descending arc
+        case 0: // Gentle ascending then descending arc
           if (i < melodyLength / 2) {
-            currentNote = Math.min(6, currentNote + 1);
+            // Go up gradually
+            const shouldStep = (hash + i) % 3 !== 0; // Step up 2/3 of the time
+            if (shouldStep && currentNote < 5) currentNote++;
           } else {
-            currentNote = Math.max(0, currentNote - 1);
+            // Come down gradually  
+            const shouldStep = (hash + i) % 3 !== 0;
+            if (shouldStep && currentNote > 1) currentNote--;
           }
           break;
-        case 1: // Wave pattern (up-down-up-down)
-          currentNote = i % 2 === 0 ? 
-            Math.min(5, currentNote + 1) : 
-            Math.max(1, currentNote - 2);
+        case 1: // Gentle wave pattern
+          const waveDirection = Math.sin(i * Math.PI / 2) > 0 ? 1 : -1;
+          const shouldMove = (hash + i) % 4 !== 0; // Move 3/4 of the time
+          if (shouldMove) {
+            currentNote = Math.max(1, Math.min(5, currentNote + waveDirection));
+          }
           break;
-        case 2: // Step pattern with leaps
-          const direction = ((hash + i) % 3) - 1; // -1, 0, or 1
-          const stepSize = ((hash + i * 3) % 2) + 1; // 1 or 2 steps
-          currentNote = Math.max(0, Math.min(6, currentNote + (direction * stepSize)));
+        case 2: // Small step pattern (mostly stepwise motion)
+          const direction = ((hash + i) % 5) - 2; // -2, -1, 0, 1, 2 but mostly -1, 0, 1
+          const stepSize = Math.abs(direction) > 1 ? 0 : direction; // Eliminate large jumps
+          currentNote = Math.max(1, Math.min(5, currentNote + stepSize));
           break;
-        case 3: // Descending then ascending
+        case 3: // Gentle descending then ascending
           if (i < melodyLength / 2) {
-            currentNote = Math.max(0, currentNote - 1);
+            // Go down gradually
+            const shouldStep = (hash + i) % 3 !== 0;
+            if (shouldStep && currentNote > 1) currentNote--;
           } else {
-            currentNote = Math.min(6, currentNote + 1);
+            // Come up gradually
+            const shouldStep = (hash + i) % 3 !== 0;
+            if (shouldStep && currentNote < 5) currentNote++;
           }
           break;
       }
@@ -384,51 +394,48 @@ class SimpleFallbackMusicManager {
       const noteIndex = params.melody[melodyIndex % params.melody.length];
       const interval = scaleIntervals[noteIndex % scaleIntervals.length];
       
-      // Add octave variation for more dramatic pitch movement
+      // Add subtle octave variation only occasionally for interest
       let octaveShift = 0;
       const melodyPosition = melodyIndex % params.melody.length;
       
-      // Higher notes in higher octave, lower notes in lower octave
-      if (noteIndex >= 5) {
-        octaveShift = 12; // One octave up for high notes
-      } else if (noteIndex <= 1) {
-        octaveShift = -12; // One octave down for low notes
-      }
-      
-      // Add some rhythmic octave jumps for excitement
-      if (melodyIndex % 4 === 3) {
-        octaveShift += 12; // Jump up an octave every 4th note
+      // Very subtle octave shifts - only for occasional emphasis
+      if (melodyPosition === 0 && melodyIndex > 0) {
+        // Octave jump only at the start of a new melody cycle, and not the first time
+        octaveShift = noteIndex >= 4 ? 12 : 0; // Up an octave for higher notes only
+      } else if (melodyPosition === Math.floor(params.melody.length / 2)) {
+        // Small octave drop in the middle for variation
+        octaveShift = noteIndex <= 2 ? -12 : 0; // Down an octave for lower notes only
       }
       
       const frequency = params.baseFreq * Math.pow(2, (interval + octaveShift) / 12);
 
-      // Create melody note
+      // Create melody note with smoother envelope
       const oscillator = this.audioContext.createOscillator();
       const gainNode = this.audioContext.createGain();
       
       oscillator.type = 'triangle';
       oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
       
-      // Envelope: smooth attack and release
+      // Smoother envelope for less jarring attacks
       gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.15, this.audioContext.currentTime + 0.05);
-      gainNode.gain.setValueAtTime(0.15, this.audioContext.currentTime + noteDuration * 0.8);
-      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + noteDuration);
+      gainNode.gain.linearRampToValueAtTime(0.12, this.audioContext.currentTime + 0.1); // Slower attack
+      gainNode.gain.setValueAtTime(0.12, this.audioContext.currentTime + noteDuration * 0.7);
+      gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + noteDuration * 1.2); // Longer release
       
       oscillator.connect(gainNode);
       gainNode.connect(this.masterGain);
       
       oscillator.start(this.audioContext.currentTime);
-      oscillator.stop(this.audioContext.currentTime + noteDuration);
+      oscillator.stop(this.audioContext.currentTime + noteDuration * 1.2);
       
       this.oscillators.push(oscillator);
       this.gainNodes.push(gainNode);
       
       melodyIndex++;
       
-      // Schedule next melody note (sometimes skip beats for rhythm variation)
-      const skipBeat = melodyIndex % 8 === 7; // Skip every 8th beat for variation
-      const nextBeatTime = skipBeat ? beatDuration * 2 : beatDuration;
+      // More varied rhythm for musical interest
+      const rhythmVariation = (melodyIndex % 6 === 5) ? 1.5 : 1; // Longer note every 6th beat
+      const nextBeatTime = beatDuration * rhythmVariation;
       const timeout = setTimeout(playMelodyNote, nextBeatTime * 1000);
       this.sequenceTimeouts.push(timeout);
     };
