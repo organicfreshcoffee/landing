@@ -495,30 +495,53 @@ export class ProceduralMusicManager {
       try {
         console.log('🎼 Generated Strudel pattern:', patternCode);
         
-        // Instead of using mini() directly, try to evaluate the pattern in global context
-        // This might be the key - Strudel patterns need to be evaluated in the global scope
-        // where the scheduler and audio system are available
+        // Create the pattern using mini() - this is the correct approach
+        // The issue was trying to eval raw mini notation as JavaScript
+        this.currentPattern = mini(patternCode);
+        console.log('🔍 Pattern created with mini():', this.currentPattern);
+        console.log('🔍 Available methods:', Object.getOwnPropertyNames(this.currentPattern));
         
-        try {
-          // Method 1: Try direct evaluation in global context
-          console.log('🎵 Attempting direct pattern evaluation...');
-          const evaluatedPattern = (globalThis as any).eval(`(${patternCode})`);
-          console.log('🔍 Evaluated pattern result:', evaluatedPattern);
+        // Now try to play the pattern using the available scheduler
+        if (this.currentPattern && typeof this.currentPattern.query === 'function') {
+          // Check what's available in the global scope for scheduling
+          const globalScheduler = (globalThis as any).scheduler;
           
-          if (evaluatedPattern && typeof evaluatedPattern.query === 'function') {
-            this.currentPattern = evaluatedPattern;
-            console.log('✅ Pattern evaluated and stored');
+          console.log('🔍 Global scheduler available:', !!globalScheduler);
+          
+          if (globalScheduler) {
+            // Let's examine what methods the scheduler has
+            console.log('🔍 Scheduler methods:', Object.getOwnPropertyNames(globalScheduler));
+            console.log('🔍 Scheduler prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(globalScheduler)));
+            
+            // Try different ways to set the pattern on the scheduler
+            if (typeof globalScheduler.setPattern === 'function') {
+              globalScheduler.setPattern(this.currentPattern);
+              console.log('✅ Pattern set using scheduler.setPattern()');
+            } else if (typeof globalScheduler.pattern === 'object' || globalScheduler.pattern === undefined) {
+              globalScheduler.pattern = this.currentPattern;
+              console.log('✅ Pattern set directly on scheduler.pattern');
+            } else if (typeof globalScheduler.evaluate === 'function') {
+              // Try using evaluate method with the pattern code
+              await globalScheduler.evaluate(patternCode);
+              console.log('✅ Pattern evaluated using scheduler.evaluate()');
+            } else if (typeof globalScheduler.start === 'function') {
+              // Maybe we need to start the scheduler first
+              globalScheduler.start();
+              console.log('✅ Scheduler started');
+              // Try setting pattern again after starting
+              if (typeof globalScheduler.setPattern === 'function') {
+                globalScheduler.setPattern(this.currentPattern);
+                console.log('✅ Pattern set after starting scheduler');
+              }
+            } else {
+              console.warn('⚠️ Could not find a way to play pattern on scheduler');
+              console.log('🔍 Available scheduler properties:', Object.keys(globalScheduler));
+            }
           } else {
-            throw new Error('Evaluated pattern is not valid');
+            console.warn('⚠️ No global scheduler found');
           }
-        } catch (evalError) {
-          console.warn('⚠️ Direct evaluation failed:', evalError);
-          
-          // Method 2: Fallback to mini() approach
-          console.log('🎵 Falling back to mini() approach...');
-          this.currentPattern = mini(patternCode);
-          console.log('🔍 Pattern created with mini():', this.currentPattern);
-          console.log('🔍 Available methods:', Object.getOwnPropertyNames(this.currentPattern));
+        } else {
+          throw new Error('Pattern does not have expected Strudel methods');
         }
         
         // Now try to play the pattern
