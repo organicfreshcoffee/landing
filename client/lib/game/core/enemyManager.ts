@@ -288,14 +288,7 @@ export class EnemyManager {
     // Calculate sprite direction similar to player system
     const newDirection = this.calculateEnemySpriteDirection(enemyPosition, enemyRotationY, localPlayerPosition);
     
-    if (newDirection !== animState.direction) {
-      console.log('🔄 Enemy sprite direction changed:', {
-        enemyId,
-        oldDirection: animState.direction,
-        newDirection,
-        enemyRotation: enemyRotationY
-      });
-      
+    if (newDirection !== animState.direction) {      
       animState.direction = newDirection;
       this.spriteDirections.set(enemyId, newDirection);
       
