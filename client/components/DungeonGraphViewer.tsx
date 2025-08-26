@@ -16,12 +16,14 @@ interface DungeonGraphViewerProps {
   nodes: VisitedNode[];
   isVisible: boolean;
   onClose: () => void;
+  currentFloor?: string;
 }
 
 export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
   nodes,
   isVisible,
-  onClose
+  onClose,
+  currentFloor
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -172,18 +174,37 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
     graphNodes.forEach(node => {
       const { x, y } = node.position;
       
-      // Node background
-      if (node.visitedBy) {
-        ctx.fillStyle = node.isBossLevel ? '#ff6b6b' : '#4ecdc4';
+      // Determine node color based on status
+      let fillColor: string;
+      if (node.name === currentFloor) {
+        // Current floor - bright green
+        fillColor = '#00ff00';
+      } else if (node.visitedBy) {
+        // Visited floor - boss levels are red, others are teal
+        fillColor = node.isBossLevel ? '#ff6b6b' : '#4ecdc4';
       } else {
-        ctx.fillStyle = '#555'; // Darker gray for unvisited
+        // Unvisited floor - dark gray
+        fillColor = '#555';
       }
       
+      // Node background
+      ctx.fillStyle = fillColor;
       ctx.fillRect(x - 50, y - 30, 100, 60);
       
       // Node border
-      ctx.strokeStyle = node.visitedBy ? '#fff' : '#999';
-      ctx.lineWidth = node.visitedBy ? 2 : 1;
+      if (node.name === currentFloor) {
+        // Current floor - thick white border
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+      } else if (node.visitedBy) {
+        // Visited floor - regular white border
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+      } else {
+        // Unvisited floor - gray border
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+      }
       ctx.strokeRect(x - 50, y - 30, 100, 60);
       
       // Add dashed border for unvisited nodes
@@ -196,7 +217,16 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
       }
       
       // Node text
-      ctx.fillStyle = node.visitedBy ? '#fff' : '#ccc';
+      if (node.name === currentFloor) {
+        // Current floor - black text for better contrast on green
+        ctx.fillStyle = '#000';
+      } else if (node.visitedBy) {
+        // Visited floor - white text
+        ctx.fillStyle = '#fff';
+      } else {
+        // Unvisited floor - light gray text
+        ctx.fillStyle = '#ccc';
+      }
       ctx.font = '14px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(node.name, x, y - 5);
@@ -204,12 +234,12 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
       // Boss indicator
       if (node.isBossLevel && node.visitedBy) {
         ctx.font = '10px monospace';
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = node.name === currentFloor ? '#000' : '#fff';
         ctx.fillText('BOSS', x, y + 10);
       }
       
-      // Unvisited indicator
-      if (!node.visitedBy) {
+      // Unvisited indicator (only if not current floor)
+      else if (!node.visitedBy) {
         ctx.font = '10px monospace';
         ctx.fillStyle = '#999';
         ctx.fillText('UNVISITED', x, y + 15);
@@ -291,6 +321,10 @@ export const DungeonGraphViewer: React.FC<DungeonGraphViewerProps> = ({
           </div>
         </div>
         <div className={styles.legend}>
+          <div className={styles.legendItem}>
+            <div className={`${styles.legendColor} ${styles.current}`}></div>
+            <span>Current Floor</span>
+          </div>
           <div className={styles.legendItem}>
             <div className={`${styles.legendColor} ${styles.visited}`}></div>
             <span>Visited</span>
