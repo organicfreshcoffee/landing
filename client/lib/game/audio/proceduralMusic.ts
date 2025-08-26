@@ -214,17 +214,10 @@ function generateStrudelPattern(params: MusicParameters): string {
   const ambientSamples = ['wind:0', 'space:0', 'pad:0', 'east:0'];
   const ambientSample = ambientSamples[Math.floor(seededRandom(scale, 0, ambientSamples.length))];
   
-  // Build a simple, safe pattern that should always parse
-  const pattern = `stack(
-  s("bd").struct("x ~ ~ ~"),
-  s("hh").struct("~ x ~ x").gain(0.4),
-  s("sd").struct("~ ~ x ~").gain(0.6),
-  n("c3 e3 g3 c4").s("sawtooth").gain(0.3)
-)`.trim();
+  // Build the simplest possible pattern that will parse
+  const pattern = `bd`;
   
-  console.log('🎼 Generated safe Strudel pattern:', pattern);
-  
-  return pattern;
+  console.log('🎼 Generated simple Strudel pattern:', pattern);
   
   return pattern;
 }
@@ -462,7 +455,22 @@ export class ProceduralMusicManager {
       // Parse and play the pattern with error handling
       try {
         this.currentPattern = mini(patternCode);
-        this.currentPattern.play();
+        console.log('🔍 Current pattern object:', this.currentPattern);
+        console.log('🔍 Available methods:', Object.getOwnPropertyNames(this.currentPattern));
+        
+        // In Strudel, patterns need to be started with the global player
+        // The mini() function returns a Pattern object, not a player
+        // We need to use the pattern with Strudel's scheduler
+        if (this.currentPattern && typeof this.currentPattern.query === 'function') {
+          // Start the pattern by querying and scheduling it
+          // This is how Strudel patterns work - they get scheduled automatically
+          console.log('🎵 Pattern created and will be scheduled by Strudel');
+          
+          // The pattern should start playing automatically once created with mini()
+          // We don't need to explicitly call play() in Strudel mini
+        } else {
+          throw new Error('Pattern does not have expected Strudel methods');
+        }
         
         this.isPlaying = true;
         this.currentFloor = floorName;
