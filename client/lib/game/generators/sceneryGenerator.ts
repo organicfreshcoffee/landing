@@ -227,6 +227,9 @@ export class ServerSceneryGenerator {
         child.userData.isScenery === true ||
         child.userData.type === 'stairs' || // Individual stair models
         child.userData.isCeiling === true || // Individual ceiling blocks
+        child.userData.isWall === true || // Individual wall blocks
+        child.userData.isItem === true || // Items should be cleared when changing floors
+        (child.userData.isEnemy === true) || // Enemies should be cleared
         (child.type === 'Mesh' && 
          !child.userData.isPlayer && 
          !child.userData.isOtherPlayer && 

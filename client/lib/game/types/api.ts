@@ -176,3 +176,63 @@ export interface VisitedNodesResponse {
   success: boolean;
   data: VisitedNode[];
 }
+
+// Item types
+export interface ItemLocation {
+  x: number;
+  y: number;
+}
+
+export interface ItemStats {
+  weaponStats?: {
+    type: string;
+    powerMultiplier: number;
+    dexterityMultiplier: number;
+  };
+  armorStats?: {
+    defenseMultiplier: number;
+    speedMultiplier: number;
+    manaMultiplier: number;
+  };
+}
+
+export interface GameItem {
+  id: string;
+  itemTemplateId: string;
+  material: string;
+  make: string;
+  location: ItemLocation;
+  inWorld: boolean;
+  owner: string | null;
+  alignment: number;
+  spawnDatetime: string;
+  enchantments: any[];
+  value: number;
+  name: string;
+  weight: number;
+  floor: string;
+  weaponStats?: {
+    type: string;
+    powerMultiplier: number;
+    dexterityMultiplier: number;
+  };
+  armorStats?: {
+    defenseMultiplier: number;
+    speedMultiplier: number;
+    manaMultiplier: number;
+  };
+}
+
+export interface FloorItemsResponse {
+  success: boolean;
+  data: {
+    floor: string;
+    items: GameItem[];
+  };
+}
+
+export interface PickupItemResponse {
+  success: boolean;
+  message: string;
+  item: GameItem;
+}

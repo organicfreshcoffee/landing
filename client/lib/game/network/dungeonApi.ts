@@ -9,7 +9,9 @@ import {
   PlayerMovedFloorResponse,
   CurrentFloorResponse,
   CurrentStatusResponse,
-  VisitedNodesResponse
+  VisitedNodesResponse,
+  FloorItemsResponse,
+  PickupItemResponse
 } from '../types/api';
 
 /**
@@ -30,6 +32,8 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
     getCurrentStatus: () => `${baseUrl}/api/dungeon/current-status`,
     getVisitedNodes: () => `${baseUrl}/api/dungeon/visited-nodes`,
+    getFloorItems: () => `${baseUrl}/api/dungeon/floor-items`,
+    pickupItem: () => `${baseUrl}/api/dungeon/pickup-item`,
   };
 };
 
@@ -223,6 +227,43 @@ export class DungeonApi {
       return response.data;
     } catch (error) {
       console.error('❌ Error getting visited nodes:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get items on the current floor
+   */
+  static async getFloorItems(serverAddress: string): Promise<FloorItemsResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const url = endpoints.getFloorItems();
+      
+      const response = await axios.get(url, config);
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting floor items:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Pickup an item
+   */
+  static async pickupItem(serverAddress: string, itemId: string): Promise<PickupItemResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const response = await axios.post(
+        endpoints.pickupItem(),
+        { itemId },
+        config
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error picking up item:', error);
       throw error;
     }
   }

@@ -88,3 +88,11 @@ export interface EnemyUpdate {
   rotationY?: number;
   isMoving: boolean;
 }
+
+export interface Item {
+  id: string;
+  name: string;
+  position: { x: number; y: number; z: number };
+  mesh?: THREE.Object3D;
+  data: any; // Full item data from server
+}
