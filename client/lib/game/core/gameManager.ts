@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData, PlayerActionData, SpellActionData, Enemy, EnemyUpdate } from '../types';
+import { GameState, GameMessage, Player, PlayerUpdate, PlayerAnimationData, CharacterData, PlayerActionData, SpellActionData, Enemy, EnemyUpdate, Item } from '../types';
 import { PlayerManager } from './playerManager';
 import { EnemyManager } from './enemyManager';
+import { ItemManager } from './itemManager';
 import { WebSocketManager } from '../network';
 import { MovementController } from './movementController';
 import { SceneManager, ParticleSystem } from '../rendering';
 import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
+import { ItemInteractionManager, ItemInteractionData } from '../ui/itemInteractionManager';
 import { DungeonApi } from '../network/dungeonApi';
-import { StairInfo } from '../types/api';
+import { StairInfo, GameItem } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
 
 export class GameManager {
@@ -23,6 +25,7 @@ export class GameManager {
   private players = new Map<string, Player>();
   private playersAnimations = new Map<string, PlayerAnimationData>();
   private enemies = new Map<string, Enemy>();
+  private items = new Map<string, Item>();
   
   // Store current player ID to avoid inconsistencies
   private currentPlayerId: string;
@@ -86,11 +89,18 @@ export class GameManager {
           const stairManager = StairInteractionManager.getInstance();
           stairManager.updatePlayerPosition(this.localPlayerRef.current.position);
           
+          // Update item interactions with current player position
+          const itemManager = ItemInteractionManager.getInstance();
+          itemManager.updatePlayerPosition(this.localPlayerRef.current.position);
+          
           // Make other players face the local player
           PlayerManager.updateAllOtherPlayersFacing(this.localPlayerRef.current.position);
           
           // Make enemies face the local player
           EnemyManager.updateAllEnemiesFacing(this.localPlayerRef.current.position);
+          
+          // Make items face the local player
+          ItemManager.updateAllItemsFacing(this.localPlayerRef.current.position);
         }
       }
       
@@ -115,6 +125,9 @@ export class GameManager {
     
     // Set up stair interaction callbacks
     this.setupStairInteractions();
+    
+    // Set up item interaction callbacks
+    this.setupItemInteractions();
   }
 
   private async createLocalPlayer(): Promise<void> {
@@ -324,6 +337,30 @@ export class GameManager {
           this.removeEnemy(message.data.enemyId);
         } else {
           console.warn('⚠️ Invalid enemy-despawned message data:', message.data);
+        }
+        break;
+
+      case 'item-spawned':
+        if (message.data && message.data.item) {
+          this.handleItemSpawned(message.data.item);
+        } else {
+          console.warn('⚠️ Invalid item-spawned message data:', message.data);
+        }
+        break;
+
+      case 'item-despawned':
+        if (message.data && message.data.itemId) {
+          this.handleItemDespawned(message.data.itemId);
+        } else {
+          console.warn('⚠️ Invalid item-despawned message data:', message.data);
+        }
+        break;
+
+      case 'item-picked-up':
+        if (message.data && message.data.itemId) {
+          this.handleItemPickedUp(message.data.itemId, message.data.playerId);
+        } else {
+          console.warn('⚠️ Invalid item-picked-up message data:', message.data);
         }
         break;
     }
@@ -800,6 +837,119 @@ export class GameManager {
     }
   }
 
+  // Item management methods
+  private handleItemSpawned(itemData: GameItem): void {
+    console.log('🎒 Item spawned:', itemData);
+    
+    if (!this.localPlayerRef.current) {
+      console.warn('⚠️ Cannot spawn item - no local player');
+      return;
+    }
+    
+    const playerGroundLevel = this.movementController.getCurrentPlayerPosition()?.y || 0;
+    const item = ItemManager.createItemFromServerData(itemData, playerGroundLevel);
+    
+    try {
+      const itemResult = ItemManager.createSpriteItemModel(item);
+      if (!itemResult || !itemResult.model) {
+        console.error('❌ Failed to create sprite item model for:', itemData.id);
+        return;
+      }
+      
+      item.mesh = itemResult.model;
+      
+      // Position the item
+      itemResult.model.position.set(
+        item.position.x,
+        item.position.y,
+        item.position.z
+      );
+      
+      // Mark as item for scene preservation
+      itemResult.model.userData.isItem = true;
+      itemResult.model.userData.itemId = itemData.id;
+      
+      this.sceneManager.addToScene(itemResult.model);
+      this.items.set(itemData.id, item);
+      
+      // Add to interaction manager
+      const itemManager = ItemInteractionManager.getInstance();
+      itemManager.addItem(item);
+      
+      console.log('✅ Successfully spawned item:', itemData.id);
+    } catch (error) {
+      console.error('❌ Error spawning item:', itemData.id, error);
+    }
+  }
+
+  private handleItemDespawned(itemId: string): void {
+    console.log('🗑️ Item despawned:', itemId);
+    this.removeItem(itemId);
+  }
+
+  private handleItemPickedUp(itemId: string, playerId: string): void {
+    console.log('🎒 Item picked up:', { itemId, playerId });
+    this.removeItem(itemId);
+  }
+
+  private removeItem(itemId: string): void {
+    console.log('🗑️ Removing item:', itemId);
+    
+    const item = this.items.get(itemId);
+    
+    if (item && item.mesh) {
+      try {
+        this.sceneManager.removeFromScene(item.mesh);
+        ItemManager.removeItem(itemId);
+        this.items.delete(itemId);
+        
+        // Remove from interaction manager
+        const itemManager = ItemInteractionManager.getInstance();
+        itemManager.removeItem(itemId);
+        
+        console.log('✅ Successfully removed item:', itemId);
+      } catch (error) {
+        console.error('❌ Error removing item:', itemId, error);
+        // Force cleanup even if error occurs
+        this.items.delete(itemId);
+        ItemManager.removeItem(itemId);
+      }
+    } else {
+      // Clean up any orphaned data
+      this.items.delete(itemId);
+      ItemManager.removeItem(itemId);
+      console.log('🧹 Cleaned up orphaned item data:', itemId);
+    }
+  }
+
+  private async handleItemPickup(itemData: ItemInteractionData): Promise<void> {
+    try {
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for item pickup');
+        return;
+      }
+      
+      console.log('🎒 Attempting to pickup item:', itemData.itemName);
+      
+      // Hide item interaction popup during pickup
+      const itemManager = ItemInteractionManager.getInstance();
+      itemManager.forceHidePopup();
+      
+      // Call pickup API
+      const response = await DungeonApi.pickupItem(serverAddress, itemData.itemId);
+      
+      if (response.success) {
+        console.log('✅ Successfully picked up item:', response.item.name);
+        // Item removal will be handled by the item-picked-up websocket message
+      } else {
+        console.error('❌ Failed to pickup item:', response);
+      }
+    } catch (error) {
+      console.error('❌ Error during item pickup:', error);
+    }
+  }
+
   private setupVisibilityHandler(): void {
     const handleVisibilityChange = () => {
       this.webSocketManager.adjustHeartbeatForVisibility(!document.hidden);
@@ -845,15 +995,25 @@ export class GameManager {
     stairManager.setCallbacks(
       // Upstairs callback
       (stairData: StairInteractionData) => {
-                this.handleUpstairsInteraction(stairData);
+        this.handleUpstairsInteraction(stairData);
       },
       // Downstairs callback
       (stairData: StairInteractionData) => {
-                this.handleDownstairsInteraction(stairData);
+        this.handleDownstairsInteraction(stairData);
       }
     );
+  }
+
+  private setupItemInteractions(): void {
+    const itemManager = ItemInteractionManager.getInstance();
     
+    // Set up callback for item pickup
+    itemManager.setCallback(
+      (itemData: ItemInteractionData) => {
+        this.handleItemPickup(itemData);
       }
+    );
+  }
 
   private async handleUpstairsInteraction(stairData: StairInteractionData): Promise<void> {
                   
@@ -1285,9 +1445,12 @@ export class GameManager {
       // Position player on ground
       this.positionPlayerOnGround();
       
+      // Load items for the current floor
+      await this.loadFloorItems();
+      
       // Reinitialize particle system after floor change
       if (!this.particleSystem.isInitialized()) {
-                this.particleSystem.reinitialize();
+        this.particleSystem.reinitialize();
       }
       
       // Notify about floor change
@@ -1296,10 +1459,97 @@ export class GameManager {
         this.onFloorChange(currentFloor);
       }
       
-          } catch (error) {
+    } catch (error) {
       console.error('Error loading floor:', error);
       throw error;
     }
+  }
+
+  private async loadFloorItems(): Promise<void> {
+    try {
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.warn('⚠️ Server address not available, skipping item loading');
+        return;
+      }
+
+      console.log('🎒 Loading items for current floor...');
+      
+      // Clear existing items
+      this.clearAllItems();
+      
+      // Fetch items from server
+      const itemsResponse = await DungeonApi.getFloorItems(serverAddress);
+      
+      if (itemsResponse.success && itemsResponse.data.items) {
+        console.log(`🎒 Found ${itemsResponse.data.items.length} items on floor ${itemsResponse.data.floor}`);
+        
+        const playerGroundLevel = this.movementController.getCurrentPlayerPosition()?.y || 0;
+        const itemsToAdd: Item[] = [];
+        
+        // Create items from server data
+        for (const itemData of itemsResponse.data.items) {
+          try {
+            const item = ItemManager.createItemFromServerData(itemData, playerGroundLevel);
+            const itemResult = ItemManager.createSpriteItemModel(item);
+            
+            if (itemResult && itemResult.model) {
+              item.mesh = itemResult.model;
+              
+              // Position the item
+              itemResult.model.position.set(
+                item.position.x,
+                item.position.y,
+                item.position.z
+              );
+              
+              // Mark as item for scene preservation
+              itemResult.model.userData.isItem = true;
+              itemResult.model.userData.itemId = itemData.id;
+              
+              this.sceneManager.addToScene(itemResult.model);
+              this.items.set(itemData.id, item);
+              itemsToAdd.push(item);
+              
+              console.log(`✅ Added item: ${itemData.name} at (${item.position.x}, ${item.position.z})`);
+            } else {
+              console.error(`❌ Failed to create sprite model for item: ${itemData.id}`);
+            }
+          } catch (error) {
+            console.error(`❌ Error creating item ${itemData.id}:`, error);
+          }
+        }
+        
+        // Initialize item interactions
+        const itemManager = ItemInteractionManager.getInstance();
+        itemManager.initializeItems(itemsToAdd);
+        
+        console.log(`🎒 Successfully loaded ${itemsToAdd.length} items`);
+      } else {
+        console.log('🎒 No items found on current floor');
+      }
+    } catch (error) {
+      console.error('❌ Error loading floor items:', error);
+    }
+  }
+
+  private clearAllItems(): void {
+    console.log('🧹 Clearing all items from scene...');
+    
+    // Remove items from scene
+    this.items.forEach((item, itemId) => {
+      if (item.mesh) {
+        this.sceneManager.removeFromScene(item.mesh);
+      }
+    });
+    
+    // Clear item collections
+    this.items.clear();
+    ItemManager.clearAllItems();
+    
+    // Clear item interactions
+    const itemManager = ItemInteractionManager.getInstance();
+    itemManager.initializeItems([]);
   }
 
   updateServerAddress(address: string): void {

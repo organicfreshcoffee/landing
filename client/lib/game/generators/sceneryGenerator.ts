@@ -227,6 +227,9 @@ export class ServerSceneryGenerator {
         child.userData.isScenery === true ||
         child.userData.type === 'stairs' || // Individual stair models
         child.userData.isCeiling === true || // Individual ceiling blocks
+        child.userData.isWall === true || // Individual wall blocks
+        // Note: Items are handled by GameManager.clearAllItems() explicitly, not here
+        (child.userData.isEnemy === true) || // Enemies should be cleared
         (child.type === 'Mesh' && 
          !child.userData.isPlayer && 
          !child.userData.isOtherPlayer && 
