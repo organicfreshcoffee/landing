@@ -11,7 +11,10 @@ import {
   CurrentStatusResponse,
   VisitedNodesResponse,
   FloorItemsResponse,
-  PickupItemResponse
+  PickupItemResponse,
+  InventoryResponse,
+  DropItemResponse,
+  EquipItemResponse
 } from '../types/api';
 
 /**
@@ -34,6 +37,9 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getVisitedNodes: () => `${baseUrl}/api/dungeon/visited-nodes`,
     getFloorItems: () => `${baseUrl}/api/dungeon/floor-items`,
     pickupItem: () => `${baseUrl}/api/dungeon/pickup-item`,
+    getInventory: () => `${baseUrl}/api/dungeon/inventory`,
+    dropItem: () => `${baseUrl}/api/dungeon/drop-item`,
+    equipItem: () => `${baseUrl}/api/dungeon/equip-item`,
   };
 };
 
@@ -264,6 +270,62 @@ export class DungeonApi {
       return response.data;
     } catch (error) {
       console.error('❌ Error picking up item:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get player inventory
+   */
+  static async getInventory(serverAddress: string): Promise<InventoryResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const url = endpoints.getInventory();
+      
+      const response = await axios.get(url, config);
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting inventory:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Drop an item from inventory
+   */
+  static async dropItem(serverAddress: string, itemId: string): Promise<DropItemResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const response = await axios.post(
+        endpoints.dropItem(),
+        { itemId },
+        config
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error dropping item:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Equip an item from inventory
+   */
+  static async equipItem(serverAddress: string, itemId: string): Promise<EquipItemResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const response = await axios.post(
+        endpoints.equipItem(),
+        { itemId },
+        config
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error equipping item:', error);
       throw error;
     }
   }
