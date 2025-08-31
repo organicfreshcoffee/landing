@@ -236,3 +236,53 @@ export interface PickupItemResponse {
   message: string;
   item: GameItem;
 }
+
+export interface InventoryItem {
+  id: string;
+  itemTemplateId: string;
+  material: string;
+  make: string;
+  alignment: number;
+  enchantments: any[];
+  value: number;
+  name: string;
+  weight: number;
+  weaponStats?: {
+    type: string;
+    powerMultiplier: number;
+    dexterityMultiplier: number;
+  } | null;
+  armorStats?: {
+    defenseMultiplier: number;
+    speedMultiplier: number;
+    manaMultiplier: number;
+  } | null;
+  spawnDatetime: string;
+}
+
+export interface InventoryStatistics {
+  totalItems: number;
+  totalValue: number;
+  totalWeight: number;
+}
+
+export interface InventoryResponse {
+  success: boolean;
+  data: {
+    inventory: {
+      items: InventoryItem[];
+      itemsByCategory: { [category: string]: InventoryItem[] };
+      statistics: InventoryStatistics;
+    };
+  };
+}
+
+export interface DropItemResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface EquipItemResponse {
+  success: boolean;
+  message: string;
+}

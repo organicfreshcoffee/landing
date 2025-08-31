@@ -8,6 +8,7 @@ import { MovementController } from './movementController';
 import { SceneManager, ParticleSystem } from '../rendering';
 import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
 import { ItemInteractionManager, ItemInteractionData } from '../ui/itemInteractionManager';
+import { InventoryManager } from '../ui/inventoryManager';
 import { DungeonApi } from '../network/dungeonApi';
 import { StairInfo, GameItem } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
@@ -128,6 +129,9 @@ export class GameManager {
     
     // Set up item interaction callbacks
     this.setupItemInteractions();
+    
+    // Set up inventory callbacks
+    this.setupInventoryInteractions();
   }
 
   private async createLocalPlayer(): Promise<void> {
@@ -178,9 +182,12 @@ export class GameManager {
   }
 
   async connectToServer(serverAddress: string): Promise<void> {
-        
     // Set server address for dungeon API calls
     this.sceneManager.setServerAddress(serverAddress);
+    
+    // Update inventory manager with server address
+    const inventoryManager = InventoryManager.getInstance();
+    inventoryManager.setServerAddress(serverAddress);
     
     // Load initial scenery from server
     await this.sceneManager.loadScenery();
@@ -950,6 +957,54 @@ export class GameManager {
     }
   }
 
+  private async handleDropItem(itemId: string): Promise<void> {
+    try {
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for item drop');
+        return;
+      }
+      
+      console.log('📦 Attempting to drop item:', itemId);
+      
+      // Call drop API
+      const response = await DungeonApi.dropItem(serverAddress, itemId);
+      
+      if (response.success) {
+        console.log('✅ Successfully dropped item:', itemId);
+        // Item will appear in world via item-spawned websocket message
+      } else {
+        console.error('❌ Failed to drop item:', response);
+      }
+    } catch (error) {
+      console.error('❌ Error during item drop:', error);
+    }
+  }
+
+  private async handleEquipItem(itemId: string): Promise<void> {
+    try {
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for item equip');
+        return;
+      }
+      
+      console.log('⚔️ Attempting to equip item:', itemId);
+      
+      // Call equip API
+      const response = await DungeonApi.equipItem(serverAddress, itemId);
+      
+      if (response.success) {
+        console.log('✅ Successfully equipped item:', itemId);
+        // Equipment changes will be reflected in character stats
+      } else {
+        console.error('❌ Failed to equip item:', response);
+      }
+    } catch (error) {
+      console.error('❌ Error during item equip:', error);
+    }
+  }
+
   private setupVisibilityHandler(): void {
     const handleVisibilityChange = () => {
       this.webSocketManager.adjustHeartbeatForVisibility(!document.hidden);
@@ -1013,6 +1068,26 @@ export class GameManager {
         this.handleItemPickup(itemData);
       }
     );
+  }
+
+  private setupInventoryInteractions(): void {
+    const inventoryManager = InventoryManager.getInstance();
+    
+    // Set server address for API calls
+    const serverAddress = this.sceneManager.getServerAddress();
+    if (serverAddress) {
+      inventoryManager.setServerAddress(serverAddress);
+    }
+    
+    // Set up callbacks for inventory actions
+    inventoryManager.setCallbacks({
+      onDropItem: (itemId: string) => {
+        this.handleDropItem(itemId);
+      },
+      onEquipItem: (itemId: string) => {
+        this.handleEquipItem(itemId);
+      }
+    });
   }
 
   private async handleUpstairsInteraction(stairData: StairInteractionData): Promise<void> {
