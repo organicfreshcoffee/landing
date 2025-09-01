@@ -9,6 +9,46 @@ export class ItemManager {
   // Store item references for accessing item data
   private static itemReferences = new Map<string, Item>();
 
+  // Item category to sprite mapping
+  private static categorySprites: { [key: string]: string[] } = {
+    'ring': ['1844', '2061'],
+    'amulet': ['1848', '1849', '1850', '2065', '2182'],
+    'chest armor': ['1857', '1858', '1859', '1860'],
+    'head armor': ['1841', '1840', '1833', '1905', '1906', '1907', '1908', '1909', '1910'],
+    'cloak': ['2016', '2015', '2071'],
+    'leg armor': ['1853', '1854', '1855', '1856', '1939', '1940', '1941'], // Same as shoes
+    'shoes': ['1853', '1854', '1855', '1856', '1939', '1940', '1941'],
+    'gloves': ['1488', '2058'],
+    'shield': ['1811', '1810', '2114'],
+    'range weapon': ['1481', '1482', '1483', '1484', '1514'],
+    'melee weapon': ['671', '727', '1449', '1508'],
+    'magic weapon': ['1492', '1493', '1653'],
+    'unknown': ['1844'] // Default fallback to ring sprite
+  };
+
+    /**
+   * Get item category from item data
+   */
+  private static getItemCategory(itemData: any): string {
+    // Use the category provided by the API if available
+    if (itemData.category) {
+      return itemData.category.toLowerCase();
+    }
+    
+    // Fallback to Unknown if no category provided
+    return 'Unknown';
+  }
+
+  /**
+   * Get a random sprite file for the given category
+   */
+  private static getRandomSpriteForCategory(category: string): string {
+    const sprites = this.categorySprites[category] || this.categorySprites['Unknown'];
+    const randomIndex = Math.floor(Math.random() * sprites.length);
+    const spriteNumber = sprites[randomIndex];
+    return `/assets/sprites/Free - Raven Fantasy Icons/Free - Raven Fantasy Icons/Separated Files/64x64/fc${spriteNumber}.png`;
+  }
+
   /**
    * Create sprite-based item model using a generic item sprite
    */
@@ -30,18 +70,29 @@ export class ItemManager {
     // Set initial position
     itemGroup.position.set(item.position.x, item.position.y, item.position.z);
 
-    // Create sprite geometry and material using the items sprite
+    // Create sprite geometry and material using category-based sprite
     const spriteGeometry = new THREE.PlaneGeometry(2, 2); // Same size as enemies
+    
+    // Determine item category and get appropriate sprite
+    const category = this.getItemCategory(item.data);
+    const spritePath = this.getRandomSpriteForCategory(category);
+    
+    console.log('🎨 Selected sprite for item:', {
+      id: item.id,
+      name: item.name,
+      category: category,
+      spritePath: spritePath
+    });
     
     // Load the item texture
     const textureLoader = new THREE.TextureLoader();
-    const itemTexture = textureLoader.load('/assets/sprites/items/items.png', 
+    const itemTexture = textureLoader.load(spritePath, 
       (texture) => {
-        console.log(`✅ Loaded item texture for ${item.id}`);
+        console.log(`✅ Loaded item texture for ${item.id} (${category})`);
       },
       undefined,
       (error) => {
-        console.error(`❌ Failed to load item texture for ${item.id}`, error);
+        console.error(`❌ Failed to load item texture for ${item.id} (${category})`, error);
       }
     );
     
