@@ -336,6 +336,43 @@ Rules:
     }
   }
 
+  async saveIssueDetails(selectedIssue, solution) {
+    this.log('Saving issue details for PR description...');
+    
+    try {
+      // Get the full issue details
+      const { data: fullIssue } = await octokit.rest.issues.get({
+        owner,
+        repo,
+        issue_number: selectedIssue.number,
+      });
+
+      const issueDetails = {
+        number: fullIssue.number,
+        title: fullIssue.title,
+        body: fullIssue.body || 'No description provided',
+        url: fullIssue.html_url,
+        labels: fullIssue.labels.map(label => label.name),
+        created_at: fullIssue.created_at,
+        user: fullIssue.user.login,
+        solution_description: solution.solution.description,
+        testing_notes: solution.solution.testing_notes,
+        commit_message: solution.solution.commit_message,
+        confidence: solution.confidence,
+        files_modified: solution.solution.files_to_modify.length
+      };
+
+      // Save to file that GitHub Action can read
+      const detailsPath = path.join(this.workspaceRoot, 'issue-fix-details.json');
+      await fs.writeFile(detailsPath, JSON.stringify(issueDetails, null, 2));
+      
+      this.log(`Issue details saved to ${detailsPath}`);
+    } catch (error) {
+      this.log(`Warning: Could not save issue details: ${error.message}`);
+      // Don't throw - this is not critical for the fix process
+    }
+  }
+
   async run() {
     try {
       this.log('Starting auto issue fix process...');
@@ -378,6 +415,9 @@ Rules:
       const applied = await this.applySolution(solution);
       
       if (applied) {
+        // Save issue details for PR description
+        await this.saveIssueDetails(analysis.selected_issue, solution);
+        
         this.log('✅ Issue fix completed successfully');
         this.log(`Commit message: ${solution.solution.commit_message}`);
         this.log(`Testing notes: ${solution.solution.testing_notes}`);
