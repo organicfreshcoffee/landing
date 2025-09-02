@@ -117,16 +117,28 @@ const getMongoUri = () => {
 
 const MONGODB_URI = getMongoUri();
 
+// Helper function to get MongoDB client options
+function getMongoClientOptions() {
+  const options = {
+    serverSelectionTimeoutMS: 5000  // 5 second timeout
+  };
+
+  // Only set auth defaults for local development URIs
+  // Production URIs should include all auth info in the connection string
+  if (MONGODB_URI.includes('localhost') || MONGODB_URI.includes('127.0.0.1')) {
+    options.authSource = 'admin';
+    options.authMechanism = 'SCRAM-SHA-256';
+  }
+
+  return options;
+}
+
 // Add a connection test function
 async function testConnection() {
   let client;
   try {
     console.log('🧪 Testing MongoDB connection...');
-    client = new MongoClient(MONGODB_URI, {
-      authSource: 'admin',
-      authMechanism: 'SCRAM-SHA-256',
-      serverSelectionTimeoutMS: 5000  // 5 second timeout
-    });
+    client = new MongoClient(MONGODB_URI, getMongoClientOptions());
     
     await client.connect();
     const adminDb = client.db('admin');
@@ -150,11 +162,8 @@ async function addAdminUser() {
     console.log('🔗 Connecting to MongoDB...');
     console.log(`📍 Database: ${MONGODB_URI.replace(/\/\/[^@]*@/, '//***:***@')}`); // Hide credentials in log
     
-    // Create client with explicit auth configuration
-    client = new MongoClient(MONGODB_URI, {
-      authSource: 'admin',  // Explicitly set auth source
-      authMechanism: 'SCRAM-SHA-256'  // Explicitly set auth mechanism
-    });
+    // Create client with flexible auth configuration
+    client = new MongoClient(MONGODB_URI, getMongoClientOptions());
     
     await client.connect();
     
