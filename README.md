@@ -5,7 +5,25 @@ A full-stack web application built with Next.js, Express.js, and MongoDB. This p
 ## 🏗️ Architecture
 
 - **Frontend**: Next.js 14 with TypeScript
-- **Backend**: Express.js with TypeScript
+- **Backend**: E## 🤖 Automated Issue Resolution
+
+This repository includes an AI-powered automation system that uses Claude Haiku 3.5 to automatically analyze and fix GitHub issues.
+
+### How It Works
+
+- **Daily Analysis**: Every day at 9:00 AM UTC, Claude analyzes all open issues
+- **Smart Selection**: AI determines the easiest and safest issue to fix automatically  
+- **Auto-Implementation**: Generates and applies code changes
+- **Pull Request**: Creates a PR with the fix for manual review
+
+### Setup Required
+
+To enable this feature, add your Anthropic API key to repository secrets:
+1. Go to repository `Settings` → `Secrets and variables` → `Actions`
+2. Add `ANTHROPIC_API_KEY` with your Claude API key
+3. Ensure workflow permissions allow PR creation
+
+See [docs/AUTO_ISSUE_FIX.md](docs/AUTO_ISSUE_FIX.md) for detailed setup instructions.Script
 - **Authentication**: External Auth Microservice (Firebase Auth)
 - **Database**: MongoDB
 - **Infrastructure**: Docker Compose for local development
@@ -319,7 +337,27 @@ For production environments, use the same script with a custom MongoDB URI:
 MONGODB_URI=your-production-uri node scripts/add-admin.js admin@example.com
 ```
 
-## 🤝 Contributing
+## � Automated Issue Resolution
+
+This repository includes an AI-powered automation system that uses Claude Sonnet to automatically analyze and fix GitHub issues.
+
+### How It Works
+
+- **Daily Analysis**: Every day at 9:00 AM UTC, Claude analyzes all open issues
+- **Smart Selection**: AI determines the easiest and safest issue to fix automatically  
+- **Auto-Implementation**: Generates and applies code changes
+- **Pull Request**: Creates a PR with the fix for manual review
+
+### Setup Required
+
+To enable this feature, add your Anthropic API key to repository secrets:
+1. Go to repository `Settings` → `Secrets and variables` → `Actions`
+2. Add `ANTHROPIC_API_KEY` with your Claude API key
+3. Ensure workflow permissions allow PR creation
+
+See [docs/AUTO_ISSUE_FIX.md](docs/AUTO_ISSUE_FIX.md) for detailed setup instructions.
+
+## �🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)

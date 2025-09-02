@@ -1,0 +1,25 @@
+{
+  "name": "organicfreshcoffee-landing-automation",
+  "version": "1.0.0",
+  "description": "Automation scripts for the Organic Fresh Coffee landing page",
+  "private": true,
+  "scripts": {
+    "auto-fix": "node scripts/auto-issue-fix.js",
+    "add-admin": "node scripts/add-admin.js",
+    "test-auto-fix": "node scripts/test-auto-fix.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.3",
+    "octokit": "^3.1.2"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/organicfreshcoffee/landing.git"
+  },
+  "author": "Organic Fresh Coffee",
+  "license": "MIT"
+}
