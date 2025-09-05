@@ -9,6 +9,7 @@ import { SceneManager, ParticleSystem } from '../rendering';
 import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
 import { ItemInteractionManager, ItemInteractionData } from '../ui/itemInteractionManager';
 import { InventoryManager } from '../ui/inventoryManager';
+import { EquipmentManager } from '../ui/equipmentManager';
 import { DungeonApi } from '../network/dungeonApi';
 import { StairInfo, GameItem } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
@@ -205,9 +206,11 @@ export class GameManager {
     // Set server address for dungeon API calls
     this.sceneManager.setServerAddress(serverAddress);
     
-    // Update inventory manager with server address
+    // Update inventory and equipment managers with server address
     const inventoryManager = InventoryManager.getInstance();
+    const equipmentManager = EquipmentManager.getInstance();
     inventoryManager.setServerAddress(serverAddress);
+    equipmentManager.setServerAddress(serverAddress);
     
     // Load initial scenery and items from server
     await this.loadFloor(); // This will call loadScenery() and loadFloorItems()
@@ -1026,12 +1029,55 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully equipped item:', itemId);
-        // Equipment changes will be reflected in character stats
+        // Refresh both inventory and equipment displays
+        await this.refreshInventoryDisplays();
       } else {
         console.error('❌ Failed to equip item:', response);
       }
     } catch (error) {
       console.error('❌ Error during item equip:', error);
+    }
+  }
+
+  private async handleUnequipItem(itemId: string): Promise<void> {
+    try {
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for item unequip');
+        return;
+      }
+      
+      console.log('📤 Attempting to unequip item:', itemId);
+      
+      // Call unequip API
+      const response = await DungeonApi.unequipItem(serverAddress, itemId);
+      
+      if (response.success) {
+        console.log('✅ Successfully unequipped item:', itemId);
+        // Refresh both inventory and equipment displays
+        await this.refreshInventoryDisplays();
+      } else {
+        console.error('❌ Failed to unequip item:', response);
+      }
+    } catch (error) {
+      console.error('❌ Error during item unequip:', error);
+    }
+  }
+
+  private async refreshInventoryDisplays(): Promise<void> {
+    try {
+      const inventoryManager = InventoryManager.getInstance();
+      const equipmentManager = EquipmentManager.getInstance();
+      
+      // Refresh both inventory and equipment data
+      await Promise.all([
+        inventoryManager.refreshInventory(),
+        equipmentManager.refreshInventory()
+      ]);
+      
+      console.log('✅ Refreshed inventory and equipment displays');
+    } catch (error) {
+      console.error('❌ Error refreshing inventory displays:', error);
     }
   }
 
@@ -1102,11 +1148,13 @@ export class GameManager {
 
   private setupInventoryInteractions(): void {
     const inventoryManager = InventoryManager.getInstance();
+    const equipmentManager = EquipmentManager.getInstance();
     
     // Set server address for API calls
     const serverAddress = this.sceneManager.getServerAddress();
     if (serverAddress) {
       inventoryManager.setServerAddress(serverAddress);
+      equipmentManager.setServerAddress(serverAddress);
     }
     
     // Set up callbacks for inventory actions
@@ -1116,6 +1164,13 @@ export class GameManager {
       },
       onEquipItem: (itemId: string) => {
         this.handleEquipItem(itemId);
+      }
+    });
+
+    // Set up callbacks for equipment actions
+    equipmentManager.setCallbacks({
+      onUnequipItem: (itemId: string) => {
+        this.handleUnequipItem(itemId);
       }
     });
   }

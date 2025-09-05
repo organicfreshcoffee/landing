@@ -258,6 +258,7 @@ export interface InventoryItem {
     manaMultiplier: number;
   } | null;
   spawnDatetime: string;
+  equipped: boolean;
 }
 
 export interface InventoryStatistics {
@@ -283,6 +284,11 @@ export interface DropItemResponse {
 }
 
 export interface EquipItemResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface UnequipItemResponse {
   success: boolean;
   message: string;
 }

@@ -119,6 +119,16 @@ export class InventoryManager {
   }
 
   /**
+   * Refresh inventory data
+   */
+  async refreshInventory(): Promise<void> {
+    await this.loadInventory();
+    if (this.isVisible) {
+      this.updateInventoryDisplay();
+    }
+  }
+
+  /**
    * Get server address - this is a placeholder, you'll need to implement this
    * based on how your app manages server addresses
    */
@@ -185,12 +195,17 @@ export class InventoryManager {
       border-bottom: 2px solid #4a90e2;
       padding-bottom: 10px;
     `;
+    // Calculate unequipped items statistics
+    const unequippedItems = this.inventory.items.filter(item => !item.equipped);
+    const unequippedWeight = unequippedItems.reduce((sum, item) => sum + item.weight, 0);
+    const unequippedValue = unequippedItems.reduce((sum, item) => sum + item.value, 0);
+
     header.innerHTML = `
       🎒 Inventory
       <div style="font-size: 14px; margin-top: 5px; color: #cccccc;">
-        Items: ${this.inventory.statistics.totalItems} | 
-        Weight: ${this.inventory.statistics.totalWeight} | 
-        Value: ${this.inventory.statistics.totalValue}
+        Items: ${unequippedItems.length} | 
+        Weight: ${unequippedWeight} | 
+        Value: ${unequippedValue}
       </div>
     `;
 
@@ -209,14 +224,17 @@ export class InventoryManager {
     
     if (Object.keys(this.inventory.itemsByCategory).length > 0) {
       Object.entries(this.inventory.itemsByCategory).forEach(([category, items]) => {
-        if (items.length > 0) {
-          const categorySection = this.createCategorySection(category, items);
+        // Filter out equipped items
+        const unequippedItems = items.filter(item => !item.equipped);
+        if (unequippedItems.length > 0) {
+          const categorySection = this.createCategorySection(category, unequippedItems);
           categoriesContainer.appendChild(categorySection);
         }
       });
     } else {
-      // Show all items if no categories
-      const allItemsSection = this.createCategorySection('All Items', this.inventory.items);
+      // Show all unequipped items if no categories
+      const unequippedItems = this.inventory.items.filter(item => !item.equipped);
+      const allItemsSection = this.createCategorySection('All Items', unequippedItems);
       categoriesContainer.appendChild(allItemsSection);
     }
 
@@ -417,6 +435,16 @@ export class InventoryManager {
    */
   private getServerAddressInternal(): string | null {
     return (this as any).serverAddress || null;
+  }
+
+  /**
+   * Update the inventory display if currently visible
+   */
+  private updateInventoryDisplay(): void {
+    if (this.isVisible) {
+      this.hideInventory();
+      this.showInventory();
+    }
   }
 
   /**
