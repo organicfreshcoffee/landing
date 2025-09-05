@@ -106,13 +106,16 @@ export class ItemManager {
     const spriteMaterial = new THREE.MeshBasicMaterial({
       map: itemTexture,
       transparent: true,
-      alphaTest: 0.5,
-      side: THREE.DoubleSide
+      alphaTest: 0.1, // Match the alphaTest value used for players and enemies
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: true // Ensure proper depth sorting
     });
 
     // Create sprite mesh
     const spriteMesh = new THREE.Mesh(spriteGeometry, spriteMaterial);
     spriteMesh.name = `item_sprite_${item.id}`;
+    spriteMesh.renderOrder = 10; // Ensure items render on top of floor
     
     // Store sprite mesh reference for future updates
     this.itemMeshReferences.set(item.id, spriteMesh);
@@ -133,14 +136,31 @@ export class ItemManager {
     console.log('📐 Item sprite mesh positioning:', {
       id: item.id,
       spriteLocalY: spriteMesh.position.y,
-      groupPosition: itemGroup.position
+      groupPosition: itemGroup.position,
+      finalWorldPosition: {
+        x: itemGroup.position.x,
+        y: itemGroup.position.y + spriteMesh.position.y,
+        z: itemGroup.position.z
+      }
     });
     
     // Add sprite to the group
     itemGroup.add(spriteMesh);
     
+    // Ensure visibility
+    itemGroup.visible = true;
+    spriteMesh.visible = true;
+    
     // Store item reference
     this.itemReferences.set(item.id, item);
+
+    console.log('✅ Item sprite creation complete:', {
+      id: item.id,
+      name: item.name,
+      groupVisible: itemGroup.visible,
+      spriteVisible: spriteMesh.visible,
+      groupChildren: itemGroup.children.length
+    });
 
     return { model: itemGroup };
   }
