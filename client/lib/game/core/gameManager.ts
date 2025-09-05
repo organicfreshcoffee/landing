@@ -1002,6 +1002,8 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully dropped item:', itemId);
+        // Refresh both inventory and equipment displays
+        await this.refreshInventoryDisplays();
         // Item will appear in world via item-spawned websocket message
       } else {
         console.error('❌ Failed to drop item:', response);

@@ -397,7 +397,6 @@ export class InventoryManager {
     dropButton.addEventListener('click', () => {
       if (this.callbacks) {
         this.callbacks.onDropItem(item.id);
-        this.hideInventory(); // Close inventory after action
       }
     });
 
@@ -423,7 +422,6 @@ export class InventoryManager {
     equipButton.addEventListener('click', () => {
       if (this.callbacks) {
         this.callbacks.onEquipItem(item.id);
-        this.hideInventory(); // Close inventory after action
       }
     });
 
