@@ -111,6 +111,9 @@ export class GameManager {
           const itemManager = ItemInteractionManager.getInstance();
           itemManager.updatePlayerPosition(this.localPlayerRef.current.position);
           
+          // Update item bounce animations
+          ItemManager.updateItemBounceAnimations();
+          
           // Make other players face the local player
           PlayerManager.updateAllOtherPlayersFacing(this.localPlayerRef.current.position);
           

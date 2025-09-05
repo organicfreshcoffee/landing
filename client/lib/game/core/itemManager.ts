@@ -9,6 +9,14 @@ export class ItemManager {
   // Store item references for accessing item data
   private static itemReferences = new Map<string, Item>();
 
+  // Store item bounce animation state
+  private static itemBounceState = new Map<string, {
+    startTime: number;
+    initialY: number;
+    bounceHeight: number;
+    bounceSpeed: number;
+  }>();
+
   // Item category to sprite mapping
   private static categorySprites: { [key: string]: string[] } = {
     'ring': ['1844', '2061'],
@@ -154,6 +162,14 @@ export class ItemManager {
     // Store item reference
     this.itemReferences.set(item.id, item);
 
+    // Initialize bounce animation state
+    this.itemBounceState.set(item.id, {
+      startTime: Date.now(),
+      initialY: spriteMesh.position.y,
+      bounceHeight: 0.3, // How high the item bounces (in world units)
+      bounceSpeed: 2.0   // Speed of the bounce animation
+    });
+
     console.log('✅ Item sprite creation complete:', {
       id: item.id,
       name: item.name,
@@ -163,6 +179,27 @@ export class ItemManager {
     });
 
     return { model: itemGroup };
+  }
+
+  /**
+   * Update item bounce animations (call this every frame)
+   */
+  static updateItemBounceAnimations(): void {
+    const currentTime = Date.now();
+    
+    this.itemBounceState.forEach((bounceState, itemId) => {
+      const spriteMesh = this.itemMeshReferences.get(itemId);
+      if (!spriteMesh) return;
+      
+      // Calculate elapsed time in seconds
+      const elapsedTime = (currentTime - bounceState.startTime) / 1000;
+      
+      // Calculate bounce offset using sine wave
+      const bounceOffset = Math.sin(elapsedTime * bounceState.bounceSpeed * Math.PI) * bounceState.bounceHeight;
+      
+      // Apply bounce animation to sprite Y position
+      spriteMesh.position.y = bounceState.initialY + bounceOffset;
+    });
   }
 
   /**
@@ -213,6 +250,7 @@ export class ItemManager {
     // Remove from maps
     this.itemMeshReferences.delete(itemId);
     this.itemReferences.delete(itemId);
+    this.itemBounceState.delete(itemId);
   }
 
   /**
@@ -233,9 +271,10 @@ export class ItemManager {
    * Clear all items
    */
   static clearAllItems(): void {
-    console.log('🧹 Clearing all items');
+    console.log('🧹 Clearing all items from ItemManager...');
     this.itemMeshReferences.clear();
     this.itemReferences.clear();
+    this.itemBounceState.clear();
   }
 
   /**
