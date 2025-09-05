@@ -35,6 +35,18 @@ export class GameManager {
   private lastFloorVerificationTime = 0;
   private floorVerificationInterval = 30000; // Check every 30 seconds
 
+  // Cleanup handler
+  private handleBeforeUnload = () => {
+    // Attempt graceful WebSocket close on browser exit
+    try {
+      if (this.webSocketManager) {
+        this.webSocketManager.close();
+      }
+    } catch (error) {
+      // Ignore errors during emergency cleanup
+    }
+  };
+
   constructor(
     canvas: HTMLCanvasElement,
     private onStateChange: (state: GameState) => void,
@@ -70,6 +82,11 @@ export class GameManager {
       this.onOpenGraphViewer
     );
 
+    // Add beforeunload handler to ensure cleanup on browser close/kill
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
+    }
+
     this.initializeGame();
   }
 
@@ -93,6 +110,9 @@ export class GameManager {
           // Update item interactions with current player position
           const itemManager = ItemInteractionManager.getInstance();
           itemManager.updatePlayerPosition(this.localPlayerRef.current.position);
+          
+          // Update item bounce animations
+          ItemManager.updateItemBounceAnimations();
           
           // Make other players face the local player
           PlayerManager.updateAllOtherPlayersFacing(this.localPlayerRef.current.position);
@@ -189,11 +209,8 @@ export class GameManager {
     const inventoryManager = InventoryManager.getInstance();
     inventoryManager.setServerAddress(serverAddress);
     
-    // Load initial scenery from server
-    await this.sceneManager.loadScenery();
-    
-    // Update collision data after loading scenery
-    this.movementController.updateCollisionData(this.sceneManager.scene);
+    // Load initial scenery and items from server
+    await this.loadFloor(); // This will call loadScenery() and loadFloorItems()
     
     // Check for stored player position and rotation from existing character
     const storedPosition = sessionStorage.getItem('playerPosition');
@@ -237,6 +254,17 @@ export class GameManager {
   }
 
   private handleGameMessage(message: GameMessage): void {
+    // Add defensive check for message structure
+    if (!message || typeof message.type !== 'string') {
+      console.warn('⚠️ Received invalid game message:', message);
+      return;
+    }
+    
+    // Add defensive check for message.data
+    if (!message.data || typeof message.data !== 'object') {
+      console.warn('⚠️ Received game message with invalid data:', message);
+      return;
+    }
         
     switch (message.type) {
       case 'player_joined':
@@ -387,7 +415,9 @@ export class GameManager {
             
       // Check if character has changed and needs sprite recreation
       let needsSpriteRecreation = false;
-      if (playerData.character && existingPlayer.character) {
+      if (playerData.character && existingPlayer.character && 
+          playerData.character.type && existingPlayer.character.type &&
+          playerData.character.style !== undefined && existingPlayer.character.style !== undefined) {
         needsSpriteRecreation = (
           playerData.character.type !== existingPlayer.character.type ||
           playerData.character.style !== existingPlayer.character.style
@@ -1514,14 +1544,44 @@ export class GameManager {
 
   async loadFloor(floorName?: string): Promise<void> {
     try {
+      console.log(`🏗️ GameManager.loadFloor: Starting to load floor "${floorName}"`);
+      
+      // Get current floor to determine if this is a floor change
+      const currentFloor = this.sceneManager.getCurrentFloor();
+      const isFloorChange = currentFloor && floorName && currentFloor !== floorName;
+      
+      console.log(`🔍 Floor change detection: current="${currentFloor}", target="${floorName}", isChange=${isFloorChange}`);
+      
+      // Only clear items if we're actually changing floors
+      if (isFloorChange) {
+        console.log(`🧹 Clearing items due to floor change from "${currentFloor}" to "${floorName}"`);
+        this.clearAllItems();
+      } else {
+        console.log(`🔄 Same floor or initial load - preserving existing items`);
+      }
+      
+      // Count items before loading scenery
+      const itemsBeforeScenery = this.sceneManager.scene.children.filter(child => child.userData.isItem).length;
+      console.log(`🔍 GameManager.loadFloor: Found ${itemsBeforeScenery} items before loading scenery`);
+      
       await this.sceneManager.loadScenery(floorName);
+      
+      // Count items after loading scenery but before loading items
+      const itemsAfterScenery = this.sceneManager.scene.children.filter(child => child.userData.isItem).length;
+      console.log(`🔍 GameManager.loadFloor: Found ${itemsAfterScenery} items after loading scenery, before loading items`);
+      
       // Update collision data after loading new scenery
       this.movementController.updateCollisionData(this.sceneManager.scene);
       // Position player on ground
       this.positionPlayerOnGround();
       
-      // Load items for the current floor
+      // Load items for the current floor (this will only add missing items, not clear existing ones)
+      console.log(`🎒 GameManager.loadFloor: About to call loadFloorItems()`);
       await this.loadFloorItems();
+      
+      // Count items after loading items
+      const itemsAfterItems = this.sceneManager.scene.children.filter(child => child.userData.isItem).length;
+      console.log(`🔍 GameManager.loadFloor: Found ${itemsAfterItems} items after loading items`);
       
       // Reinitialize particle system after floor change
       if (!this.particleSystem.isInitialized()) {
@@ -1529,9 +1589,9 @@ export class GameManager {
       }
       
       // Notify about floor change
-      const currentFloor = this.sceneManager.getCurrentFloor();
-      if (this.onFloorChange && currentFloor) {
-        this.onFloorChange(currentFloor);
+      const newCurrentFloor = this.sceneManager.getCurrentFloor();
+      if (this.onFloorChange && newCurrentFloor) {
+        this.onFloorChange(newCurrentFloor);
       }
       
     } catch (error) {
@@ -1548,13 +1608,28 @@ export class GameManager {
         return;
       }
 
-      console.log('🎒 Loading items for current floor...');
+      // Get the current floor name
+      const currentFloor = this.sceneManager.getCurrentFloor();
+      if (!currentFloor) {
+        console.warn('⚠️ Current floor not available, skipping item loading');
+        return;
+      }
+
+      console.log('🎒 Loading items for current floor...', currentFloor);
       
-      // Clear existing items
-      this.clearAllItems();
+      // Count existing items (don't clear them - they may be preserved or already correct)
+      let existingItemCount = 0;
+      const existingItems = new Set<string>();
+      this.sceneManager.scene.traverse((child) => {
+        if (child.userData.isItem && child.userData.itemId) {
+          existingItemCount++;
+          existingItems.add(child.userData.itemId);
+        }
+      });
+      console.log(`🔍 Found ${existingItemCount} existing items in scene`);
       
-      // Fetch items from server
-      const itemsResponse = await DungeonApi.getFloorItems(serverAddress);
+      // Fetch items from server for the specific floor
+      const itemsResponse = await DungeonApi.getFloorItems(serverAddress, currentFloor);
       
       if (itemsResponse.success && itemsResponse.data.items) {
         console.log(`🎒 Found ${itemsResponse.data.items.length} items on floor ${itemsResponse.data.floor}`);
@@ -1562,9 +1637,16 @@ export class GameManager {
         const playerGroundLevel = this.movementController.getCurrentPlayerPosition()?.y || 0;
         const itemsToAdd: Item[] = [];
         
-        // Create items from server data
+        // Create items from server data - only add items that don't already exist
         for (const itemData of itemsResponse.data.items) {
+          // Skip items that already exist in the scene
+          if (existingItems.has(itemData.id)) {
+            console.log(`⏭️ Skipping item ${itemData.id} - already exists in scene`);
+            continue;
+          }
+          
           try {
+            console.log(`➕ Adding new item: ${itemData.id} (${itemData.name})`);
             const item = ItemManager.createItemFromServerData(itemData, playerGroundLevel);
             const itemResult = ItemManager.createSpriteItemModel(item);
             
@@ -1587,6 +1669,14 @@ export class GameManager {
               itemsToAdd.push(item);
               
               console.log(`✅ Added item: ${itemData.name} at (${item.position.x}, ${item.position.z})`);
+              
+              // Verify item is actually in scene
+              const itemInScene = this.sceneManager.scene.getObjectByProperty('uuid', itemResult.model.uuid);
+              if (!itemInScene) {
+                console.error(`❌ Item ${itemData.id} was added but not found in scene!`);
+              } else {
+                console.log(`✅ Item ${itemData.id} verified in scene with UUID: ${itemResult.model.uuid}`);
+              }
             } else {
               console.error(`❌ Failed to create sprite model for item: ${itemData.id}`);
             }
@@ -1595,11 +1685,24 @@ export class GameManager {
           }
         }
         
-        // Initialize item interactions
+        // Initialize item interactions with ALL current items (existing + newly added)
         const itemManager = ItemInteractionManager.getInstance();
-        itemManager.initializeItems(itemsToAdd);
+        const allCurrentItems = Array.from(this.items.values());
+        itemManager.initializeItems(allCurrentItems);
         
-        console.log(`🎒 Successfully loaded ${itemsToAdd.length} items`);
+        console.log(`🎯 Initialized ItemInteractionManager with ${allCurrentItems.length} total items (${itemsToAdd.length} newly added)`);
+        
+        // Final verification - count items actually in scene
+        let finalItemCount = 0;
+        this.sceneManager.scene.traverse((child) => {
+          if (child.userData.isItem) {
+            finalItemCount++;
+          }
+        });
+        
+        console.log(`🎒 Successfully added ${itemsToAdd.length} new items`);
+        console.log(`🔍 Total items now in scene: ${finalItemCount}`);
+        
       } else {
         console.log('🎒 No items found on current floor');
       }
@@ -1686,6 +1789,11 @@ export class GameManager {
   }
 
   cleanup(): void {
+    // Remove beforeunload event listener
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    }
+    
     this.webSocketManager.close();
     this.movementController.cleanup();
     this.sceneManager.cleanup();

@@ -9,6 +9,14 @@ export class ItemManager {
   // Store item references for accessing item data
   private static itemReferences = new Map<string, Item>();
 
+  // Store item bounce animation state
+  private static itemBounceState = new Map<string, {
+    startTime: number;
+    initialY: number;
+    bounceHeight: number;
+    bounceSpeed: number;
+  }>();
+
   // Item category to sprite mapping
   private static categorySprites: { [key: string]: string[] } = {
     'ring': ['1844', '2061'],
@@ -106,13 +114,16 @@ export class ItemManager {
     const spriteMaterial = new THREE.MeshBasicMaterial({
       map: itemTexture,
       transparent: true,
-      alphaTest: 0.5,
-      side: THREE.DoubleSide
+      alphaTest: 0.1, // Match the alphaTest value used for players and enemies
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: true // Ensure proper depth sorting
     });
 
     // Create sprite mesh
     const spriteMesh = new THREE.Mesh(spriteGeometry, spriteMaterial);
     spriteMesh.name = `item_sprite_${item.id}`;
+    spriteMesh.renderOrder = 10; // Ensure items render on top of floor
     
     // Store sprite mesh reference for future updates
     this.itemMeshReferences.set(item.id, spriteMesh);
@@ -133,16 +144,62 @@ export class ItemManager {
     console.log('📐 Item sprite mesh positioning:', {
       id: item.id,
       spriteLocalY: spriteMesh.position.y,
-      groupPosition: itemGroup.position
+      groupPosition: itemGroup.position,
+      finalWorldPosition: {
+        x: itemGroup.position.x,
+        y: itemGroup.position.y + spriteMesh.position.y,
+        z: itemGroup.position.z
+      }
     });
     
     // Add sprite to the group
     itemGroup.add(spriteMesh);
     
+    // Ensure visibility
+    itemGroup.visible = true;
+    spriteMesh.visible = true;
+    
     // Store item reference
     this.itemReferences.set(item.id, item);
 
+    // Initialize bounce animation state
+    this.itemBounceState.set(item.id, {
+      startTime: Date.now(),
+      initialY: spriteMesh.position.y,
+      bounceHeight: 0.3, // How high the item bounces (in world units)
+      bounceSpeed: 2.0   // Speed of the bounce animation
+    });
+
+    console.log('✅ Item sprite creation complete:', {
+      id: item.id,
+      name: item.name,
+      groupVisible: itemGroup.visible,
+      spriteVisible: spriteMesh.visible,
+      groupChildren: itemGroup.children.length
+    });
+
     return { model: itemGroup };
+  }
+
+  /**
+   * Update item bounce animations (call this every frame)
+   */
+  static updateItemBounceAnimations(): void {
+    const currentTime = Date.now();
+    
+    this.itemBounceState.forEach((bounceState, itemId) => {
+      const spriteMesh = this.itemMeshReferences.get(itemId);
+      if (!spriteMesh) return;
+      
+      // Calculate elapsed time in seconds
+      const elapsedTime = (currentTime - bounceState.startTime) / 1000;
+      
+      // Calculate bounce offset using sine wave
+      const bounceOffset = Math.sin(elapsedTime * bounceState.bounceSpeed * Math.PI) * bounceState.bounceHeight;
+      
+      // Apply bounce animation to sprite Y position
+      spriteMesh.position.y = bounceState.initialY + bounceOffset;
+    });
   }
 
   /**
@@ -193,6 +250,7 @@ export class ItemManager {
     // Remove from maps
     this.itemMeshReferences.delete(itemId);
     this.itemReferences.delete(itemId);
+    this.itemBounceState.delete(itemId);
   }
 
   /**
@@ -213,9 +271,10 @@ export class ItemManager {
    * Clear all items
    */
   static clearAllItems(): void {
-    console.log('🧹 Clearing all items');
+    console.log('🧹 Clearing all items from ItemManager...');
     this.itemMeshReferences.clear();
     this.itemReferences.clear();
+    this.itemBounceState.clear();
   }
 
   /**

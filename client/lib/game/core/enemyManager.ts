@@ -224,11 +224,6 @@ export class EnemyManager {
         y: enemyData.rotationY,
         z: 0
       };
-      console.log('🔄 Stored enemy rotation data (not applied to mesh):', {
-        id: enemy.id,
-        degrees: enemyData.rotationY,
-        radians: THREE.MathUtils.degToRad(enemyData.rotationY)
-      });
 
       // Update sprite direction based on rotation and local player position
       if (localPlayerPosition) {
