@@ -1685,9 +1685,12 @@ export class GameManager {
           }
         }
         
-        // Initialize item interactions
+        // Initialize item interactions with ALL current items (existing + newly added)
         const itemManager = ItemInteractionManager.getInstance();
-        itemManager.initializeItems(itemsToAdd);
+        const allCurrentItems = Array.from(this.items.values());
+        itemManager.initializeItems(allCurrentItems);
+        
+        console.log(`🎯 Initialized ItemInteractionManager with ${allCurrentItems.length} total items (${itemsToAdd.length} newly added)`);
         
         // Final verification - count items actually in scene
         let finalItemCount = 0;
