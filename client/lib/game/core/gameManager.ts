@@ -1002,6 +1002,8 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully dropped item:', itemId);
+        // Refresh both inventory and equipment displays
+        await this.refreshInventoryDisplays();
         // Item will appear in world via item-spawned websocket message
       } else {
         console.error('❌ Failed to drop item:', response);
@@ -1026,12 +1028,51 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully equipped item:', itemId);
-        // Equipment changes will be reflected in character stats
+        // Refresh both inventory and equipment displays
+        await this.refreshInventoryDisplays();
       } else {
         console.error('❌ Failed to equip item:', response);
       }
     } catch (error) {
       console.error('❌ Error during item equip:', error);
+    }
+  }
+
+  private async handleUnequipItem(itemId: string): Promise<void> {
+    try {
+      const serverAddress = this.sceneManager.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ Server address not available for item unequip');
+        return;
+      }
+      
+      console.log('📤 Attempting to unequip item:', itemId);
+      
+      // Call unequip API
+      const response = await DungeonApi.unequipItem(serverAddress, itemId);
+      
+      if (response.success) {
+        console.log('✅ Successfully unequipped item:', itemId);
+        // Refresh both inventory and equipment displays
+        await this.refreshInventoryDisplays();
+      } else {
+        console.error('❌ Failed to unequip item:', response);
+      }
+    } catch (error) {
+      console.error('❌ Error during item unequip:', error);
+    }
+  }
+
+  private async refreshInventoryDisplays(): Promise<void> {
+    try {
+      const inventoryManager = InventoryManager.getInstance();
+      
+      // Refresh inventory data (which will also refresh equipment panel)
+      await inventoryManager.refreshInventory();
+      
+      console.log('✅ Refreshed inventory and equipment displays');
+    } catch (error) {
+      console.error('❌ Error refreshing inventory displays:', error);
     }
   }
 
@@ -1109,13 +1150,16 @@ export class GameManager {
       inventoryManager.setServerAddress(serverAddress);
     }
     
-    // Set up callbacks for inventory actions
+    // Set up callbacks for inventory and equipment actions
     inventoryManager.setCallbacks({
       onDropItem: (itemId: string) => {
         this.handleDropItem(itemId);
       },
       onEquipItem: (itemId: string) => {
         this.handleEquipItem(itemId);
+      },
+      onUnequipItem: (itemId: string) => {
+        this.handleUnequipItem(itemId);
       }
     });
   }

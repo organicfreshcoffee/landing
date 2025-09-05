@@ -1,9 +1,11 @@
 import { InventoryItem, InventoryResponse } from '../types/api';
 import { DungeonApi } from '../network/dungeonApi';
+import { EquipmentManager } from './equipmentManager';
 
 export interface InventoryCallbacks {
   onDropItem: (itemId: string) => void;
   onEquipItem: (itemId: string) => void;
+  onUnequipItem: (itemId: string) => void;
 }
 
 /**
@@ -63,7 +65,7 @@ export class InventoryManager {
   }
 
   /**
-   * Show inventory
+   * Show inventory (and equipment panel)
    */
   async showInventory(): Promise<void> {
     if (this.isVisible) return;
@@ -77,11 +79,24 @@ export class InventoryManager {
     }
 
     this.createInventoryOverlay();
+    
+    // Also show equipment panel
+    const equipmentManager = EquipmentManager.getInstance();
+    
+    // Pass the unequip callback to equipment manager
+    if (this.callbacks?.onUnequipItem) {
+      equipmentManager.setCallbacks({
+        onUnequipItem: this.callbacks.onUnequipItem
+      });
+    }
+    
+    await equipmentManager.showEquipment();
+    
     this.isVisible = true;
   }
 
   /**
-   * Hide inventory
+   * Hide inventory (and equipment panel)
    */
   hideInventory(): void {
     if (!this.isVisible) return;
@@ -90,6 +105,11 @@ export class InventoryManager {
       this.inventoryOverlay.remove();
       this.inventoryOverlay = null;
     }
+    
+    // Also hide equipment panel
+    const equipmentManager = EquipmentManager.getInstance();
+    equipmentManager.hideEquipment();
+    
     this.isVisible = false;
   }
 
@@ -115,6 +135,20 @@ export class InventoryManager {
       }
     } catch (error) {
       console.error('❌ Error loading inventory:', error);
+    }
+  }
+
+  /**
+   * Refresh inventory data and update both inventory and equipment displays
+   */
+  async refreshInventory(): Promise<void> {
+    await this.loadInventory();
+    if (this.isVisible) {
+      this.updateInventoryDisplay();
+      
+      // Also refresh equipment panel
+      const equipmentManager = EquipmentManager.getInstance();
+      await equipmentManager.refreshInventory();
     }
   }
 
@@ -155,9 +189,10 @@ export class InventoryManager {
       background: rgba(0, 0, 0, 0.8);
       z-index: 3000;
       display: flex;
-      justify-content: center;
+      justify-content: flex-end;
       align-items: center;
       font-family: 'Courier New', monospace;
+      padding-right: 20px;
     `;
 
     // Create inventory panel
@@ -167,8 +202,8 @@ export class InventoryManager {
       border: 2px solid #4a90e2;
       border-radius: 12px;
       padding: 20px;
-      max-width: 80%;
-      max-height: 80%;
+      max-width: 400px;
+      max-height: 80vh;
       overflow-y: auto;
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -185,12 +220,17 @@ export class InventoryManager {
       border-bottom: 2px solid #4a90e2;
       padding-bottom: 10px;
     `;
+    // Calculate unequipped items statistics
+    const unequippedItems = this.inventory.items.filter(item => !item.equipped);
+    const unequippedWeight = unequippedItems.reduce((sum, item) => sum + item.weight, 0);
+    const unequippedValue = unequippedItems.reduce((sum, item) => sum + item.value, 0);
+
     header.innerHTML = `
       🎒 Inventory
       <div style="font-size: 14px; margin-top: 5px; color: #cccccc;">
-        Items: ${this.inventory.statistics.totalItems} | 
-        Weight: ${this.inventory.statistics.totalWeight} | 
-        Value: ${this.inventory.statistics.totalValue}
+        Items: ${unequippedItems.length} | 
+        Weight: ${unequippedWeight} | 
+        Value: ${unequippedValue}
       </div>
     `;
 
@@ -209,14 +249,17 @@ export class InventoryManager {
     
     if (Object.keys(this.inventory.itemsByCategory).length > 0) {
       Object.entries(this.inventory.itemsByCategory).forEach(([category, items]) => {
-        if (items.length > 0) {
-          const categorySection = this.createCategorySection(category, items);
+        // Filter out equipped items
+        const unequippedItems = items.filter(item => !item.equipped);
+        if (unequippedItems.length > 0) {
+          const categorySection = this.createCategorySection(category, unequippedItems);
           categoriesContainer.appendChild(categorySection);
         }
       });
     } else {
-      // Show all items if no categories
-      const allItemsSection = this.createCategorySection('All Items', this.inventory.items);
+      // Show all unequipped items if no categories
+      const unequippedItems = this.inventory.items.filter(item => !item.equipped);
+      const allItemsSection = this.createCategorySection('All Items', unequippedItems);
       categoriesContainer.appendChild(allItemsSection);
     }
 
@@ -354,7 +397,6 @@ export class InventoryManager {
     dropButton.addEventListener('click', () => {
       if (this.callbacks) {
         this.callbacks.onDropItem(item.id);
-        this.hideInventory(); // Close inventory after action
       }
     });
 
@@ -380,7 +422,6 @@ export class InventoryManager {
     equipButton.addEventListener('click', () => {
       if (this.callbacks) {
         this.callbacks.onEquipItem(item.id);
-        this.hideInventory(); // Close inventory after action
       }
     });
 
@@ -410,6 +451,10 @@ export class InventoryManager {
    */
   setServerAddress(serverAddress: string): void {
     (this as any).serverAddress = serverAddress;
+    
+    // Also set server address on equipment manager
+    const equipmentManager = EquipmentManager.getInstance();
+    equipmentManager.setServerAddress(serverAddress);
   }
 
   /**
@@ -417,6 +462,16 @@ export class InventoryManager {
    */
   private getServerAddressInternal(): string | null {
     return (this as any).serverAddress || null;
+  }
+
+  /**
+   * Update the inventory display if currently visible
+   */
+  private updateInventoryDisplay(): void {
+    if (this.isVisible) {
+      this.hideInventory();
+      this.showInventory();
+    }
   }
 
   /**

@@ -14,7 +14,8 @@ import {
   PickupItemResponse,
   InventoryResponse,
   DropItemResponse,
-  EquipItemResponse
+  EquipItemResponse,
+  UnequipItemResponse
 } from '../types/api';
 
 /**
@@ -40,6 +41,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getInventory: () => `${baseUrl}/api/dungeon/inventory`,
     dropItem: () => `${baseUrl}/api/dungeon/drop-item`,
     equipItem: () => `${baseUrl}/api/dungeon/equip-item`,
+    unequipItem: () => `${baseUrl}/api/dungeon/unequip-item`,
   };
 };
 
@@ -326,6 +328,25 @@ export class DungeonApi {
       return response.data;
     } catch (error) {
       console.error('❌ Error equipping item:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unequip an item (remove from equipped slot)
+   */
+  static async unequipItem(serverAddress: string, itemId: string): Promise<UnequipItemResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const response = await axios.post(
+        endpoints.unequipItem(),
+        { itemId },
+        config
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error unequipping item:', error);
       throw error;
     }
   }
