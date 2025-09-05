@@ -270,6 +270,7 @@ export class ServerSceneryGenerator {
         (child.type === 'Mesh' && 
          !child.userData.isPlayer && 
          !child.userData.isOtherPlayer && 
+         !child.userData.isItem && // EXPLICITLY PRESERVE ITEMS
          !child.userData.preserve &&
          (child as THREE.Mesh).material && 
          ((child as THREE.Mesh).material as THREE.MeshLambertMaterial).color &&
@@ -284,7 +285,8 @@ export class ServerSceneryGenerator {
       }
     });
     
-        
+    console.log(`🧹 Clearing ${objectsToRemove.length} scenery objects, preserving players, lights, and items`);
+    
     objectsToRemove.forEach((obj) => {
       try {
         if (obj.parent) {
