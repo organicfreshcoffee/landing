@@ -154,12 +154,20 @@ export default function Game() {
           if (statusResponse.success && statusResponse.data.isAlive) {
             console.log('🎮 Player has live character, loading directly into game');
             
-            // Set the character from server response
-            setSelectedCharacter({
-              type: statusResponse.data.character.type,
-              style: statusResponse.data.character.style,
-              name: statusResponse.data.character.name
-            });
+            // Safely access character data with defensive checks
+            const characterData = statusResponse.data.character;
+            if (characterData && characterData.type && characterData.style !== undefined && characterData.name) {
+              setSelectedCharacter({
+                type: characterData.type,
+                style: characterData.style,
+                name: characterData.name
+              });
+            } else {
+              console.warn('⚠️ Invalid character data received:', characterData);
+              setConnectionState('failed');
+              setConnectionError('Invalid character data received from server');
+              return;
+            }
 
             // Set the health from server response
             setPlayerHealth({

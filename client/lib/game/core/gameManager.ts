@@ -35,6 +35,18 @@ export class GameManager {
   private lastFloorVerificationTime = 0;
   private floorVerificationInterval = 30000; // Check every 30 seconds
 
+  // Cleanup handler
+  private handleBeforeUnload = () => {
+    // Attempt graceful WebSocket close on browser exit
+    try {
+      if (this.webSocketManager) {
+        this.webSocketManager.close();
+      }
+    } catch (error) {
+      // Ignore errors during emergency cleanup
+    }
+  };
+
   constructor(
     canvas: HTMLCanvasElement,
     private onStateChange: (state: GameState) => void,
@@ -69,6 +81,11 @@ export class GameManager {
       () => this.handleDebugDeath(),
       this.onOpenGraphViewer
     );
+
+    // Add beforeunload handler to ensure cleanup on browser close/kill
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
+    }
 
     this.initializeGame();
   }
@@ -237,6 +254,17 @@ export class GameManager {
   }
 
   private handleGameMessage(message: GameMessage): void {
+    // Add defensive check for message structure
+    if (!message || typeof message.type !== 'string') {
+      console.warn('⚠️ Received invalid game message:', message);
+      return;
+    }
+    
+    // Add defensive check for message.data
+    if (!message.data || typeof message.data !== 'object') {
+      console.warn('⚠️ Received game message with invalid data:', message);
+      return;
+    }
         
     switch (message.type) {
       case 'player_joined':
@@ -387,7 +415,9 @@ export class GameManager {
             
       // Check if character has changed and needs sprite recreation
       let needsSpriteRecreation = false;
-      if (playerData.character && existingPlayer.character) {
+      if (playerData.character && existingPlayer.character && 
+          playerData.character.type && existingPlayer.character.type &&
+          playerData.character.style !== undefined && existingPlayer.character.style !== undefined) {
         needsSpriteRecreation = (
           playerData.character.type !== existingPlayer.character.type ||
           playerData.character.style !== existingPlayer.character.style
@@ -1686,6 +1716,11 @@ export class GameManager {
   }
 
   cleanup(): void {
+    // Remove beforeunload event listener
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    }
+    
     this.webSocketManager.close();
     this.movementController.cleanup();
     this.sceneManager.cleanup();

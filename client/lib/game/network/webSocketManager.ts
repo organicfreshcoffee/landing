@@ -95,7 +95,15 @@ export class WebSocketManager {
 
       ws.onmessage = (event) => {
         try {
-          const message: GameMessage = JSON.parse(event.data);
+          const parsed = JSON.parse(event.data);
+          
+          // Validate that the parsed message has the expected structure
+          if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
+            console.warn('Received invalid message format:', parsed);
+            return;
+          }
+          
+          const message: GameMessage = parsed;
           
           // Handle pong messages for heartbeat
           if (message.type === 'pong') {
@@ -162,15 +170,13 @@ export class WebSocketManager {
 
     try {
       // Log character data if it's a player_move message
-      try {
-        const parsedMessage = JSON.parse(message);
-        if (parsedMessage.type === 'player_move' && parsedMessage.data?.character) {
+        try {
+          const parsedMessage = JSON.parse(message);
+          if (parsedMessage.type === 'player_move' && parsedMessage.data?.character) {
                   }
-      } catch (parseError) {
-        // Ignore parse errors, just send the message
-      }
-
-      this.ws.send(message);
+        } catch (parseError) {
+          // Ignore parse errors, just send the message
+        }      this.ws.send(message);
       return true;
     } catch (error) {
       console.error('Error sending message:', error);
