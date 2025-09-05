@@ -75,22 +75,59 @@ export class ServerSceneryGenerator {
    * Get the spawn location for new players
    */
   static async getSpawnLocation(serverAddress: string): Promise<string> {
-        try {
+    try {
       // Get the player's current status from the API
       const currentStatusResponse = await DungeonApi.getCurrentStatus(serverAddress);
       
       if (currentStatusResponse.success && currentStatusResponse.data.currentFloor) {
-                return currentStatusResponse.data.currentFloor;
+        const currentFloor = currentStatusResponse.data.currentFloor;
+        
+        // Notify server that player is loading into this floor
+        try {
+          await DungeonApi.notifyPlayerMovedFloor(serverAddress, currentFloor);
+          console.log(`✅ Notified server that player moved to floor: ${currentFloor}`);
+        } catch (moveFloorError) {
+          console.error(`❌ Failed to notify server of player movement to floor ${currentFloor}:`, moveFloorError);
+          // Don't fail the spawn process if notification fails
+        }
+        
+        return currentFloor;
       } else {
         console.warn(`⚠️ Failed to get current floor from API, using default spawn location`);
+        
+        // Notify server about default floor A
+        try {
+          await DungeonApi.notifyPlayerMovedFloor(serverAddress, "A");
+          console.log(`✅ Notified server that player moved to default floor: A`);
+        } catch (moveFloorError) {
+          console.error(`❌ Failed to notify server of player movement to default floor A:`, moveFloorError);
+        }
+        
         return "A"; // Default to root node
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'PLAYER_NOT_ALIVE') {
-                return "A"; // Default to root node for new players
+        // Notify server about default floor A for new players
+        try {
+          await DungeonApi.notifyPlayerMovedFloor(serverAddress, "A");
+          console.log(`✅ Notified server that new player moved to floor: A`);
+        } catch (moveFloorError) {
+          console.error(`❌ Failed to notify server of new player movement to floor A:`, moveFloorError);
+        }
+        
+        return "A"; // Default to root node for new players
       }
       console.error(`❌ Error getting current status from API:`, error);
-            return "A"; // Default to root node as fallback
+      
+      // Notify server about default floor A as fallback
+      try {
+        await DungeonApi.notifyPlayerMovedFloor(serverAddress, "A");
+        console.log(`✅ Notified server that player moved to fallback floor: A`);
+      } catch (moveFloorError) {
+        console.error(`❌ Failed to notify server of player movement to fallback floor A:`, moveFloorError);
+      }
+      
+      return "A"; // Default to root node as fallback
     }
   }
 
@@ -98,9 +135,9 @@ export class ServerSceneryGenerator {
    * Notify server that player moved to a new floor
    */
   static async notifyPlayerMovedFloor(serverAddress: string, newFloorName: string): Promise<void> {
-        try {
+    try {
       await DungeonApi.notifyPlayerMovedFloor(serverAddress, newFloorName);
-          } catch (error) {
+    } catch (error) {
       console.error(`❌ Failed to notify server of floor change to ${newFloorName}:`, error);
       throw error;
     }
