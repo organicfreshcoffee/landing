@@ -9,7 +9,6 @@ import { SceneManager, ParticleSystem } from '../rendering';
 import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
 import { ItemInteractionManager, ItemInteractionData } from '../ui/itemInteractionManager';
 import { InventoryManager } from '../ui/inventoryManager';
-import { EquipmentManager } from '../ui/equipmentManager';
 import { DungeonApi } from '../network/dungeonApi';
 import { StairInfo, GameItem } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
@@ -206,11 +205,9 @@ export class GameManager {
     // Set server address for dungeon API calls
     this.sceneManager.setServerAddress(serverAddress);
     
-    // Update inventory and equipment managers with server address
+    // Update inventory manager with server address
     const inventoryManager = InventoryManager.getInstance();
-    const equipmentManager = EquipmentManager.getInstance();
     inventoryManager.setServerAddress(serverAddress);
-    equipmentManager.setServerAddress(serverAddress);
     
     // Load initial scenery and items from server
     await this.loadFloor(); // This will call loadScenery() and loadFloorItems()
@@ -1067,13 +1064,9 @@ export class GameManager {
   private async refreshInventoryDisplays(): Promise<void> {
     try {
       const inventoryManager = InventoryManager.getInstance();
-      const equipmentManager = EquipmentManager.getInstance();
       
-      // Refresh both inventory and equipment data
-      await Promise.all([
-        inventoryManager.refreshInventory(),
-        equipmentManager.refreshInventory()
-      ]);
+      // Refresh inventory data (which will also refresh equipment panel)
+      await inventoryManager.refreshInventory();
       
       console.log('✅ Refreshed inventory and equipment displays');
     } catch (error) {
@@ -1148,27 +1141,21 @@ export class GameManager {
 
   private setupInventoryInteractions(): void {
     const inventoryManager = InventoryManager.getInstance();
-    const equipmentManager = EquipmentManager.getInstance();
     
     // Set server address for API calls
     const serverAddress = this.sceneManager.getServerAddress();
     if (serverAddress) {
       inventoryManager.setServerAddress(serverAddress);
-      equipmentManager.setServerAddress(serverAddress);
     }
     
-    // Set up callbacks for inventory actions
+    // Set up callbacks for inventory and equipment actions
     inventoryManager.setCallbacks({
       onDropItem: (itemId: string) => {
         this.handleDropItem(itemId);
       },
       onEquipItem: (itemId: string) => {
         this.handleEquipItem(itemId);
-      }
-    });
-
-    // Set up callbacks for equipment actions
-    equipmentManager.setCallbacks({
+      },
       onUnequipItem: (itemId: string) => {
         this.handleUnequipItem(itemId);
       }

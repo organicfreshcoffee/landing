@@ -17,7 +17,7 @@ export class EquipmentManager {
   private serverAddress: string | null = null;
   
   private constructor() {
-    this.setupKeyListener();
+    // Equipment manager will be controlled by InventoryManager
   }
 
   static getInstance(): EquipmentManager {
@@ -39,23 +39,6 @@ export class EquipmentManager {
    */
   setServerAddress(serverAddress: string): void {
     this.serverAddress = serverAddress;
-  }
-
-  /**
-   * Set up keyboard listener for E key
-   */
-  private setupKeyListener(): void {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === 'KeyE') {
-        event.preventDefault();
-        this.toggleEquipment();
-      } else if (event.code === 'Escape' && this.isVisible) {
-        event.preventDefault();
-        this.hideEquipment();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
   }
 
   /**
@@ -134,7 +117,7 @@ export class EquipmentManager {
   }
 
   /**
-   * Create the equipment overlay UI
+   * Create the equipment overlay UI (positioned on left side)
    */
   private createEquipmentOverlay(): void {
     if (!this.inventory) return;
@@ -150,33 +133,22 @@ export class EquipmentManager {
       this.equipmentOverlay.remove();
     }
 
-    // Create overlay container
+    // Create equipment panel (no background overlay, just the panel)
     this.equipmentOverlay = document.createElement('div');
-    this.equipmentOverlay.id = 'equipment-overlay';
+    this.equipmentOverlay.id = 'equipment-panel';
     this.equipmentOverlay.style.cssText = `
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      z-index: 3000;
-      display: flex;
-      justify-content: flex-start;
-      align-items: center;
+      top: 50%;
+      left: 20px;
+      transform: translateY(-50%);
+      z-index: 3001;
       font-family: 'Courier New', monospace;
-      padding-left: 20px;
-    `;
-
-    // Create equipment panel
-    const equipmentPanel = document.createElement('div');
-    equipmentPanel.style.cssText = `
       background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95));
       border: 2px solid #e24a4a;
       border-radius: 12px;
       padding: 20px;
       max-width: 400px;
-      max-height: 80%;
+      max-height: 80vh;
       overflow-y: auto;
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -243,19 +215,13 @@ export class EquipmentManager {
       });
     }
 
-    // Assemble the panel
-    equipmentPanel.appendChild(header);
-    equipmentPanel.appendChild(instructions);
-    equipmentPanel.appendChild(itemsList);
+    // Assemble the panel content directly
+    this.equipmentOverlay.appendChild(header);
+    // this.equipmentOverlay.appendChild(instructions);
+    this.equipmentOverlay.appendChild(itemsList);
 
-    // Add click handler to close when clicking outside
-    this.equipmentOverlay.addEventListener('click', (e) => {
-      if (e.target === this.equipmentOverlay) {
-        this.hideEquipment();
-      }
-    });
+    // Note: No click handler needed since this will be managed by InventoryManager
 
-    this.equipmentOverlay.appendChild(equipmentPanel);
     document.body.appendChild(this.equipmentOverlay);
   }
 
