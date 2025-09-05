@@ -209,11 +209,8 @@ export class GameManager {
     const inventoryManager = InventoryManager.getInstance();
     inventoryManager.setServerAddress(serverAddress);
     
-    // Load initial scenery from server
-    await this.sceneManager.loadScenery();
-    
-    // Update collision data after loading scenery
-    this.movementController.updateCollisionData(this.sceneManager.scene);
+    // Load initial scenery and items from server
+    await this.loadFloor(); // This will call loadScenery() and loadFloorItems()
     
     // Check for stored player position and rotation from existing character
     const storedPosition = sessionStorage.getItem('playerPosition');
