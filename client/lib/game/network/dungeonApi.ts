@@ -35,7 +35,7 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     getSpawnLocation: () => `${baseUrl}/api/dungeon/spawn`,
     getCurrentStatus: () => `${baseUrl}/api/dungeon/current-status`,
     getVisitedNodes: () => `${baseUrl}/api/dungeon/visited-nodes`,
-    getFloorItems: () => `${baseUrl}/api/dungeon/floor-items`,
+    getFloorItems: (floorName: string) => `${baseUrl}/api/dungeon/floor-items?floorName=${encodeURIComponent(floorName)}`,
     pickupItem: () => `${baseUrl}/api/dungeon/pickup-item`,
     getInventory: () => `${baseUrl}/api/dungeon/inventory`,
     dropItem: () => `${baseUrl}/api/dungeon/drop-item`,
@@ -240,11 +240,11 @@ export class DungeonApi {
   /**
    * Get items on the current floor
    */
-  static async getFloorItems(serverAddress: string): Promise<FloorItemsResponse> {
+  static async getFloorItems(serverAddress: string, floorName: string): Promise<FloorItemsResponse> {
     try {
       const config = await getAuthConfig();
       const endpoints = buildDungeonEndpoints(serverAddress);
-      const url = endpoints.getFloorItems();
+      const url = endpoints.getFloorItems(floorName);
       
       const response = await axios.get(url, config);
       

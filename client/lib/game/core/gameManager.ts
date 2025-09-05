@@ -1578,13 +1578,20 @@ export class GameManager {
         return;
       }
 
+      // Get the current floor name
+      const currentFloor = this.sceneManager.getCurrentFloor();
+      if (!currentFloor) {
+        console.warn('⚠️ Current floor not available, skipping item loading');
+        return;
+      }
+
       console.log('🎒 Loading items for current floor...');
       
       // Clear existing items
       this.clearAllItems();
       
-      // Fetch items from server
-      const itemsResponse = await DungeonApi.getFloorItems(serverAddress);
+      // Fetch items from server for the specific floor
+      const itemsResponse = await DungeonApi.getFloorItems(serverAddress, currentFloor);
       
       if (itemsResponse.success && itemsResponse.data.items) {
         console.log(`🎒 Found ${itemsResponse.data.items.length} items on floor ${itemsResponse.data.floor}`);
