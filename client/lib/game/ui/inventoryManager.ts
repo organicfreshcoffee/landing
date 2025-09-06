@@ -156,6 +156,7 @@ export class InventoryManager {
    * Check if an item category is a weapon type
    */
   private isWeaponCategory(category: string): boolean {
+    if (!category) return false;
     return ['magic weapon', 'melee weapon', 'range weapon'].includes(category.toLowerCase());
   }
 
@@ -163,6 +164,7 @@ export class InventoryManager {
    * Get normalized category for equipment slots (weapons are all grouped as 'weapon')
    */
   private getNormalizedCategory(category: string): string {
+    if (!category) return 'unknown';
     if (this.isWeaponCategory(category)) {
       return 'weapon';
     }
@@ -172,13 +174,15 @@ export class InventoryManager {
   /**
    * Check if adding an item would exceed equipment limits
    */
-  private canEquipItem(item: InventoryItem): { canEquip: boolean; error?: string } {
+  private canEquipItem(item: InventoryItem, categoryName?: string): { canEquip: boolean; error?: string } {
     if (!this.inventory) {
       return { canEquip: false, error: 'Inventory not loaded' };
     }
 
     const equippedItems = this.inventory.items.filter(i => i.equipped);
-    const normalizedCategory = this.getNormalizedCategory(item.itemCategory);
+    // Use the category parameter first, then fall back to item.category
+    const itemCategory = categoryName || item.category;
+    const normalizedCategory = this.getNormalizedCategory(itemCategory);
     
     // Equipment slot limits
     const slotLimits: { [key: string]: number } = {
@@ -196,7 +200,7 @@ export class InventoryManager {
 
     const maxAllowed = slotLimits[normalizedCategory];
     if (!maxAllowed) {
-      return { canEquip: false, error: `Unknown item category: ${item.itemCategory}` };
+      return { canEquip: false, error: `Unknown item category: ${itemCategory}` };
     }
 
     // Count currently equipped items in this category
@@ -204,20 +208,20 @@ export class InventoryManager {
     if (normalizedCategory === 'weapon') {
       // Count all weapon types
       currentCount = equippedItems.filter(equippedItem => 
-        this.isWeaponCategory(equippedItem.itemCategory)
+        this.isWeaponCategory(equippedItem.category)
       ).length;
     } else {
       // Count items in this specific category
       currentCount = equippedItems.filter(equippedItem => 
-        this.getNormalizedCategory(equippedItem.itemCategory) === normalizedCategory
+        this.getNormalizedCategory(equippedItem.category) === normalizedCategory
       ).length;
     }
 
     if (currentCount >= maxAllowed) {
-      const itemType = normalizedCategory === 'weapon' ? 'weapon' : item.itemCategory;
+      const itemType = normalizedCategory === 'weapon' ? 'weapon' : itemCategory;
       return { 
         canEquip: false, 
-        error: `Cannot equip ${item.itemCategory}. You already have the maximum number of ${itemType}${maxAllowed > 1 ? 's' : ''} equipped (${currentCount}/${maxAllowed})` 
+        error: `Cannot equip ${itemCategory}. You already have the maximum number of ${itemType}${maxAllowed > 1 ? 's' : ''} equipped (${currentCount}/${maxAllowed})` 
       };
     }
 
@@ -378,7 +382,7 @@ export class InventoryManager {
     // Items list
     const itemsList = document.createElement('div');
     items.forEach(item => {
-      const itemElement = this.createItemElement(item);
+      const itemElement = this.createItemElement(item, categoryName);
       itemsList.appendChild(itemElement);
     });
 
@@ -391,7 +395,7 @@ export class InventoryManager {
   /**
    * Create an individual item element
    */
-  private createItemElement(item: InventoryItem): HTMLElement {
+  private createItemElement(item: InventoryItem, categoryName?: string): HTMLElement {
     const itemDiv = document.createElement('div');
     itemDiv.style.cssText = `
       background: rgba(255, 255, 255, 0.05);
@@ -493,8 +497,13 @@ export class InventoryManager {
     });
     equipButton.addEventListener('click', () => {
       if (this.callbacks) {
+        // Debug: Log the item to see what fields are available
+        console.log('🔍 Item being equipped:', item);
+        console.log('🔍 Item category from parameter:', categoryName);
+        console.log('🔍 Item category from item:', item.category);
+        
         // Validate equipment limits before attempting to equip
-        const validation = this.canEquipItem(item);
+        const validation = this.canEquipItem(item, categoryName);
         if (!validation.canEquip) {
           // Show error message to user
           alert(validation.error);

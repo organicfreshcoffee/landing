@@ -83,11 +83,11 @@ export class EquipmentManager {
    * Check if adding an item would exceed equipment limits
    */
   private canEquipItem(item: InventoryItem, equippedItems: InventoryItem[]): { canEquip: boolean; error?: string } {
-    const normalizedCategory = this.getNormalizedCategory(item.itemCategory);
+    const normalizedCategory = this.getNormalizedCategory(item.category);
     const slot = EQUIPMENT_SLOTS.find(s => s.category === normalizedCategory);
     
     if (!slot) {
-      return { canEquip: false, error: `Unknown item category: ${item.itemCategory}` };
+      return { canEquip: false, error: `Unknown item category: ${item.category}` };
     }
 
     // Count currently equipped items in this category
@@ -95,20 +95,20 @@ export class EquipmentManager {
     if (normalizedCategory === 'weapon') {
       // Count all weapon types
       currentCount = equippedItems.filter(equippedItem => 
-        this.isWeaponCategory(equippedItem.itemCategory)
+        this.isWeaponCategory(equippedItem.category)
       ).length;
     } else {
       // Count items in this specific category
       currentCount = equippedItems.filter(equippedItem => 
-        this.getNormalizedCategory(equippedItem.itemCategory) === normalizedCategory
+        this.getNormalizedCategory(equippedItem.category) === normalizedCategory
       ).length;
     }
 
     if (currentCount >= slot.maxCount) {
-      const itemType = normalizedCategory === 'weapon' ? 'weapon' : item.itemCategory;
+      const itemType = normalizedCategory === 'weapon' ? 'weapon' : item.category;
       return { 
         canEquip: false, 
-        error: `Cannot equip ${item.itemCategory}. You already have the maximum number of ${itemType}${slot.maxCount > 1 ? 's' : ''} equipped (${currentCount}/${slot.maxCount})` 
+        error: `Cannot equip ${item.category}. You already have the maximum number of ${itemType}${slot.maxCount > 1 ? 's' : ''} equipped (${currentCount}/${slot.maxCount})` 
       };
     }
 
@@ -128,7 +128,7 @@ export class EquipmentManager {
 
     // Group items by normalized category
     equippedItems.forEach(item => {
-      const normalizedCategory = this.getNormalizedCategory(item.itemCategory);
+      const normalizedCategory = this.getNormalizedCategory(item.category);
       const existing = organizedItems.get(normalizedCategory) || [];
       existing.push(item);
       organizedItems.set(normalizedCategory, existing);
