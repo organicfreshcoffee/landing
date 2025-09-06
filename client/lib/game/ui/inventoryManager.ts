@@ -153,6 +153,78 @@ export class InventoryManager {
   }
 
   /**
+   * Check if an item category is a weapon type
+   */
+  private isWeaponCategory(category: string): boolean {
+    return ['magic weapon', 'melee weapon', 'range weapon'].includes(category.toLowerCase());
+  }
+
+  /**
+   * Get normalized category for equipment slots (weapons are all grouped as 'weapon')
+   */
+  private getNormalizedCategory(category: string): string {
+    if (this.isWeaponCategory(category)) {
+      return 'weapon';
+    }
+    return category.toLowerCase();
+  }
+
+  /**
+   * Check if adding an item would exceed equipment limits
+   */
+  private canEquipItem(item: InventoryItem): { canEquip: boolean; error?: string } {
+    if (!this.inventory) {
+      return { canEquip: false, error: 'Inventory not loaded' };
+    }
+
+    const equippedItems = this.inventory.items.filter(i => i.equipped);
+    const normalizedCategory = this.getNormalizedCategory(item.itemCategory);
+    
+    // Equipment slot limits
+    const slotLimits: { [key: string]: number } = {
+      'ring': 2,
+      'amulet': 1,
+      'chest armor': 1,
+      'head armor': 1,
+      'cloak': 1,
+      'leg armor': 1,
+      'shoes': 1,
+      'gloves': 1,
+      'shield': 1,
+      'weapon': 1
+    };
+
+    const maxAllowed = slotLimits[normalizedCategory];
+    if (!maxAllowed) {
+      return { canEquip: false, error: `Unknown item category: ${item.itemCategory}` };
+    }
+
+    // Count currently equipped items in this category
+    let currentCount = 0;
+    if (normalizedCategory === 'weapon') {
+      // Count all weapon types
+      currentCount = equippedItems.filter(equippedItem => 
+        this.isWeaponCategory(equippedItem.itemCategory)
+      ).length;
+    } else {
+      // Count items in this specific category
+      currentCount = equippedItems.filter(equippedItem => 
+        this.getNormalizedCategory(equippedItem.itemCategory) === normalizedCategory
+      ).length;
+    }
+
+    if (currentCount >= maxAllowed) {
+      const itemType = normalizedCategory === 'weapon' ? 'weapon' : item.itemCategory;
+      return { 
+        canEquip: false, 
+        error: `Cannot equip ${item.itemCategory}. You already have the maximum number of ${itemType}${maxAllowed > 1 ? 's' : ''} equipped (${currentCount}/${maxAllowed})` 
+      };
+    }
+
+    return { canEquip: true };
+  }
+
+  /**
    * Get server address - this is a placeholder, you'll need to implement this
    * based on how your app manages server addresses
    */
@@ -421,6 +493,14 @@ export class InventoryManager {
     });
     equipButton.addEventListener('click', () => {
       if (this.callbacks) {
+        // Validate equipment limits before attempting to equip
+        const validation = this.canEquipItem(item);
+        if (!validation.canEquip) {
+          // Show error message to user
+          alert(validation.error);
+          return;
+        }
+        
         this.callbacks.onEquipItem(item.id);
       }
     });

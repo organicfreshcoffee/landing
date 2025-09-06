@@ -5,6 +5,27 @@ export interface EquipmentCallbacks {
   onUnequipItem: (itemId: string) => void;
 }
 
+// Equipment slot definitions with max counts
+interface EquipmentSlot {
+  name: string;
+  category: string;
+  maxCount: number;
+  icon: string;
+}
+
+const EQUIPMENT_SLOTS: EquipmentSlot[] = [
+  { name: 'Ring', category: 'ring', maxCount: 2, icon: '💍' },
+  { name: 'Amulet', category: 'amulet', maxCount: 1, icon: '📿' },
+  { name: 'Chest Armor', category: 'chest armor', maxCount: 1, icon: '🛡️' },
+  { name: 'Head Armor', category: 'head armor', maxCount: 1, icon: '⛑️' },
+  { name: 'Cloak', category: 'cloak', maxCount: 1, icon: '🧥' },
+  { name: 'Leg Armor', category: 'leg armor', maxCount: 1, icon: '👖' },
+  { name: 'Shoes', category: 'shoes', maxCount: 1, icon: '👠' },
+  { name: 'Gloves', category: 'gloves', maxCount: 1, icon: '🧤' },
+  { name: 'Shield', category: 'shield', maxCount: 1, icon: '🛡️' },
+  { name: 'Weapons', category: 'weapon', maxCount: 1, icon: '⚔️' } // All weapon types combined
+];
+
 /**
  * Manages equipment UI and interactions
  */
@@ -42,8 +63,79 @@ export class EquipmentManager {
   }
 
   /**
-   * Toggle equipment visibility
+   * Check if an item category is a weapon type
    */
+  private isWeaponCategory(category: string): boolean {
+    return ['magic weapon', 'melee weapon', 'range weapon'].includes(category.toLowerCase());
+  }
+
+  /**
+   * Get normalized category for equipment slots (weapons are all grouped as 'weapon')
+   */
+  private getNormalizedCategory(category: string): string {
+    if (this.isWeaponCategory(category)) {
+      return 'weapon';
+    }
+    return category.toLowerCase();
+  }
+
+  /**
+   * Check if adding an item would exceed equipment limits
+   */
+  private canEquipItem(item: InventoryItem, equippedItems: InventoryItem[]): { canEquip: boolean; error?: string } {
+    const normalizedCategory = this.getNormalizedCategory(item.itemCategory);
+    const slot = EQUIPMENT_SLOTS.find(s => s.category === normalizedCategory);
+    
+    if (!slot) {
+      return { canEquip: false, error: `Unknown item category: ${item.itemCategory}` };
+    }
+
+    // Count currently equipped items in this category
+    let currentCount = 0;
+    if (normalizedCategory === 'weapon') {
+      // Count all weapon types
+      currentCount = equippedItems.filter(equippedItem => 
+        this.isWeaponCategory(equippedItem.itemCategory)
+      ).length;
+    } else {
+      // Count items in this specific category
+      currentCount = equippedItems.filter(equippedItem => 
+        this.getNormalizedCategory(equippedItem.itemCategory) === normalizedCategory
+      ).length;
+    }
+
+    if (currentCount >= slot.maxCount) {
+      const itemType = normalizedCategory === 'weapon' ? 'weapon' : item.itemCategory;
+      return { 
+        canEquip: false, 
+        error: `Cannot equip ${item.itemCategory}. You already have the maximum number of ${itemType}${slot.maxCount > 1 ? 's' : ''} equipped (${currentCount}/${slot.maxCount})` 
+      };
+    }
+
+    return { canEquip: true };
+  }
+
+  /**
+   * Organize equipped items by category slots
+   */
+  private organizeEquippedItems(equippedItems: InventoryItem[]): Map<string, InventoryItem[]> {
+    const organizedItems = new Map<string, InventoryItem[]>();
+    
+    // Initialize all slots as empty
+    EQUIPMENT_SLOTS.forEach(slot => {
+      organizedItems.set(slot.category, []);
+    });
+
+    // Group items by normalized category
+    equippedItems.forEach(item => {
+      const normalizedCategory = this.getNormalizedCategory(item.itemCategory);
+      const existing = organizedItems.get(normalizedCategory) || [];
+      existing.push(item);
+      organizedItems.set(normalizedCategory, existing);
+    });
+
+    return organizedItems;
+  }
   async toggleEquipment(): Promise<void> {
     if (this.isVisible) {
       this.hideEquipment();
@@ -186,11 +278,11 @@ export class EquipmentManager {
       background: rgba(255, 255, 255, 0.1);
       border-radius: 6px;
     `;
-    instructions.textContent = 'Press E to close • Click "Take Off" to unequip items';
+    instructions.textContent = 'Equipment slots • Click "Take Off" to unequip items';
 
-    // Create equipped items list
-    const itemsList = document.createElement('div');
-    itemsList.style.cssText = `
+    // Create equipment slots container
+    const slotsContainer = document.createElement('div');
+    slotsContainer.style.cssText = `
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -198,27 +290,20 @@ export class EquipmentManager {
       overflow-y: auto;
     `;
 
-    if (equippedItems.length === 0) {
-      const noItemsMessage = document.createElement('div');
-      noItemsMessage.style.cssText = `
-        color: #888888;
-        text-align: center;
-        font-style: italic;
-        padding: 20px;
-      `;
-      noItemsMessage.textContent = 'No items equipped';
-      itemsList.appendChild(noItemsMessage);
-    } else {
-      equippedItems.forEach(item => {
-        const itemElement = this.createEquippedItemElement(item);
-        itemsList.appendChild(itemElement);
-      });
-    }
+    // Get equipped items and organize them
+    const organizedItems = this.organizeEquippedItems(equippedItems);
+
+    // Create each equipment slot
+    EQUIPMENT_SLOTS.forEach(slot => {
+      const slotItems = organizedItems.get(slot.category) || [];
+      const slotElement = this.createEquipmentSlot(slot, slotItems);
+      slotsContainer.appendChild(slotElement);
+    });
 
     // Assemble the panel content directly
     this.equipmentOverlay.appendChild(header);
-    // this.equipmentOverlay.appendChild(instructions);
-    this.equipmentOverlay.appendChild(itemsList);
+    this.equipmentOverlay.appendChild(instructions);
+    this.equipmentOverlay.appendChild(slotsContainer);
 
     // Note: No click handler needed since this will be managed by InventoryManager
 
@@ -319,6 +404,173 @@ export class EquipmentManager {
     });
 
     itemDiv.appendChild(itemInfo);
+    itemDiv.appendChild(takeOffButton);
+
+    return itemDiv;
+  }
+
+  /**
+   * Create an equipment slot showing all items in that category
+   */
+  private createEquipmentSlot(slot: EquipmentSlot, items: InventoryItem[]): HTMLDivElement {
+    const slotDiv = document.createElement('div');
+    slotDiv.style.cssText = `
+      background: linear-gradient(135deg, rgba(30, 30, 30, 0.8), rgba(50, 50, 50, 0.8));
+      border: 1px solid #555555;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    `;
+
+    // Slot header
+    const slotHeader = document.createElement('div');
+    slotHeader.style.cssText = `
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #666666;
+      padding-bottom: 5px;
+    `;
+
+    const slotTitle = document.createElement('span');
+    slotTitle.textContent = `${slot.icon} ${slot.name}`;
+
+    const slotCount = document.createElement('span');
+    slotCount.style.cssText = `
+      font-size: 12px;
+      color: #cccccc;
+    `;
+    slotCount.textContent = `${items.length}/${slot.maxCount}`;
+
+    slotHeader.appendChild(slotTitle);
+    slotHeader.appendChild(slotCount);
+
+    slotDiv.appendChild(slotHeader);
+
+    // Show equipped items or empty slots
+    if (items.length === 0) {
+      const emptySlot = document.createElement('div');
+      emptySlot.style.cssText = `
+        color: #888888;
+        font-style: italic;
+        font-size: 12px;
+        padding: 8px;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        border: 1px dashed #666666;
+      `;
+      emptySlot.textContent = `Empty ${slot.name.toLowerCase()} slot${slot.maxCount > 1 ? 's' : ''}`;
+      slotDiv.appendChild(emptySlot);
+    } else {
+      // Show equipped items in this slot
+      items.forEach(item => {
+        const itemElement = this.createSlotItemElement(item);
+        slotDiv.appendChild(itemElement);
+      });
+
+      // Show empty slots if not at max capacity
+      const emptySlotsCount = slot.maxCount - items.length;
+      for (let i = 0; i < emptySlotsCount; i++) {
+        const emptySlot = document.createElement('div');
+        emptySlot.style.cssText = `
+          color: #666666;
+          font-style: italic;
+          font-size: 11px;
+          padding: 4px 8px;
+          margin-top: 4px;
+          text-align: center;
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 4px;
+          border: 1px dashed #555555;
+        `;
+        emptySlot.textContent = `Empty slot`;
+        slotDiv.appendChild(emptySlot);
+      }
+    }
+
+    return slotDiv;
+  }
+
+  /**
+   * Create a compact item element for display within a slot
+   */
+  private createSlotItemElement(item: InventoryItem): HTMLDivElement {
+    const itemDiv = document.createElement('div');
+    itemDiv.style.cssText = `
+      background: linear-gradient(135deg, rgba(40, 40, 40, 0.8), rgba(60, 60, 60, 0.8));
+      border: 1px solid #666666;
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 4px;
+      transition: all 0.2s ease;
+    `;
+
+    // Add hover effect
+    itemDiv.addEventListener('mouseenter', () => {
+      itemDiv.style.background = 'linear-gradient(135deg, rgba(60, 60, 60, 0.9), rgba(80, 80, 80, 0.9))';
+      itemDiv.style.borderColor = '#888888';
+    });
+
+    itemDiv.addEventListener('mouseleave', () => {
+      itemDiv.style.background = 'linear-gradient(135deg, rgba(40, 40, 40, 0.8), rgba(60, 60, 60, 0.8))';
+      itemDiv.style.borderColor = '#666666';
+    });
+
+    // Item name and basic info
+    const itemName = document.createElement('div');
+    itemName.style.cssText = `
+      color: #4CAF50;
+      font-weight: bold;
+      font-size: 13px;
+      margin-bottom: 4px;
+    `;
+    itemName.textContent = item.name;
+
+    const itemDetails = document.createElement('div');
+    itemDetails.style.cssText = `
+      color: #cccccc;
+      font-size: 10px;
+      margin-bottom: 6px;
+    `;
+    itemDetails.textContent = `${item.material} • Value: ${item.value}`;
+
+    // Take off button
+    const takeOffButton = document.createElement('button');
+    takeOffButton.textContent = '📤 Take Off';
+    takeOffButton.style.cssText = `
+      background: linear-gradient(135deg, #d32f2f, #f44336);
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+      width: 100%;
+    `;
+
+    takeOffButton.addEventListener('mouseenter', () => {
+      takeOffButton.style.background = 'linear-gradient(135deg, #b71c1c, #d32f2f)';
+    });
+
+    takeOffButton.addEventListener('mouseleave', () => {
+      takeOffButton.style.background = 'linear-gradient(135deg, #d32f2f, #f44336)';
+    });
+
+    takeOffButton.addEventListener('click', () => {
+      if (this.callbacks?.onUnequipItem) {
+        this.callbacks.onUnequipItem(item.id);
+      }
+    });
+
+    itemDiv.appendChild(itemName);
+    itemDiv.appendChild(itemDetails);
     itemDiv.appendChild(takeOffButton);
 
     return itemDiv;
