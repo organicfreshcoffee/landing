@@ -388,10 +388,19 @@ export class InventoryManager {
       background: rgba(0, 0, 0, 0.8);
       z-index: 3000;
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       align-items: center;
       font-family: 'Courier New', monospace;
-      padding-right: 20px;
+    `;
+
+    // Create main container that holds both menus
+    const mainContainer = document.createElement('div');
+    mainContainer.style.cssText = `
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      max-width: 90vw;
+      max-height: 80vh;
     `;
 
     // Create inventory panel
@@ -467,8 +476,11 @@ export class InventoryManager {
     inventoryPanel.appendChild(instructions);
     inventoryPanel.appendChild(categoriesContainer);
 
-    // Add to overlay
-    this.inventoryOverlay.appendChild(inventoryPanel);
+    // Add inventory panel to the main container (it will be on the right)
+    mainContainer.appendChild(inventoryPanel);
+    
+    // Add main container to overlay
+    this.inventoryOverlay.appendChild(mainContainer);
 
     // Add click outside to close
     this.inventoryOverlay.addEventListener('click', (e) => {

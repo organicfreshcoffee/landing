@@ -226,15 +226,23 @@ export class EquipmentManager {
       this.equipmentOverlay.remove();
     }
 
-    // Create equipment panel (no background overlay, just the panel)
+    // Find the main container created by inventory manager
+    const inventoryOverlay = document.getElementById('inventory-overlay');
+    if (!inventoryOverlay) {
+      console.error('❌ Cannot find inventory overlay to attach equipment panel');
+      return;
+    }
+
+    const mainContainer = inventoryOverlay.querySelector('div[style*="display: flex"]') as HTMLDivElement;
+    if (!mainContainer) {
+      console.error('❌ Cannot find main container to attach equipment panel');
+      return;
+    }
+
+    // Create equipment panel (will be inserted as the first child, so it appears on the left)
     this.equipmentOverlay = document.createElement('div');
     this.equipmentOverlay.id = 'equipment-panel';
     this.equipmentOverlay.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 20px;
-      transform: translateY(-50%);
-      z-index: 3001;
       font-family: 'Courier New', monospace;
       background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95));
       border: 2px solid #e24a4a;
@@ -306,9 +314,8 @@ export class EquipmentManager {
     this.equipmentOverlay.appendChild(instructions);
     this.equipmentOverlay.appendChild(slotsContainer);
 
-    // Note: No click handler needed since this will be managed by InventoryManager
-
-    document.body.appendChild(this.equipmentOverlay);
+    // Add equipment panel as the first child of main container (so it appears on the left)
+    mainContainer.insertBefore(this.equipmentOverlay, mainContainer.firstChild);
   }
 
   /**
