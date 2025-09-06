@@ -1,6 +1,7 @@
 import { InventoryItem, InventoryResponse } from '../types/api';
 import { DungeonApi } from '../network/dungeonApi';
 import { EquipmentManager } from './equipmentManager';
+import { ToastManager } from './toastManager';
 
 export interface InventoryCallbacks {
   onDropItem: (itemId: string) => void;
@@ -497,16 +498,12 @@ export class InventoryManager {
     });
     equipButton.addEventListener('click', () => {
       if (this.callbacks) {
-        // Debug: Log the item to see what fields are available
-        console.log('🔍 Item being equipped:', item);
-        console.log('🔍 Item category from parameter:', categoryName);
-        console.log('🔍 Item category from item:', item.category);
-        
         // Validate equipment limits before attempting to equip
         const validation = this.canEquipItem(item, categoryName);
         if (!validation.canEquip) {
-          // Show error message to user
-          alert(validation.error);
+          // Show error message to user using toast
+          const toastManager = ToastManager.getInstance();
+          toastManager.showError(validation.error || 'Cannot equip item');
           return;
         }
         
