@@ -83,7 +83,8 @@ export class GameManager {
       this.onOpenGraphViewer,
       (fromPos, toPos) => this.particleSystem.castPunch(fromPos, toPos),
       (fromPos, toPos) => this.particleSystem.castMelee(fromPos, toPos),
-      (fromPos, toPos) => this.particleSystem.castRange(fromPos, toPos)
+      (fromPos, toPos) => this.particleSystem.castRange(fromPos, toPos),
+      () => this.getServerAddress()
     );
 
     // Add beforeunload handler to ensure cleanup on browser close/kill
@@ -92,6 +93,10 @@ export class GameManager {
     }
 
     this.initializeGame();
+  }
+
+  private getServerAddress(): string | null {
+    return this.sceneManager.getServerAddress();
   }
 
   private async initializeGame(): Promise<void> {
@@ -1161,6 +1166,10 @@ export class GameManager {
         // Show success toast
         const toastManager = ToastManager.getInstance();
         toastManager.showSuccess('Item equipped successfully!');
+        
+        // Notify movement controller that weapon equipment changed
+        this.movementController.onWeaponEquipmentChanged();
+        
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
       } else {
@@ -1192,6 +1201,10 @@ export class GameManager {
         // Show success toast
         const toastManager = ToastManager.getInstance();
         toastManager.showSuccess('Item unequipped successfully!');
+        
+        // Notify movement controller that weapon equipment changed
+        this.movementController.onWeaponEquipmentChanged();
+        
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
       } else {

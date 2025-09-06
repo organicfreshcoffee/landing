@@ -39,6 +39,12 @@ export class MovementController {
   private collisionSystem: CollisionSystem;
   private gameHUD: GameHUD;
 
+  // Weapon tracking for attack types
+  private currentEquippedWeapon: string | null = null;
+  private weaponType: 'magic' | 'melee' | 'range' | null = null;
+  private lastInventoryCheck = 0;
+  private inventoryCheckCooldown = 5000; // Check inventory every 5 seconds if needed
+
   constructor(
     private localPlayerRef: { current: THREE.Object3D | null },
     private cameraRef: { current: THREE.PerspectiveCamera | null },
@@ -54,7 +60,8 @@ export class MovementController {
     private onOpenGraphViewer?: () => void,
     private onPunchCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
     private onMeleeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
-    private onRangeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void
+    private onRangeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private getServerAddress?: () => string | null
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -88,31 +95,6 @@ export class MovementController {
         if (this.onOpenGraphViewer) {
           this.onOpenGraphViewer();
         }
-        return;
-      }
-
-      // Handle attack types with number keys
-      if (event.code === 'Digit1') {
-        event.preventDefault();
-        this.castSpell(); // Spell attack
-        return;
-      }
-
-      if (event.code === 'Digit2') {
-        event.preventDefault();
-        this.castPunch(); // Punch attack
-        return;
-      }
-
-      if (event.code === 'Digit3') {
-        event.preventDefault();
-        this.castMelee(); // Melee attack
-        return;
-      }
-
-      if (event.code === 'Digit4') {
-        event.preventDefault();
-        this.castRange(); // Range attack
         return;
       }
 
@@ -161,10 +143,10 @@ export class MovementController {
       
       if (!isPointerLocked || !this.isConnected()) return;
       
-      // Only handle left clicks for spell casting
+      // Only handle left clicks for attacks
       if (event.button === 0) {
         event.preventDefault(); // Prevent other handlers
-                this.castSpell();
+        this.performAttackBasedOnEquippedWeapon();
       }
     };
 
@@ -858,6 +840,102 @@ export class MovementController {
 
     // Call the range cast callback for local visual effect
     this.onRangeCast(rangeStartPosition, targetPosition);
+  }
+
+  private async performAttackBasedOnEquippedWeapon(): Promise<void> {
+    // Check if we need to update weapon info
+    await this.updateWeaponInfoIfNeeded();
+    
+    // Perform attack based on weapon type
+    switch (this.weaponType) {
+      case 'magic':
+        this.castSpell();
+        break;
+      case 'melee':
+        this.castMelee();
+        break;
+      case 'range':
+        this.castRange();
+        break;
+      default:
+        // No weapon equipped, use punch
+        this.castPunch();
+        break;
+    }
+  }
+
+  private async updateWeaponInfoIfNeeded(): Promise<void> {
+    const now = Date.now();
+    
+    // Only check inventory if enough time has passed since last check
+    if (now - this.lastInventoryCheck < this.inventoryCheckCooldown) {
+      return;
+    }
+    
+    try {
+      // Get server address from constructor parameter
+      const serverAddress = this.getServerAddress?.();
+      if (!serverAddress) {
+        console.warn('⚠️ No server address available for weapon check');
+        return;
+      }
+      
+      // Import DungeonApi dynamically to avoid circular dependencies
+      const { DungeonApi } = await import('../network/dungeonApi');
+      const response = await DungeonApi.getInventory(serverAddress);
+      
+      if (response.success) {
+        const equippedWeapons = response.data.inventory.items.filter(item => 
+          item.equipped && item.weaponStats
+        );
+        
+        if (equippedWeapons.length > 0) {
+          const weapon = equippedWeapons[0]; // Take the first equipped weapon
+          this.currentEquippedWeapon = weapon.id;
+          this.weaponType = this.determineWeaponType(weapon);
+          
+          console.log('🗡️ Updated weapon info:', {
+            weaponId: this.currentEquippedWeapon,
+            weaponType: this.weaponType,
+            weaponName: weapon.name,
+            weaponCategory: weapon.category
+          });
+        } else {
+          // No weapon equipped
+          this.currentEquippedWeapon = null;
+          this.weaponType = null;
+          console.log('👊 No weapon equipped, will use punch attack');
+        }
+        
+        this.lastInventoryCheck = now;
+      }
+    } catch (error) {
+      console.error('❌ Error checking weapon info:', error);
+    }
+  }
+
+  private determineWeaponType(weapon: any): 'magic' | 'melee' | 'range' {
+    const category = weapon.category.toLowerCase();
+    const weaponType = weapon.weaponStats?.type?.toLowerCase() || '';
+    
+    // Determine weapon type based on category and weapon stats
+    if (category.includes('staff') || category.includes('wand') || 
+        category.includes('magic') || weaponType.includes('magic')) {
+      return 'magic';
+    } else if (category.includes('bow') || category.includes('crossbow') || 
+               category.includes('arrow') || weaponType.includes('ranged') ||
+               weaponType.includes('bow')) {
+      return 'range';
+    } else {
+      // Default to melee for swords, axes, maces, etc.
+      return 'melee';
+    }
+  }
+
+  // Method to force weapon update when items are equipped/unequipped
+  public onWeaponEquipmentChanged(): void {
+    this.lastInventoryCheck = 0; // Force check on next attack
+    console.log('⚔️ Weapon equipment changed, will update on next attack');
   }
 
   cleanup(): void {
