@@ -243,6 +243,7 @@ export class EquipmentManager {
     this.equipmentOverlay = document.createElement('div');
     this.equipmentOverlay.id = 'equipment-panel';
     this.equipmentOverlay.style.cssText = `
+      position: relative;
       font-family: 'Courier New', monospace;
       background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95));
       border: 2px solid #e24a4a;
@@ -627,6 +628,7 @@ export class EquipmentManager {
         align-items: center;
         justify-content: center;
         z-index: 1000;
+        border-radius: 12px;
       `;
       
       const spinner = document.createElement('div');

@@ -163,6 +163,10 @@ export class InventoryManager {
   private showLoadingOverlay() {
     if (!this.inventoryOverlay) return;
 
+    // Find the inventory panel within the overlay
+    const inventoryPanel = this.inventoryOverlay.querySelector('div[style*="border: 2px solid #4a90e2"]') as HTMLDivElement;
+    if (!inventoryPanel) return;
+
     if (!this.loadingOverlay) {
       this.loadingOverlay = document.createElement('div');
       this.loadingOverlay.style.cssText = `
@@ -176,6 +180,7 @@ export class InventoryManager {
         align-items: center;
         justify-content: center;
         z-index: 1000;
+        border-radius: 12px;
       `;
       
       const spinner = document.createElement('div');
@@ -204,7 +209,7 @@ export class InventoryManager {
       this.loadingOverlay.appendChild(spinner);
     }
 
-    this.inventoryOverlay.appendChild(this.loadingOverlay);
+    inventoryPanel.appendChild(this.loadingOverlay);
   }
 
   /**
@@ -406,6 +411,7 @@ export class InventoryManager {
     // Create inventory panel
     const inventoryPanel = document.createElement('div');
     inventoryPanel.style.cssText = `
+      position: relative;
       background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95));
       border: 2px solid #4a90e2;
       border-radius: 12px;
