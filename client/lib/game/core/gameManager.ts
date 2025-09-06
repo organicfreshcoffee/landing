@@ -9,6 +9,7 @@ import { SceneManager, ParticleSystem } from '../rendering';
 import { StairInteractionManager, StairInteractionData } from '../ui/stairInteractionManager';
 import { ItemInteractionManager, ItemInteractionData } from '../ui/itemInteractionManager';
 import { InventoryManager } from '../ui/inventoryManager';
+import { ToastManager } from '../ui/toastManager';
 import { DungeonApi } from '../network/dungeonApi';
 import { StairInfo, GameItem } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
@@ -1002,11 +1003,17 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully dropped item:', itemId);
+        // Show success toast
+        const toastManager = ToastManager.getInstance();
+        toastManager.showSuccess('Item dropped successfully!');
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
         // Item will appear in world via item-spawned websocket message
       } else {
         console.error('❌ Failed to drop item:', response);
+        // Show error toast
+        const toastManager = ToastManager.getInstance();
+        toastManager.showError(response.message || 'Failed to drop item');
       }
     } catch (error) {
       console.error('❌ Error during item drop:', error);
@@ -1028,10 +1035,16 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully equipped item:', itemId);
+        // Show success toast
+        const toastManager = ToastManager.getInstance();
+        toastManager.showSuccess('Item equipped successfully!');
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
       } else {
         console.error('❌ Failed to equip item:', response);
+        // Show error toast
+        const toastManager = ToastManager.getInstance();
+        toastManager.showError(response.message || 'Failed to equip item');
       }
     } catch (error) {
       console.error('❌ Error during item equip:', error);
@@ -1053,10 +1066,16 @@ export class GameManager {
       
       if (response.success) {
         console.log('✅ Successfully unequipped item:', itemId);
+        // Show success toast
+        const toastManager = ToastManager.getInstance();
+        toastManager.showSuccess('Item unequipped successfully!');
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
       } else {
         console.error('❌ Failed to unequip item:', response);
+        // Show error toast
+        const toastManager = ToastManager.getInstance();
+        toastManager.showError(response.message || 'Failed to unequip item');
       }
     } catch (error) {
       console.error('❌ Error during item unequip:', error);
@@ -1067,8 +1086,8 @@ export class GameManager {
     try {
       const inventoryManager = InventoryManager.getInstance();
       
-      // Refresh inventory data (which will also refresh equipment panel)
-      await inventoryManager.refreshInventory();
+      // Refresh inventory data with loading overlay to prevent flashing
+      await inventoryManager.refreshInventoryWithLoading();
       
       console.log('✅ Refreshed inventory and equipment displays');
     } catch (error) {

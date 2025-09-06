@@ -240,6 +240,7 @@ export interface PickupItemResponse {
 export interface InventoryItem {
   id: string;
   itemTemplateId: string;
+  category: string;
   material: string;
   make: string;
   alignment: number;

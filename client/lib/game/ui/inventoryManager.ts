@@ -1,6 +1,7 @@
 import { InventoryItem, InventoryResponse } from '../types/api';
 import { DungeonApi } from '../network/dungeonApi';
 import { EquipmentManager } from './equipmentManager';
+import { ToastManager } from './toastManager';
 
 export interface InventoryCallbacks {
   onDropItem: (itemId: string) => void;
@@ -17,6 +18,7 @@ export class InventoryManager {
   private isVisible = false;
   private inventory: InventoryResponse['data']['inventory'] | null = null;
   private callbacks: InventoryCallbacks | null = null;
+  private loadingOverlay: HTMLDivElement | null = null;
   
   private constructor() {
     this.setupKeyListener();
@@ -153,6 +155,208 @@ export class InventoryManager {
   }
 
   /**
+   * Refresh inventory with loading state (keeps menus visible)
+   */
+    /**
+   * Shows loading overlay during refresh
+   */
+  private showLoadingOverlay() {
+    if (!this.inventoryOverlay) return;
+
+    // Find the inventory panel within the overlay
+    const inventoryPanel = this.inventoryOverlay.querySelector('div[style*="border: 2px solid #4a90e2"]') as HTMLDivElement;
+    if (!inventoryPanel) return;
+
+    if (!this.loadingOverlay) {
+      this.loadingOverlay = document.createElement('div');
+      this.loadingOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        border-radius: 12px;
+      `;
+      
+      const spinner = document.createElement('div');
+      spinner.style.cssText = `
+        width: 32px;
+        height: 32px;
+        border: 3px solid #333;
+        border-top: 3px solid #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      `;
+      
+      // Add CSS animation for spinner
+      if (!document.getElementById('loading-spinner-style')) {
+        const style = document.createElement('style');
+        style.id = 'loading-spinner-style';
+        style.textContent = `
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      this.loadingOverlay.appendChild(spinner);
+    }
+
+    inventoryPanel.appendChild(this.loadingOverlay);
+  }
+
+  /**
+   * Hides loading overlay
+   */
+  private hideLoadingOverlay() {
+    if (this.loadingOverlay && this.loadingOverlay.parentNode) {
+      this.loadingOverlay.parentNode.removeChild(this.loadingOverlay);
+    }
+  }
+
+  /**
+   * Updates inventory display content without showing/hiding the panel
+   */
+  private updateInventoryDisplayContent() {
+    if (!this.inventoryOverlay || !this.inventory) return;
+
+    // Store the loading overlay temporarily
+    const currentLoadingOverlay = this.loadingOverlay;
+    
+    // Recreate the inventory content
+    this.createInventoryOverlay();
+    
+    // Re-attach the loading overlay if it was showing
+    if (currentLoadingOverlay && currentLoadingOverlay.parentNode) {
+      this.inventoryOverlay.appendChild(currentLoadingOverlay);
+      this.loadingOverlay = currentLoadingOverlay;
+    }
+  }
+
+    async refreshInventoryWithLoading() {
+    const equipmentManager = EquipmentManager.getInstance();
+    
+    // Only proceed if menus are visible
+    if (!this.isVisible || !equipmentManager.getIsVisible()) {
+      // If menus aren't visible, use the normal refresh
+      await this.refreshInventory();
+      return;
+    }
+    
+    // Show loading overlays
+    this.showLoadingOverlay();
+    equipmentManager.showLoadingOverlay();
+    
+    try {
+      // Get server address
+      const serverAddress = this.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ No server address available for inventory');
+        return;
+      }
+
+      // Fetch fresh inventory data from server
+      const response = await DungeonApi.getInventory(serverAddress);
+      if (response.success) {
+        this.inventory = response.data.inventory;
+        
+        // Update content without hiding/showing panels
+        this.updateInventoryDisplayContent();
+        equipmentManager.updateInventoryData(response.data.inventory);
+        await equipmentManager.updateEquipmentDisplayContent();
+      }
+      
+    } finally {
+      // Hide loading overlays
+      this.hideLoadingOverlay();
+      equipmentManager.hideLoadingOverlay();
+    }
+  }
+
+  /**
+   * Check if an item category is a weapon type
+   */
+  private isWeaponCategory(category: string): boolean {
+    if (!category) return false;
+    return ['magic weapon', 'melee weapon', 'range weapon'].includes(category.toLowerCase());
+  }
+
+  /**
+   * Get normalized category for equipment slots (weapons are all grouped as 'weapon')
+   */
+  private getNormalizedCategory(category: string): string {
+    if (!category) return 'unknown';
+    if (this.isWeaponCategory(category)) {
+      return 'weapon';
+    }
+    return category.toLowerCase();
+  }
+
+  /**
+   * Check if adding an item would exceed equipment limits
+   */
+  private canEquipItem(item: InventoryItem, categoryName?: string): { canEquip: boolean; error?: string } {
+    if (!this.inventory) {
+      return { canEquip: false, error: 'Inventory not loaded' };
+    }
+
+    const equippedItems = this.inventory.items.filter(i => i.equipped);
+    // Use the category parameter first, then fall back to item.category
+    const itemCategory = categoryName || item.category;
+    const normalizedCategory = this.getNormalizedCategory(itemCategory);
+    
+    // Equipment slot limits
+    const slotLimits: { [key: string]: number } = {
+      'ring': 2,
+      'amulet': 1,
+      'chest armor': 1,
+      'head armor': 1,
+      'cloak': 1,
+      'leg armor': 1,
+      'shoes': 1,
+      'gloves': 1,
+      'shield': 1,
+      'weapon': 1
+    };
+
+    const maxAllowed = slotLimits[normalizedCategory];
+    if (!maxAllowed) {
+      return { canEquip: false, error: `Unknown item category: ${itemCategory}` };
+    }
+
+    // Count currently equipped items in this category
+    let currentCount = 0;
+    if (normalizedCategory === 'weapon') {
+      // Count all weapon types
+      currentCount = equippedItems.filter(equippedItem => 
+        this.isWeaponCategory(equippedItem.category)
+      ).length;
+    } else {
+      // Count items in this specific category
+      currentCount = equippedItems.filter(equippedItem => 
+        this.getNormalizedCategory(equippedItem.category) === normalizedCategory
+      ).length;
+    }
+
+    if (currentCount >= maxAllowed) {
+      const itemType = normalizedCategory === 'weapon' ? 'weapon' : itemCategory;
+      return { 
+        canEquip: false, 
+        error: `Cannot equip ${itemCategory}. You already have the maximum number of ${itemType}${maxAllowed > 1 ? 's' : ''} equipped (${currentCount}/${maxAllowed})` 
+      };
+    }
+
+    return { canEquip: true };
+  }
+
+  /**
    * Get server address - this is a placeholder, you'll need to implement this
    * based on how your app manages server addresses
    */
@@ -189,21 +393,31 @@ export class InventoryManager {
       background: rgba(0, 0, 0, 0.8);
       z-index: 3000;
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       align-items: center;
       font-family: 'Courier New', monospace;
-      padding-right: 20px;
+    `;
+
+    // Create main container that holds both menus
+    const mainContainer = document.createElement('div');
+    mainContainer.style.cssText = `
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      max-width: 90vw;
+      max-height: 80vh;
     `;
 
     // Create inventory panel
     const inventoryPanel = document.createElement('div');
     inventoryPanel.style.cssText = `
+      position: relative;
       background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95));
       border: 2px solid #4a90e2;
       border-radius: 12px;
       padding: 20px;
       max-width: 400px;
-      max-height: 80vh;
+      height: 70vh;
       overflow-y: auto;
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -268,8 +482,11 @@ export class InventoryManager {
     inventoryPanel.appendChild(instructions);
     inventoryPanel.appendChild(categoriesContainer);
 
-    // Add to overlay
-    this.inventoryOverlay.appendChild(inventoryPanel);
+    // Add inventory panel to the main container (it will be on the right)
+    mainContainer.appendChild(inventoryPanel);
+    
+    // Add main container to overlay
+    this.inventoryOverlay.appendChild(mainContainer);
 
     // Add click outside to close
     this.inventoryOverlay.addEventListener('click', (e) => {
@@ -306,7 +523,7 @@ export class InventoryManager {
     // Items list
     const itemsList = document.createElement('div');
     items.forEach(item => {
-      const itemElement = this.createItemElement(item);
+      const itemElement = this.createItemElement(item, categoryName);
       itemsList.appendChild(itemElement);
     });
 
@@ -319,7 +536,7 @@ export class InventoryManager {
   /**
    * Create an individual item element
    */
-  private createItemElement(item: InventoryItem): HTMLElement {
+  private createItemElement(item: InventoryItem, categoryName?: string): HTMLElement {
     const itemDiv = document.createElement('div');
     itemDiv.style.cssText = `
       background: rgba(255, 255, 255, 0.05);
@@ -421,6 +638,15 @@ export class InventoryManager {
     });
     equipButton.addEventListener('click', () => {
       if (this.callbacks) {
+        // Validate equipment limits before attempting to equip
+        const validation = this.canEquipItem(item, categoryName);
+        if (!validation.canEquip) {
+          // Show error message to user using toast
+          const toastManager = ToastManager.getInstance();
+          toastManager.showError(validation.error || 'Cannot equip item');
+          return;
+        }
+        
         this.callbacks.onEquipItem(item.id);
       }
     });
