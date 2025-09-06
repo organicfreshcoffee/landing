@@ -708,7 +708,7 @@ export class MovementController {
     punchStartPosition.add(forwardOffset);
 
     // Calculate target position - shorter range for punch
-    const punchRange = 3;
+    const punchRange = 1.5; // Reduced from 3 to match particle effect
     const targetPosition = punchStartPosition.clone().add(direction.clone().multiplyScalar(punchRange));
 
     // Send player action to other clients
@@ -768,7 +768,7 @@ export class MovementController {
     meleeStartPosition.add(forwardOffset);
 
     // Calculate target position - medium range for melee
-    const meleeRange = 5;
+    const meleeRange = 2.5; // Reduced from 5 to match particle effect
     const targetPosition = meleeStartPosition.clone().add(direction.clone().multiplyScalar(meleeRange));
 
     // Send player action to other clients

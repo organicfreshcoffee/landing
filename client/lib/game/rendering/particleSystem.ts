@@ -275,7 +275,7 @@ export class ParticleSystem {
     }
   }
 
-  // Punch Effect - Short range, explosive impact
+  // Punch Effect - Short range, small explosive impact
   private createPunchEffect(fromPosition: THREE.Vector3, toPosition: THREE.Vector3, isFromOtherPlayer: boolean): void {
     console.log('👊 createPunchEffect called!', { from: fromPosition, to: toPosition, isFromOtherPlayer });
     
@@ -284,36 +284,36 @@ export class ParticleSystem {
       this.scene.add(this.particleSystem);
     }
     
-    // Punch is short range - limit distance and create explosive impact
+    // Punch is very short range - limit distance for close combat
     const direction = new THREE.Vector3().subVectors(toPosition, fromPosition).normalize();
-    const punchRange = Math.min(3, fromPosition.distanceTo(toPosition)); // Max 3 units range
+    const punchRange = Math.min(1.5, fromPosition.distanceTo(toPosition)); // Max 1.5 units range - much closer
     const actualTarget = fromPosition.clone().add(direction.clone().multiplyScalar(punchRange));
     
-    // Punch colors - yellow/orange for energy
-    const baseHue = isFromOtherPlayer ? 0.08 : 0.12; // Orange/yellow tones
+    // Punch colors - yellow for energy
+    const baseHue = 0.15; // Yellow for both local and others
     
-    // Create a few fast-moving impact particles
-    const particleCount = 15;
+    // Create fewer, closer impact particles
+    const particleCount = 8; // Reduced from 15
     for (let i = 0; i < particleCount; i++) {
-      const spreadAngle = (Math.random() - 0.5) * Math.PI * 0.3; // 30 degree spread
+      const spreadAngle = (Math.random() - 0.5) * Math.PI * 0.2; // Reduced spread - 20 degrees
       const spreadDirection = direction.clone();
       spreadDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), spreadAngle);
       
-      const velocity = spreadDirection.clone().multiplyScalar(8 + Math.random() * 4);
+      const velocity = spreadDirection.clone().multiplyScalar(4 + Math.random() * 2); // Slower particles
       velocity.add(new THREE.Vector3(
-        (Math.random() - 0.5) * 2,
-        Math.random() * 3 + 1,
-        (Math.random() - 0.5) * 2
+        (Math.random() - 0.5) * 1,
+        Math.random() * 1.5 + 0.5,
+        (Math.random() - 0.5) * 1
       ));
 
       const particle: Particle = {
         position: fromPosition.clone(),
         velocity: velocity,
-        life: 0.6,
-        maxLife: 0.6 + Math.random() * 0.4,
-        size: 0.1 + Math.random() * 0.1,
+        life: 0.4,
+        maxLife: 0.4 + Math.random() * 0.2,
+        size: 0.08 + Math.random() * 0.06,
         color: new THREE.Color().setHSL(
-          baseHue + Math.random() * 0.1,
+          baseHue + Math.random() * 0.05,
           0.9 + Math.random() * 0.1,
           0.7 + Math.random() * 0.3
         )
@@ -322,7 +322,7 @@ export class ParticleSystem {
       this.particles.push(particle);
     }
 
-    // Large impact burst at target
+    // Smaller impact burst at target
     this.createPunchImpact(actualTarget, isFromOtherPlayer);
     
     // Remove old particles if we exceed the limit
@@ -332,23 +332,23 @@ export class ParticleSystem {
   }
 
   private createPunchImpact(position: THREE.Vector3, isFromOtherPlayer: boolean): void {
-    const impactCount = 25;
+    const impactCount = 12; // Reduced from 25 for smaller explosion
     for (let i = 0; i < impactCount; i++) {
       const angle = (i / impactCount) * Math.PI * 2;
       const velocity = new THREE.Vector3(
-        Math.cos(angle) * (5 + Math.random() * 3),
-        Math.random() * 4 + 2,
-        Math.sin(angle) * (5 + Math.random() * 3)
+        Math.cos(angle) * (2 + Math.random() * 1.5), // Reduced velocity for smaller explosion
+        Math.random() * 2 + 1,
+        Math.sin(angle) * (2 + Math.random() * 1.5)
       );
 
       const particle: Particle = {
         position: position.clone(),
         velocity: velocity,
-        life: 0.8,
-        maxLife: 0.8,
-        size: 0.15 + Math.random() * 0.1,
+        life: 0.5,
+        maxLife: 0.5,
+        size: 0.08 + Math.random() * 0.06,
         color: new THREE.Color().setHSL(
-          isFromOtherPlayer ? 0.08 : 0.12, // Orange/yellow
+          0.15, // Yellow for both local and others
           0.95,
           0.8 + Math.random() * 0.2
         )
@@ -358,7 +358,7 @@ export class ParticleSystem {
     }
   }
 
-  // Melee Effect - Sword slash with arc motion
+  // Melee Effect - Sword slash with tighter arc motion
   private createMeleeEffect(fromPosition: THREE.Vector3, toPosition: THREE.Vector3, isFromOtherPlayer: boolean): void {
     console.log('⚔️ createMeleeEffect called!', { from: fromPosition, to: toPosition, isFromOtherPlayer });
     
@@ -368,42 +368,42 @@ export class ParticleSystem {
     }
     
     const direction = new THREE.Vector3().subVectors(toPosition, fromPosition).normalize();
-    const distance = Math.min(5, fromPosition.distanceTo(toPosition)); // Max 5 units range
+    const distance = Math.min(2.5, fromPosition.distanceTo(toPosition)); // Reduced range - half of original 5
     
     // Melee colors - silver/white for blade
-    const baseHue = isFromOtherPlayer ? 0.6 : 0.0; // Blue-ish for others, white for local
+    const baseHue = 0.0; // White/silver for both local and others
     
-    // Create slash arc effect
-    const particleCount = 20;
+    // Create tighter slash arc effect
+    const particleCount = 15; // Reduced from 20
     for (let i = 0; i < particleCount; i++) {
       const t = i / (particleCount - 1);
       
-      // Create arc motion - particles follow a curved slash path
-      const arcAngle = (t - 0.5) * Math.PI * 0.4; // 40 degree arc
+      // Create smaller arc motion - particles follow a tighter curved slash path
+      const arcAngle = (t - 0.5) * Math.PI * 0.15; // Reduced from 0.4 to 0.15 for tighter arc
       const arcDirection = direction.clone();
       arcDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), arcAngle);
       
       const arcPosition = fromPosition.clone().add(arcDirection.clone().multiplyScalar(distance * t));
       
-      // Add some height variation for slash effect
-      arcPosition.y += Math.sin(t * Math.PI) * 0.5;
+      // Add smaller height variation for slash effect - closer to character
+      arcPosition.y += Math.sin(t * Math.PI) * 0.2; // Reduced from 0.5 to 0.2
       
-      const velocity = arcDirection.clone().multiplyScalar(6 + Math.random() * 3);
+      const velocity = arcDirection.clone().multiplyScalar(3 + Math.random() * 2); // Reduced velocity
       velocity.add(new THREE.Vector3(
-        (Math.random() - 0.5) * 1,
-        Math.random() * 2,
-        (Math.random() - 0.5) * 1
+        (Math.random() - 0.5) * 0.5,
+        Math.random() * 1,
+        (Math.random() - 0.5) * 0.5
       ));
 
       const particle: Particle = {
         position: arcPosition,
         velocity: velocity,
-        life: 0.8,
-        maxLife: 0.8 + Math.random() * 0.4,
-        size: 0.06 + Math.random() * 0.08,
+        life: 0.6,
+        maxLife: 0.6 + Math.random() * 0.3,
+        size: 0.05 + Math.random() * 0.06,
         color: new THREE.Color().setHSL(
-          baseHue + Math.random() * 0.1,
-          isFromOtherPlayer ? 0.7 : 0.1, // Less saturated for metallic look
+          baseHue + Math.random() * 0.05,
+          0.1, // Low saturation for metallic look
           0.8 + Math.random() * 0.2
         )
       };
@@ -411,7 +411,7 @@ export class ParticleSystem {
       this.particles.push(particle);
     }
 
-    // Sparks at impact point
+    // Smaller sparks at impact point
     this.createMeleeSparks(toPosition, isFromOtherPlayer);
     
     // Remove old particles if we exceed the limit
@@ -421,23 +421,23 @@ export class ParticleSystem {
   }
 
   private createMeleeSparks(position: THREE.Vector3, isFromOtherPlayer: boolean): void {
-    const sparkCount = 15;
+    const sparkCount = 10; // Reduced from 15
     for (let i = 0; i < sparkCount; i++) {
       const velocity = new THREE.Vector3(
-        (Math.random() - 0.5) * 6,
-        Math.random() * 5 + 1,
-        (Math.random() - 0.5) * 6
+        (Math.random() - 0.5) * 3, // Reduced spread
+        Math.random() * 3 + 0.5,
+        (Math.random() - 0.5) * 3
       );
 
       const particle: Particle = {
         position: position.clone(),
         velocity: velocity,
-        life: 1.0,
-        maxLife: 1.0,
-        size: 0.05 + Math.random() * 0.05,
+        life: 0.7,
+        maxLife: 0.7,
+        size: 0.04 + Math.random() * 0.04,
         color: new THREE.Color().setHSL(
-          isFromOtherPlayer ? 0.6 : 0.0, // Blue-ish for others, white for local
-          0.2,
+          0.0, // White/silver for both local and others
+          0.1,
           0.9 + Math.random() * 0.1
         )
       };
@@ -458,8 +458,8 @@ export class ParticleSystem {
     const direction = new THREE.Vector3().subVectors(toPosition, fromPosition).normalize();
     const distance = fromPosition.distanceTo(toPosition);
     
-    // Range colors - brown/green for arrow
-    const baseHue = isFromOtherPlayer ? 0.3 : 0.1; // Green for others, brown for local
+    // Range colors - black for arrow
+    const baseHue = 0.0; // Black/dark for both local and others
     
     // Create arrow trail effect - particles along the trajectory
     const particleCount = Math.min(30, Math.floor(distance * 2) + 10);
@@ -492,9 +492,9 @@ export class ParticleSystem {
         maxLife: 1.0 + Math.random() * 0.5,
         size: 0.04 + Math.random() * 0.06,
         color: new THREE.Color().setHSL(
-          baseHue + Math.random() * 0.1,
-          0.6 + Math.random() * 0.3,
-          0.5 + Math.random() * 0.3
+          baseHue,
+          0.0, // No saturation for black
+          0.1 + Math.random() * 0.2 // Very dark
         )
       };
 
@@ -526,9 +526,9 @@ export class ParticleSystem {
         maxLife: 0.6,
         size: 0.08 + Math.random() * 0.06,
         color: new THREE.Color().setHSL(
-          isFromOtherPlayer ? 0.3 : 0.1, // Green for others, brown for local
-          0.7,
-          0.6 + Math.random() * 0.3
+          0.0, // Black for both local and others
+          0.0, // No saturation for black
+          0.1 + Math.random() * 0.2 // Very dark
         )
       };
 
