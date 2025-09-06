@@ -18,6 +18,7 @@ export class InventoryManager {
   private isVisible = false;
   private inventory: InventoryResponse['data']['inventory'] | null = null;
   private callbacks: InventoryCallbacks | null = null;
+  private loadingOverlay: HTMLDivElement | null = null;
   
   private constructor() {
     this.setupKeyListener();
@@ -150,6 +151,127 @@ export class InventoryManager {
       // Also refresh equipment panel
       const equipmentManager = EquipmentManager.getInstance();
       await equipmentManager.refreshInventory();
+    }
+  }
+
+  /**
+   * Refresh inventory with loading state (keeps menus visible)
+   */
+    /**
+   * Shows loading overlay during refresh
+   */
+  private showLoadingOverlay() {
+    if (!this.inventoryOverlay) return;
+
+    if (!this.loadingOverlay) {
+      this.loadingOverlay = document.createElement('div');
+      this.loadingOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      `;
+      
+      const spinner = document.createElement('div');
+      spinner.style.cssText = `
+        width: 32px;
+        height: 32px;
+        border: 3px solid #333;
+        border-top: 3px solid #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      `;
+      
+      // Add CSS animation for spinner
+      if (!document.getElementById('loading-spinner-style')) {
+        const style = document.createElement('style');
+        style.id = 'loading-spinner-style';
+        style.textContent = `
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      this.loadingOverlay.appendChild(spinner);
+    }
+
+    this.inventoryOverlay.appendChild(this.loadingOverlay);
+  }
+
+  /**
+   * Hides loading overlay
+   */
+  private hideLoadingOverlay() {
+    if (this.loadingOverlay && this.loadingOverlay.parentNode) {
+      this.loadingOverlay.parentNode.removeChild(this.loadingOverlay);
+    }
+  }
+
+  /**
+   * Updates inventory display content without showing/hiding the panel
+   */
+  private updateInventoryDisplayContent() {
+    if (!this.inventoryOverlay || !this.inventory) return;
+
+    // Store the loading overlay temporarily
+    const currentLoadingOverlay = this.loadingOverlay;
+    
+    // Recreate the inventory content
+    this.createInventoryOverlay();
+    
+    // Re-attach the loading overlay if it was showing
+    if (currentLoadingOverlay && currentLoadingOverlay.parentNode) {
+      this.inventoryOverlay.appendChild(currentLoadingOverlay);
+      this.loadingOverlay = currentLoadingOverlay;
+    }
+  }
+
+    async refreshInventoryWithLoading() {
+    const equipmentManager = EquipmentManager.getInstance();
+    
+    // Only proceed if menus are visible
+    if (!this.isVisible || !equipmentManager.getIsVisible()) {
+      // If menus aren't visible, use the normal refresh
+      await this.refreshInventory();
+      return;
+    }
+    
+    // Show loading overlays
+    this.showLoadingOverlay();
+    equipmentManager.showLoadingOverlay();
+    
+    try {
+      // Get server address
+      const serverAddress = this.getServerAddress();
+      if (!serverAddress) {
+        console.error('❌ No server address available for inventory');
+        return;
+      }
+
+      // Fetch fresh inventory data from server
+      const response = await DungeonApi.getInventory(serverAddress);
+      if (response.success) {
+        this.inventory = response.data.inventory;
+        
+        // Update content without hiding/showing panels
+        this.updateInventoryDisplayContent();
+        equipmentManager.updateInventoryData(response.data.inventory);
+        await equipmentManager.updateEquipmentDisplayContent();
+      }
+      
+    } finally {
+      // Hide loading overlays
+      this.hideLoadingOverlay();
+      equipmentManager.hideLoadingOverlay();
     }
   }
 

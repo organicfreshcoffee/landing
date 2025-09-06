@@ -1086,8 +1086,8 @@ export class GameManager {
     try {
       const inventoryManager = InventoryManager.getInstance();
       
-      // Refresh inventory data (which will also refresh equipment panel)
-      await inventoryManager.refreshInventory();
+      // Refresh inventory data with loading overlay to prevent flashing
+      await inventoryManager.refreshInventoryWithLoading();
       
       console.log('✅ Refreshed inventory and equipment displays');
     } catch (error) {

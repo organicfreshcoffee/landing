@@ -32,6 +32,7 @@ const EQUIPMENT_SLOTS: EquipmentSlot[] = [
 export class EquipmentManager {
   private static instance: EquipmentManager;
   private equipmentOverlay: HTMLDivElement | null = null;
+  private loadingOverlay: HTMLDivElement | null = null;
   private isVisible = false;
   private inventory: InventoryResponse['data']['inventory'] | null = null;
   private callbacks: EquipmentCallbacks | null = null;
@@ -583,6 +584,85 @@ export class EquipmentManager {
     if (this.isVisible) {
       this.hideEquipment();
       this.showEquipment();
+    }
+  }
+
+  /**
+   * Check if equipment panel is currently visible
+   */
+  public getIsVisible(): boolean {
+    return this.isVisible;
+  }
+
+  /**
+   * Update inventory data without changing visibility
+   */
+  public updateInventoryData(inventory: InventoryResponse['data']['inventory']): void {
+    this.inventory = inventory;
+  }
+
+  /**
+   * Shows loading overlay during refresh
+   */
+  public showLoadingOverlay() {
+    if (!this.equipmentOverlay) return;
+
+    if (!this.loadingOverlay) {
+      this.loadingOverlay = document.createElement('div');
+      this.loadingOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      `;
+      
+      const spinner = document.createElement('div');
+      spinner.style.cssText = `
+        width: 32px;
+        height: 32px;
+        border: 3px solid #333;
+        border-top: 3px solid #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      `;
+      
+      this.loadingOverlay.appendChild(spinner);
+    }
+
+    this.equipmentOverlay.appendChild(this.loadingOverlay);
+  }
+
+  /**
+   * Hides loading overlay
+   */
+  public hideLoadingOverlay() {
+    if (this.loadingOverlay && this.loadingOverlay.parentNode) {
+      this.loadingOverlay.parentNode.removeChild(this.loadingOverlay);
+    }
+  }
+
+  /**
+   * Updates equipment display content without showing/hiding the panel
+   */
+  public async updateEquipmentDisplayContent() {
+    if (!this.equipmentOverlay || !this.inventory) return;
+
+    // Store the loading overlay temporarily
+    const currentLoadingOverlay = this.loadingOverlay;
+    
+    // Recreate the equipment content
+    this.createEquipmentOverlay();
+    
+    // Re-attach the loading overlay if it was showing
+    if (currentLoadingOverlay && currentLoadingOverlay.parentNode) {
+      this.equipmentOverlay.appendChild(currentLoadingOverlay);
+      this.loadingOverlay = currentLoadingOverlay;
     }
   }
 }
