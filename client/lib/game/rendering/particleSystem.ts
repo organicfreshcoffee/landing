@@ -7,6 +7,7 @@ interface Particle {
   maxLife: number;
   size: number;
   color: THREE.Color;
+  attackType: 'spell' | 'punch' | 'melee' | 'range'; // Add attack type
 }
 
 export class ParticleSystem {
@@ -29,7 +30,7 @@ export class ParticleSystem {
     
     // Create material with transparency and blending for magical effect
     this.particleMaterial = new THREE.PointsMaterial({
-      color: 0x4488ff,
+      color: 0xffffff, // White base color to allow vertex colors to show through
       size: 0.15,
       transparent: true,
       opacity: 0.9,
@@ -198,7 +199,8 @@ export class ParticleSystem {
           baseHue + Math.random() * hueRange, // Different colors for local vs other players
           0.9 + Math.random() * 0.1, // Very high saturation
           0.6 + Math.random() * 0.4   // Bright lightness
-        )
+        ),
+        attackType: 'spell'
       };
 
       this.particles.push(particle);
@@ -238,7 +240,8 @@ export class ParticleSystem {
           isFromOtherPlayer ? 0.05 + Math.random() * 0.1 : 0.7 + Math.random() * 0.1, // Orange for others, blue for local
           0.95,
           0.7 + Math.random() * 0.3
-        )
+        ),
+        attackType: 'spell'
       };
 
       this.particles.push(particle);
@@ -268,7 +271,8 @@ export class ParticleSystem {
           isFromOtherPlayer ? 0.02 + Math.random() * 0.08 : 0.05 + Math.random() * 0.15, // Redder for others, orange for local
           0.95,
           0.7 + Math.random() * 0.3
-        )
+        ),
+        attackType: 'spell'
       };
 
       this.particles.push(particle);
@@ -316,7 +320,8 @@ export class ParticleSystem {
           baseHue + Math.random() * 0.05,
           0.9 + Math.random() * 0.1,
           0.7 + Math.random() * 0.3
-        )
+        ),
+        attackType: 'punch'
       };
 
       this.particles.push(particle);
@@ -351,7 +356,8 @@ export class ParticleSystem {
           0.15, // Yellow for both local and others
           0.95,
           0.8 + Math.random() * 0.2
-        )
+        ),
+        attackType: 'punch'
       };
 
       this.particles.push(particle);
@@ -405,7 +411,8 @@ export class ParticleSystem {
           baseHue + Math.random() * 0.05,
           0.1, // Low saturation for metallic look
           0.8 + Math.random() * 0.2
-        )
+        ),
+        attackType: 'melee'
       };
 
       this.particles.push(particle);
@@ -439,7 +446,8 @@ export class ParticleSystem {
           0.0, // White/silver for both local and others
           0.1,
           0.9 + Math.random() * 0.1
-        )
+        ),
+        attackType: 'melee'
       };
 
       this.particles.push(particle);
@@ -495,7 +503,8 @@ export class ParticleSystem {
           baseHue,
           0.0, // No saturation for black
           0.1 + Math.random() * 0.2 // Very dark
-        )
+        ),
+        attackType: 'range'
       };
 
       this.particles.push(particle);
@@ -529,7 +538,8 @@ export class ParticleSystem {
           0.0, // Black for both local and others
           0.0, // No saturation for black
           0.1 + Math.random() * 0.2 // Very dark
-        )
+        ),
+        attackType: 'range'
       };
 
       this.particles.push(particle);
@@ -622,9 +632,28 @@ export class ParticleSystem {
       const alpha = Math.pow(lifeRatio, 0.5); // Slower fade for more dramatic effect
       const intensity = 0.8 + Math.sin(lifeRatio * Math.PI) * 0.2; // Pulsing effect
       
-      colors[i3] = particle.color.r * alpha * intensity;
-      colors[i3 + 1] = particle.color.g * alpha * intensity;
-      colors[i3 + 2] = particle.color.b * alpha * intensity;
+      // Get base color based on attack type
+      let baseColor: THREE.Color;
+      switch (particle.attackType) {
+        case 'spell':
+          baseColor = new THREE.Color(0x4488ff); // Blue
+          break;
+        case 'punch':
+          baseColor = new THREE.Color(0xffdd00); // Yellow
+          break;
+        case 'melee':
+          baseColor = new THREE.Color(0xcccccc); // Silver
+          break;
+        case 'range':
+          baseColor = new THREE.Color(0x333333); // Dark gray
+          break;
+        default:
+          baseColor = new THREE.Color(0xffffff); // White fallback
+      }
+      
+      colors[i3] = baseColor.r * alpha * intensity;
+      colors[i3 + 1] = baseColor.g * alpha * intensity;
+      colors[i3 + 2] = baseColor.b * alpha * intensity;
 
       // Size with life-based scaling and pulsing
       const sizeMultiplier = 0.5 + Math.sin(lifeRatio * Math.PI * 2) * 0.3; // Pulsing size
