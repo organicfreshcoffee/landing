@@ -51,7 +51,10 @@ export class MovementController {
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
     private sendPlayerAction?: (action: string, data?: any, target?: string) => void,
     private onDebugDeath?: () => void,
-    private onOpenGraphViewer?: () => void
+    private onOpenGraphViewer?: () => void,
+    private onPunchCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private onMeleeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private onRangeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -85,6 +88,31 @@ export class MovementController {
         if (this.onOpenGraphViewer) {
           this.onOpenGraphViewer();
         }
+        return;
+      }
+
+      // Handle attack types with number keys
+      if (event.code === 'Digit1') {
+        event.preventDefault();
+        this.castSpell(); // Spell attack
+        return;
+      }
+
+      if (event.code === 'Digit2') {
+        event.preventDefault();
+        this.castPunch(); // Punch attack
+        return;
+      }
+
+      if (event.code === 'Digit3') {
+        event.preventDefault();
+        this.castMelee(); // Melee attack
+        return;
+      }
+
+      if (event.code === 'Digit4') {
+        event.preventDefault();
+        this.castRange(); // Range attack
         return;
       }
 
@@ -650,6 +678,186 @@ export class MovementController {
 
     // Call the spell cast callback for local visual effect
     this.onSpellCast(spellStartPosition, targetPosition);
+  }
+
+  private castPunch(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onPunchCast) {
+      console.log('❌ Punch attack failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onPunchCast
+      });
+      return;
+    }
+
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start punch from player's fist level
+    const punchStartPosition = playerWorldPosition.clone();
+    punchStartPosition.y += 1.0; // Lower than spell, fist level
+
+    // Use the player's movement rotation for facing direction
+    const playerFacingDirection = this.localPlayerRotation.y;
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the punch start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.5);
+    punchStartPosition.add(forwardOffset);
+
+    // Calculate target position - shorter range for punch
+    const punchRange = 3;
+    const targetPosition = punchStartPosition.clone().add(direction.clone().multiplyScalar(punchRange));
+
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      const punchActionData = {
+        fromPosition: {
+          x: punchStartPosition.x,
+          y: punchStartPosition.y,
+          z: punchStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: punchRange,
+        timestamp: Date.now()
+      };
+
+      this.sendPlayerAction('punch_attack', punchActionData);
+    }
+
+    // Call the punch cast callback for local visual effect
+    this.onPunchCast(punchStartPosition, targetPosition);
+  }
+
+  private castMelee(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onMeleeCast) {
+      console.log('❌ Melee attack failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onMeleeCast
+      });
+      return;
+    }
+
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start melee from player's sword level
+    const meleeStartPosition = playerWorldPosition.clone();
+    meleeStartPosition.y += 1.3; // Shoulder height for sword
+
+    // Use the player's movement rotation for facing direction
+    const playerFacingDirection = this.localPlayerRotation.y;
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the melee start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.6);
+    meleeStartPosition.add(forwardOffset);
+
+    // Calculate target position - medium range for melee
+    const meleeRange = 5;
+    const targetPosition = meleeStartPosition.clone().add(direction.clone().multiplyScalar(meleeRange));
+
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      const meleeActionData = {
+        fromPosition: {
+          x: meleeStartPosition.x,
+          y: meleeStartPosition.y,
+          z: meleeStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: meleeRange,
+        timestamp: Date.now()
+      };
+
+      this.sendPlayerAction('melee_attack', meleeActionData);
+    }
+
+    // Call the melee cast callback for local visual effect
+    this.onMeleeCast(meleeStartPosition, targetPosition);
+  }
+
+  private castRange(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onRangeCast) {
+      console.log('❌ Range attack failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onRangeCast
+      });
+      return;
+    }
+
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start range from player's bow level
+    const rangeStartPosition = playerWorldPosition.clone();
+    rangeStartPosition.y += 1.4; // Eye level for aiming
+
+    // Use the player's movement rotation for facing direction
+    const playerFacingDirection = this.localPlayerRotation.y;
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the range start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.7);
+    rangeStartPosition.add(forwardOffset);
+
+    // Calculate target position - long range for ranged attack
+    const rangeRange = 15;
+    const targetPosition = rangeStartPosition.clone().add(direction.clone().multiplyScalar(rangeRange));
+
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      const rangeActionData = {
+        fromPosition: {
+          x: rangeStartPosition.x,
+          y: rangeStartPosition.y,
+          z: rangeStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: rangeRange,
+        timestamp: Date.now()
+      };
+
+      this.sendPlayerAction('range_attack', rangeActionData);
+    }
+
+    // Call the range cast callback for local visual effect
+    this.onRangeCast(rangeStartPosition, targetPosition);
   }
 
   cleanup(): void {
