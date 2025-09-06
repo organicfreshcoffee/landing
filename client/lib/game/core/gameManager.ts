@@ -80,7 +80,11 @@ export class GameManager {
       (fromPos, toPos) => this.particleSystem.castSpell(fromPos, toPos),
       (action, data, target) => this.sendPlayerAction(action, data, target),
       () => this.handleDebugDeath(),
-      this.onOpenGraphViewer
+      this.onOpenGraphViewer,
+      (fromPos, toPos) => this.particleSystem.castPunch(fromPos, toPos),
+      (fromPos, toPos) => this.particleSystem.castMelee(fromPos, toPos),
+      (fromPos, toPos) => this.particleSystem.castRange(fromPos, toPos),
+      () => this.getServerAddress()
     );
 
     // Add beforeunload handler to ensure cleanup on browser close/kill
@@ -89,6 +93,10 @@ export class GameManager {
     }
 
     this.initializeGame();
+  }
+
+  private getServerAddress(): string | null {
+    return this.sceneManager.getServerAddress();
   }
 
   private async initializeGame(): Promise<void> {
@@ -680,6 +688,15 @@ export class GameManager {
       case 'spell_cast':
         this.handleSpellCastAction(playerId, data);
         break;
+      case 'punch_attack':
+        this.handlePunchAttackAction(playerId, data);
+        break;
+      case 'melee_attack':
+        this.handleMeleeAttackAction(playerId, data);
+        break;
+      case 'range_attack':
+        this.handleRangeAttackAction(playerId, data);
+        break;
       default:
                 break;
     }
@@ -721,6 +738,117 @@ export class GameManager {
 
     // Render the spell effect using our particle system
     this.particleSystem.castSpellFromNetwork(fromPosition, toPosition);
+  }
+
+  private handlePunchAttackAction(playerId: string, punchData: any): void {
+    console.log('👊 handlePunchAttackAction called with:', {
+      playerId,
+      punchData,
+      hasFromPosition: !!punchData?.fromPosition,
+      hasToPosition: !!punchData?.toPosition,
+      currentPlayerId: this.currentPlayerId,
+      isLocalPlayer: playerId === this.currentPlayerId
+    });
+
+    if (!punchData || !punchData.fromPosition || !punchData.toPosition) {
+      console.warn('⚠️ Invalid punch attack data:', punchData);
+      return;
+    }
+
+    // Convert positions from the message data to THREE.Vector3
+    const fromPosition = new THREE.Vector3(
+      punchData.fromPosition.x,
+      punchData.fromPosition.y,
+      punchData.fromPosition.z
+    );
+    
+    const toPosition = new THREE.Vector3(
+      punchData.toPosition.x,
+      punchData.toPosition.y,
+      punchData.toPosition.z
+    );
+
+    console.log('👊 About to call particleSystem.castPunchFromNetwork with:', {
+      fromPosition: fromPosition.toArray(),
+      toPosition: toPosition.toArray()
+    });
+
+    // Render the punch effect using our particle system
+    this.particleSystem.castPunchFromNetwork(fromPosition, toPosition);
+  }
+
+  private handleMeleeAttackAction(playerId: string, meleeData: any): void {
+    console.log('⚔️ handleMeleeAttackAction called with:', {
+      playerId,
+      meleeData,
+      hasFromPosition: !!meleeData?.fromPosition,
+      hasToPosition: !!meleeData?.toPosition,
+      currentPlayerId: this.currentPlayerId,
+      isLocalPlayer: playerId === this.currentPlayerId
+    });
+
+    if (!meleeData || !meleeData.fromPosition || !meleeData.toPosition) {
+      console.warn('⚠️ Invalid melee attack data:', meleeData);
+      return;
+    }
+
+    // Convert positions from the message data to THREE.Vector3
+    const fromPosition = new THREE.Vector3(
+      meleeData.fromPosition.x,
+      meleeData.fromPosition.y,
+      meleeData.fromPosition.z
+    );
+    
+    const toPosition = new THREE.Vector3(
+      meleeData.toPosition.x,
+      meleeData.toPosition.y,
+      meleeData.toPosition.z
+    );
+
+    console.log('⚔️ About to call particleSystem.castMeleeFromNetwork with:', {
+      fromPosition: fromPosition.toArray(),
+      toPosition: toPosition.toArray()
+    });
+
+    // Render the melee effect using our particle system
+    this.particleSystem.castMeleeFromNetwork(fromPosition, toPosition);
+  }
+
+  private handleRangeAttackAction(playerId: string, rangeData: any): void {
+    console.log('🏹 handleRangeAttackAction called with:', {
+      playerId,
+      rangeData,
+      hasFromPosition: !!rangeData?.fromPosition,
+      hasToPosition: !!rangeData?.toPosition,
+      currentPlayerId: this.currentPlayerId,
+      isLocalPlayer: playerId === this.currentPlayerId
+    });
+
+    if (!rangeData || !rangeData.fromPosition || !rangeData.toPosition) {
+      console.warn('⚠️ Invalid range attack data:', rangeData);
+      return;
+    }
+
+    // Convert positions from the message data to THREE.Vector3
+    const fromPosition = new THREE.Vector3(
+      rangeData.fromPosition.x,
+      rangeData.fromPosition.y,
+      rangeData.fromPosition.z
+    );
+    
+    const toPosition = new THREE.Vector3(
+      rangeData.toPosition.x,
+      rangeData.toPosition.y,
+      rangeData.toPosition.z
+    );
+
+    console.log('🏹 About to call particleSystem.castRangeFromNetwork with:', {
+      fromPosition: fromPosition.toArray(),
+      toPosition: toPosition.toArray()
+    });
+
+    // Render the range effect using our particle system
+    this.particleSystem.castRangeFromNetwork(fromPosition, toPosition);
   }
 
   private handleHealthUpdate(healthData: any): void {
@@ -1038,6 +1166,10 @@ export class GameManager {
         // Show success toast
         const toastManager = ToastManager.getInstance();
         toastManager.showSuccess('Item equipped successfully!');
+        
+        // Notify movement controller that weapon equipment changed
+        this.movementController.onWeaponEquipmentChanged();
+        
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
       } else {
@@ -1069,6 +1201,10 @@ export class GameManager {
         // Show success toast
         const toastManager = ToastManager.getInstance();
         toastManager.showSuccess('Item unequipped successfully!');
+        
+        // Notify movement controller that weapon equipment changed
+        this.movementController.onWeaponEquipmentChanged();
+        
         // Refresh both inventory and equipment displays
         await this.refreshInventoryDisplays();
       } else {

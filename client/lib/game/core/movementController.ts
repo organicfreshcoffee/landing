@@ -39,6 +39,12 @@ export class MovementController {
   private collisionSystem: CollisionSystem;
   private gameHUD: GameHUD;
 
+  // Weapon tracking for attack types
+  private currentEquippedWeapon: string | null = null;
+  private weaponType: 'magic' | 'melee' | 'range' | null = null;
+  private lastInventoryCheck = 0;
+  private inventoryCheckCooldown = 5000; // Check inventory every 5 seconds if needed
+
   constructor(
     private localPlayerRef: { current: THREE.Object3D | null },
     private cameraRef: { current: THREE.PerspectiveCamera | null },
@@ -51,7 +57,11 @@ export class MovementController {
     private onSpellCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
     private sendPlayerAction?: (action: string, data?: any, target?: string) => void,
     private onDebugDeath?: () => void,
-    private onOpenGraphViewer?: () => void
+    private onOpenGraphViewer?: () => void,
+    private onPunchCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private onMeleeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private onRangeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
+    private getServerAddress?: () => string | null
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -133,10 +143,10 @@ export class MovementController {
       
       if (!isPointerLocked || !this.isConnected()) return;
       
-      // Only handle left clicks for spell casting
+      // Only handle left clicks for attacks
       if (event.button === 0) {
         event.preventDefault(); // Prevent other handlers
-                this.castSpell();
+        this.performAttackBasedOnEquippedWeapon();
       }
     };
 
@@ -650,6 +660,282 @@ export class MovementController {
 
     // Call the spell cast callback for local visual effect
     this.onSpellCast(spellStartPosition, targetPosition);
+  }
+
+  private castPunch(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onPunchCast) {
+      console.log('❌ Punch attack failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onPunchCast
+      });
+      return;
+    }
+
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start punch from player's fist level
+    const punchStartPosition = playerWorldPosition.clone();
+    punchStartPosition.y += 1.0; // Lower than spell, fist level
+
+    // Use the player's movement rotation for facing direction
+    const playerFacingDirection = this.localPlayerRotation.y;
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the punch start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.5);
+    punchStartPosition.add(forwardOffset);
+
+    // Calculate target position - shorter range for punch
+    const punchRange = 1.5; // Reduced from 3 to match particle effect
+    const targetPosition = punchStartPosition.clone().add(direction.clone().multiplyScalar(punchRange));
+
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      const punchActionData = {
+        fromPosition: {
+          x: punchStartPosition.x,
+          y: punchStartPosition.y,
+          z: punchStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: punchRange,
+        timestamp: Date.now()
+      };
+
+      this.sendPlayerAction('punch_attack', punchActionData);
+    }
+
+    // Call the punch cast callback for local visual effect
+    this.onPunchCast(punchStartPosition, targetPosition);
+  }
+
+  private castMelee(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onMeleeCast) {
+      console.log('❌ Melee attack failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onMeleeCast
+      });
+      return;
+    }
+
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start melee from player's sword level
+    const meleeStartPosition = playerWorldPosition.clone();
+    meleeStartPosition.y += 1.3; // Shoulder height for sword
+
+    // Use the player's movement rotation for facing direction
+    const playerFacingDirection = this.localPlayerRotation.y;
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the melee start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.6);
+    meleeStartPosition.add(forwardOffset);
+
+    // Calculate target position - medium range for melee
+    const meleeRange = 2.5; // Reduced from 5 to match particle effect
+    const targetPosition = meleeStartPosition.clone().add(direction.clone().multiplyScalar(meleeRange));
+
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      const meleeActionData = {
+        fromPosition: {
+          x: meleeStartPosition.x,
+          y: meleeStartPosition.y,
+          z: meleeStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: meleeRange,
+        timestamp: Date.now()
+      };
+
+      this.sendPlayerAction('melee_attack', meleeActionData);
+    }
+
+    // Call the melee cast callback for local visual effect
+    this.onMeleeCast(meleeStartPosition, targetPosition);
+  }
+
+  private castRange(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current || !this.onRangeCast) {
+      console.log('❌ Range attack failed - missing requirements:', {
+        hasPlayer: !!this.localPlayerRef.current,
+        hasCamera: !!this.cameraRef.current,
+        hasCallback: !!this.onRangeCast
+      });
+      return;
+    }
+
+    // Get the actual player model's world position
+    const playerWorldPosition = new THREE.Vector3();
+    this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
+    
+    // Start range from player's bow level
+    const rangeStartPosition = playerWorldPosition.clone();
+    rangeStartPosition.y += 1.4; // Eye level for aiming
+
+    // Use the player's movement rotation for facing direction
+    const playerFacingDirection = this.localPlayerRotation.y;
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), playerFacingDirection);
+    
+    // Move the range start position forward from the player model
+    const forwardOffset = direction.clone().multiplyScalar(0.7);
+    rangeStartPosition.add(forwardOffset);
+
+    // Calculate target position - long range for ranged attack
+    const rangeRange = 15;
+    const targetPosition = rangeStartPosition.clone().add(direction.clone().multiplyScalar(rangeRange));
+
+    // Send player action to other clients
+    if (this.sendPlayerAction) {
+      const rangeActionData = {
+        fromPosition: {
+          x: rangeStartPosition.x,
+          y: rangeStartPosition.y,
+          z: rangeStartPosition.z
+        },
+        toPosition: {
+          x: targetPosition.x,
+          y: targetPosition.y,
+          z: targetPosition.z
+        },
+        direction: {
+          x: direction.x,
+          y: direction.y,
+          z: direction.z
+        },
+        range: rangeRange,
+        timestamp: Date.now()
+      };
+
+      this.sendPlayerAction('range_attack', rangeActionData);
+    }
+
+    // Call the range cast callback for local visual effect
+    this.onRangeCast(rangeStartPosition, targetPosition);
+  }
+
+  private async performAttackBasedOnEquippedWeapon(): Promise<void> {
+    // Check if we need to update weapon info
+    await this.updateWeaponInfoIfNeeded();
+    
+    // Perform attack based on weapon type
+    switch (this.weaponType) {
+      case 'magic':
+        this.castSpell();
+        break;
+      case 'melee':
+        this.castMelee();
+        break;
+      case 'range':
+        this.castRange();
+        break;
+      default:
+        // No weapon equipped, use punch
+        this.castPunch();
+        break;
+    }
+  }
+
+  private async updateWeaponInfoIfNeeded(): Promise<void> {
+    const now = Date.now();
+    
+    // Only check inventory if enough time has passed since last check
+    if (now - this.lastInventoryCheck < this.inventoryCheckCooldown) {
+      return;
+    }
+    
+    try {
+      // Get server address from constructor parameter
+      const serverAddress = this.getServerAddress?.();
+      if (!serverAddress) {
+        console.warn('⚠️ No server address available for weapon check');
+        return;
+      }
+      
+      // Import DungeonApi dynamically to avoid circular dependencies
+      const { DungeonApi } = await import('../network/dungeonApi');
+      const response = await DungeonApi.getInventory(serverAddress);
+      
+      if (response.success) {
+        const equippedWeapons = response.data.inventory.items.filter(item => 
+          item.equipped && item.weaponStats
+        );
+        
+        if (equippedWeapons.length > 0) {
+          const weapon = equippedWeapons[0]; // Take the first equipped weapon
+          this.currentEquippedWeapon = weapon.id;
+          this.weaponType = this.determineWeaponType(weapon);
+          
+          console.log('🗡️ Updated weapon info:', {
+            weaponId: this.currentEquippedWeapon,
+            weaponType: this.weaponType,
+            weaponName: weapon.name,
+            weaponCategory: weapon.category
+          });
+        } else {
+          // No weapon equipped
+          this.currentEquippedWeapon = null;
+          this.weaponType = null;
+          console.log('👊 No weapon equipped, will use punch attack');
+        }
+        
+        this.lastInventoryCheck = now;
+      }
+    } catch (error) {
+      console.error('❌ Error checking weapon info:', error);
+    }
+  }
+
+  private determineWeaponType(weapon: any): 'magic' | 'melee' | 'range' {
+    const category = weapon.category.toLowerCase();
+    const weaponType = weapon.weaponStats?.type?.toLowerCase() || '';
+    
+    // Determine weapon type based on category and weapon stats
+    if (category.includes('staff') || category.includes('wand') || 
+        category.includes('magic') || weaponType.includes('magic')) {
+      return 'magic';
+    } else if (category.includes('bow') || category.includes('crossbow') || 
+               category.includes('arrow') || weaponType.includes('ranged') ||
+               weaponType.includes('bow')) {
+      return 'range';
+    } else {
+      // Default to melee for swords, axes, maces, etc.
+      return 'melee';
+    }
+  }
+
+  // Method to force weapon update when items are equipped/unequipped
+  public onWeaponEquipmentChanged(): void {
+    this.lastInventoryCheck = 0; // Force check on next attack
+    console.log('⚔️ Weapon equipment changed, will update on next attack');
   }
 
   cleanup(): void {
