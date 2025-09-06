@@ -249,7 +249,7 @@ export class EquipmentManager {
       border-radius: 12px;
       padding: 20px;
       max-width: 400px;
-      max-height: 80vh;
+      height: 70vh;
       overflow-y: auto;
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
