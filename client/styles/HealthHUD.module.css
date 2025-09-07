@@ -9,13 +9,17 @@
   border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
-.healthLabel {
+.healthLabel,
+.staminaLabel,
+.manaLabel {
   margin-bottom: 0.5rem;
   font-weight: bold;
   text-align: center;
 }
 
-.healthBarContainer {
+.healthBarContainer,
+.staminaBarContainer,
+.manaBarContainer {
   position: relative;
   height: 20px;
   border-radius: 10px;
@@ -23,7 +27,9 @@
   margin-bottom: 0.5rem;
 }
 
-.healthBarBackground {
+.healthBarBackground,
+.staminaBarBackground,
+.manaBarBackground {
   position: absolute;
   top: 0;
   left: 0;
@@ -33,7 +39,9 @@
   border-radius: 10px;
 }
 
-.healthBar {
+.healthBar,
+.staminaBar,
+.manaBar {
   position: absolute;
   top: 0;
   left: 0;
@@ -41,6 +49,14 @@
   border-radius: 10px;
   transition: width 0.3s ease, background-color 0.3s ease;
   z-index: 1;
+}
+
+.staminaBar {
+  background-color: #a855f7; /* purple */
+}
+
+.manaBar {
+  background-color: #3b82f6; /* blue */
 }
 
 .deathIndicator {

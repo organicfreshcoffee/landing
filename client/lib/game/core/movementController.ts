@@ -61,7 +61,10 @@ export class MovementController {
     private onPunchCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
     private onMeleeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
     private onRangeCast?: (fromPosition: THREE.Vector3, toPosition: THREE.Vector3) => void,
-    private getServerAddress?: () => string | null
+    private getServerAddress?: () => string | null,
+    private onStaminaConsume?: (amount: number) => boolean,
+    private onManaConsume?: (amount: number) => boolean,
+    private onShowToast?: (message: string, type?: 'error' | 'warning' | 'info') => void
   ) {
     this.setupKeyboardListeners();
     this.setupMouseListeners();
@@ -589,6 +592,22 @@ export class MovementController {
       return;
     }
 
+    // Check if player has enough mana
+    const manaCost = 15;
+    console.log('🔍 Spell cast - checking mana:', {
+      manaCost,
+      hasOnManaConsume: !!this.onManaConsume,
+      hasOnShowToast: !!this.onShowToast
+    });
+    
+    if (this.onManaConsume && !this.onManaConsume(manaCost)) {
+      console.log('⚠️ Spell cast blocked - insufficient mana');
+      this.onShowToast?.('Out of mana', 'warning');
+      return;
+    }
+    
+    console.log('✅ Spell cast - mana consumed successfully');
+
     
     // Get the actual player model's world position
     const playerWorldPosition = new THREE.Vector3();
@@ -672,6 +691,22 @@ export class MovementController {
       return;
     }
 
+    // Check if player has enough stamina
+    const staminaCost = 5;
+    console.log('🔍 Punch attack - checking stamina:', {
+      staminaCost,
+      hasOnStaminaConsume: !!this.onStaminaConsume,
+      hasOnShowToast: !!this.onShowToast
+    });
+    
+    if (this.onStaminaConsume && !this.onStaminaConsume(staminaCost)) {
+      console.log('⚠️ Punch attack blocked - insufficient stamina');
+      this.onShowToast?.('Out of stamina', 'warning');
+      return;
+    }
+    
+    console.log('✅ Punch attack - stamina consumed successfully');
+
     // Get the actual player model's world position
     const playerWorldPosition = new THREE.Vector3();
     this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
@@ -732,6 +767,13 @@ export class MovementController {
       return;
     }
 
+    // Check if player has enough stamina
+    const staminaCost = 10;
+    if (this.onStaminaConsume && !this.onStaminaConsume(staminaCost)) {
+      this.onShowToast?.('Out of stamina', 'warning');
+      return;
+    }
+
     // Get the actual player model's world position
     const playerWorldPosition = new THREE.Vector3();
     this.localPlayerRef.current.getWorldPosition(playerWorldPosition);
@@ -789,6 +831,13 @@ export class MovementController {
         hasCamera: !!this.cameraRef.current,
         hasCallback: !!this.onRangeCast
       });
+      return;
+    }
+
+    // Check if player has enough stamina
+    const staminaCost = 8;
+    if (this.onStaminaConsume && !this.onStaminaConsume(staminaCost)) {
+      this.onShowToast?.('Out of stamina', 'warning');
       return;
     }
 

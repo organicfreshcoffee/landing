@@ -10,6 +10,7 @@ import HealthHUD from '../components/HealthHUD';
 import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
 import { VisitedNode } from '../lib/game/types/api';
+import { ToastManager } from '../lib/game/ui/toastManager';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -30,6 +31,27 @@ export default function Game() {
     maxHealth: 100,
     isAlive: true
   });
+  const [playerStamina, setPlayerStamina] = useState<{ stamina: number; maxStamina: number }>({
+    stamina: 100,
+    maxStamina: 100
+  });
+  const [playerMana, setPlayerMana] = useState<{ mana: number; maxMana: number }>({
+    mana: 100,
+    maxMana: 100
+  });
+
+  // Use refs to store current values for consumption functions
+  const staminaRef = useRef(playerStamina);
+  const manaRef = useRef(playerMana);
+
+  // Update refs when state changes
+  useEffect(() => {
+    staminaRef.current = playerStamina;
+  }, [playerStamina]);
+
+  useEffect(() => {
+    manaRef.current = playerMana;
+  }, [playerMana]);
   const [isRespawning, setIsRespawning] = useState<boolean>(false);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -85,7 +107,10 @@ export default function Game() {
         setCurrentFloor, // Pass current floor state setter
         setPlayerHealth, // Pass health update callback
         () => setIsRespawning(true), // Pass death callback
-        handleOpenGraphViewer // Pass graph viewer callback
+        handleOpenGraphViewer, // Pass graph viewer callback
+        consumeStamina, // Pass stamina consumption function
+        consumeMana, // Pass mana consumption function
+        showToast // Pass toast notification function
       );
       gameManagerRef.current = gameManager;
       
@@ -224,6 +249,90 @@ export default function Game() {
     });
   }, [connectionState, selectedCharacter, gameState]);
 
+  // Stamina regeneration
+  useEffect(() => {
+    const staminaRegenInterval = setInterval(() => {
+      setPlayerStamina(prev => ({
+        ...prev,
+        stamina: Math.min(prev.maxStamina, prev.stamina + 2) // Regen 2 stamina per second
+      }));
+    }, 1000);
+
+    return () => clearInterval(staminaRegenInterval);
+  }, []);
+
+  // Mana regeneration
+  useEffect(() => {
+    const manaRegenInterval = setInterval(() => {
+      setPlayerMana(prev => ({
+        ...prev,
+        mana: Math.min(prev.maxMana, prev.mana + 1) // Regen 1 mana per second
+      }));
+    }, 1000);
+
+    return () => clearInterval(manaRegenInterval);
+  }, []);
+
+  // Stamina consumption function
+  const consumeStamina = (amount: number): boolean => {
+    const currentStamina = staminaRef.current.stamina;
+    console.log('🔍 Stamina consumption check:', {
+      currentStamina,
+      requiredAmount: amount,
+      hasEnough: currentStamina >= amount
+    });
+    
+    if (currentStamina >= amount) {
+      setPlayerStamina(prev => ({
+        ...prev,
+        stamina: Math.max(0, prev.stamina - amount)
+      }));
+      console.log('✅ Stamina consumed successfully');
+      return true;
+    }
+    console.log('❌ Insufficient stamina');
+    return false;
+  };
+
+  // Mana consumption function
+  const consumeMana = (amount: number): boolean => {
+    const currentMana = manaRef.current.mana;
+    console.log('🔍 Mana consumption check:', {
+      currentMana,
+      requiredAmount: amount,
+      hasEnough: currentMana >= amount
+    });
+    
+    if (currentMana >= amount) {
+      setPlayerMana(prev => ({
+        ...prev,
+        mana: Math.max(0, prev.mana - amount)
+      }));
+      console.log('✅ Mana consumed successfully');
+      return true;
+    }
+    console.log('❌ Insufficient mana');
+    return false;
+  };
+
+  // Toast notification function using existing ToastManager
+  const showToast = (message: string, type?: 'error' | 'warning' | 'info') => {
+    const toastManager = ToastManager.getInstance();
+    
+    switch (type) {
+      case 'error':
+        toastManager.showError(message);
+        break;
+      case 'warning':
+        toastManager.showWarning(message);
+        break;
+      case 'info':
+      default:
+        toastManager.showInfo(message);
+        break;
+    }
+  };
+
   // Handle character selection
   const handleCharacterSelected = (character: CharacterData) => {
         
@@ -240,6 +349,17 @@ export default function Game() {
         health: 100,
         maxHealth: 100,
         isAlive: true
+      });
+      
+      // Reset stamina and mana on respawn
+      setPlayerStamina({
+        stamina: 100,
+        maxStamina: 100
+      });
+      
+      setPlayerMana({
+        mana: 100,
+        maxMana: 100
       });
     }
     
@@ -375,6 +495,10 @@ export default function Game() {
             health={playerHealth.health} 
             maxHealth={playerHealth.maxHealth} 
             isAlive={playerHealth.isAlive}
+            stamina={playerStamina.stamina}
+            maxStamina={playerStamina.maxStamina}
+            mana={playerMana.mana}
+            maxMana={playerMana.maxMana}
           />
         </div>
         

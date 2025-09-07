@@ -5,10 +5,24 @@ interface HealthHUDProps {
   health: number;
   maxHealth: number;
   isAlive: boolean;
+  stamina: number;
+  maxStamina: number;
+  mana: number;
+  maxMana: number;
 }
 
-export default function HealthHUD({ health, maxHealth, isAlive }: HealthHUDProps) {
+export default function HealthHUD({ 
+  health, 
+  maxHealth, 
+  isAlive, 
+  stamina, 
+  maxStamina, 
+  mana, 
+  maxMana 
+}: HealthHUDProps) {
   const healthPercentage = maxHealth > 0 ? (health / maxHealth) * 100 : 0;
+  const staminaPercentage = maxStamina > 0 ? (stamina / maxStamina) * 100 : 0;
+  const manaPercentage = maxMana > 0 ? (mana / maxMana) * 100 : 0;
   
   // Determine color based on health percentage
   let healthColor = '#4ade80'; // green
@@ -34,6 +48,35 @@ export default function HealthHUD({ health, maxHealth, isAlive }: HealthHUDProps
         />
         <div className={styles.healthBarBackground} />
       </div>
+
+      <div className={styles.staminaLabel}>
+        Stamina: {stamina}/{maxStamina}
+      </div>
+      <div className={styles.staminaBarContainer}>
+        <div 
+          className={styles.staminaBar}
+          style={{
+            width: `${Math.max(0, staminaPercentage)}%`,
+            opacity: isAlive ? 1 : 0.5
+          }}
+        />
+        <div className={styles.staminaBarBackground} />
+      </div>
+
+      <div className={styles.manaLabel}>
+        Mana: {mana}/{maxMana}
+      </div>
+      <div className={styles.manaBarContainer}>
+        <div 
+          className={styles.manaBar}
+          style={{
+            width: `${Math.max(0, manaPercentage)}%`,
+            opacity: isAlive ? 1 : 0.5
+          }}
+        />
+        <div className={styles.manaBarBackground} />
+      </div>
+
       {!isAlive && (
         <div className={styles.deathIndicator}>
           💀 DEAD

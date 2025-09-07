@@ -62,7 +62,10 @@ export class GameManager {
     private onFloorChange?: (floorName: string) => void,
     private onHealthUpdate?: (health: { health: number; maxHealth: number; isAlive: boolean }) => void,
     private onPlayerDeath?: () => void,
-    private onOpenGraphViewer?: () => void
+    private onOpenGraphViewer?: () => void,
+    private onStaminaConsume?: (amount: number) => boolean,
+    private onManaConsume?: (amount: number) => boolean,
+    private onShowToast?: (message: string, type?: 'error' | 'warning' | 'info') => void
   ) {
     this.currentPlayerId = user?.uid || 'local';
     this.sceneManager = new SceneManager(canvas);
@@ -84,7 +87,10 @@ export class GameManager {
       (fromPos, toPos) => this.particleSystem.castPunch(fromPos, toPos),
       (fromPos, toPos) => this.particleSystem.castMelee(fromPos, toPos),
       (fromPos, toPos) => this.particleSystem.castRange(fromPos, toPos),
-      () => this.getServerAddress()
+      () => this.getServerAddress(),
+      this.onStaminaConsume,
+      this.onManaConsume,
+      this.onShowToast
     );
 
     // Add beforeunload handler to ensure cleanup on browser close/kill
