@@ -594,14 +594,6 @@ export class EnemyManager {
 
     // If maxHealth is not provided, assume a default of 100
     const effectiveMaxHealth = maxHealth !== undefined ? maxHealth : 100;
-    
-    console.log('🔧 Using health values:', {
-      enemyId,
-      health: newHealth,
-      maxHealth: effectiveMaxHealth,
-      isHealthBelowMax: newHealth < effectiveMaxHealth
-    });
-
     const currentHealthData = this.enemyHealthData.get(enemyId);
     const enemy = this.enemyReferences.get(enemyId);
     
@@ -614,24 +606,11 @@ export class EnemyManager {
       return;
     }
 
-    console.log('✅ Enemy and mesh found, proceeding with health update:', {
-      enemyId,
-      enemyMeshUuid: enemy.mesh.uuid,
-      currentHealthData: currentHealthData || 'none'
-    });
-
     // Check for damage (new health < old health)
-    if (currentHealthData && newHealth < currentHealthData.lastHealth && particleSystem) {
-      console.log('🩸 Enemy took damage:', {
-        enemyId,
-        oldHealth: currentHealthData.lastHealth,
-        newHealth,
-        damage: currentHealthData.lastHealth - newHealth
-      });
-      
-      // Create damage particle effect at enemy position
+    if (currentHealthData && newHealth < currentHealthData.lastHealth && particleSystem) {      
+      // Create damage particle effect at enemy position (lowered Y offset)
       const enemyPosition = enemy.mesh.position.clone();
-      enemyPosition.y += 2; // Offset upward from enemy
+      enemyPosition.y += 0.5; // Reduced from 2 to 0.5 to be more inline with enemy
       particleSystem.createDamageEffect(enemyPosition);
     }
 
@@ -646,19 +625,10 @@ export class EnemyManager {
     enemy.health = newHealth;
     enemy.maxHealth = effectiveMaxHealth;
 
-    console.log('💚 Health data updated, checking if health bar needed:', {
-      enemyId,
-      health: newHealth,
-      maxHealth: effectiveMaxHealth,
-      needsHealthBar: newHealth < effectiveMaxHealth
-    });
-
-    // Create or update health bar if health is below max (TESTING: always show)
-    if (newHealth < effectiveMaxHealth || true) { // TESTING: always show health bars
-      console.log('🔨 Creating/updating health bar for enemy (TESTING MODE):', enemyId);
+    // Create or update health bar only if health is below max (removed testing mode)
+    if (newHealth < effectiveMaxHealth) {
       this.createOrUpdateHealthBar(enemyId, newHealth, effectiveMaxHealth, enemy.mesh);
     } else {
-      console.log('❌ Removing health bar - enemy at full health:', enemyId);
       // Remove health bar if at full health
       this.removeHealthBar(enemyId);
     }

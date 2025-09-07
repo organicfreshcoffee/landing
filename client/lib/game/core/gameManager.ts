@@ -611,16 +611,21 @@ export class GameManager {
       console.log('🔄 Updating existing enemy health:', {
         enemyId: enemyData.id,
         health: enemyData.health,
-        maxHealth: enemyData.maxHealth
+        maxHealth: enemyData.maxHealth,
+        hasHealthData: enemyData.health !== undefined
       });
 
-      // Update health data and check for damage
-      EnemyManager.updateEnemyHealth(
-        enemyData.id, 
-        enemyData.health, 
-        enemyData.maxHealth, 
-        this.particleSystem
-      );
+      // Only update health data if health information is provided
+      if (enemyData.health !== undefined) {
+        EnemyManager.updateEnemyHealth(
+          enemyData.id, 
+          enemyData.health, 
+          enemyData.maxHealth, 
+          this.particleSystem
+        );
+      } else {
+        console.log('⏭️ Skipping health update - no health data provided for enemy:', enemyData.id);
+      }
 
       // Update position and animation
       try {
@@ -685,16 +690,21 @@ export class GameManager {
         console.log('🆕 Initializing health for new enemy:', {
           enemyId: enemyData.id,
           health: enemyData.health,
-          maxHealth: enemyData.maxHealth
+          maxHealth: enemyData.maxHealth,
+          hasHealthData: enemyData.health !== undefined
         });
 
-        // Initialize health data for new enemy
-        EnemyManager.updateEnemyHealth(
-          enemyData.id, 
-          enemyData.health, 
-          enemyData.maxHealth, 
-          this.particleSystem
-        );
+        // Initialize health data for new enemy only if health data is provided
+        if (enemyData.health !== undefined) {
+          EnemyManager.updateEnemyHealth(
+            enemyData.id, 
+            enemyData.health, 
+            enemyData.maxHealth, 
+            this.particleSystem
+          );
+        } else {
+          console.log('⏭️ Skipping initial health setup - no health data provided for new enemy:', enemyData.id);
+        }
       } catch (error) {
         console.error('❌ Error creating new enemy:', enemyData.id, error);
         // Clean up any partial state
