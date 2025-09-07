@@ -9,23 +9,208 @@ export class EnemyManager {
     lastFrameTime: number;
     isMoving: boolean;
     direction: 'front' | 'back' | 'left' | 'right';
+    totalFrames: number;
+    animationType: string;
   }>();
 
   // Sprite mesh references for texture updates
   private static spriteMeshReferences = new Map<string, THREE.Mesh>();
 
-  // Pre-loaded textures for sprite animation
-  private static spriteTextures = new Map<string, {
-    frame1: THREE.Texture;
-    frame2: THREE.Texture;
-    frame3: THREE.Texture;
-  }>();
+  // Pre-loaded textures for sprite animation (now supports variable frame counts)
+  private static spriteTextures = new Map<string, THREE.Texture[]>();
 
   // Store current sprite direction for each enemy
   private static spriteDirections = new Map<string, 'front' | 'back' | 'left' | 'right'>();
 
   // Store enemy references for accessing enemy data
   private static enemyReferences = new Map<string, Enemy>();
+
+  // Enemy type configurations
+  private static readonly PIXEL_ADVENTURE_2_ENEMIES = new Set([
+    'AngryPig', 'Bat', 'Bee', 'BlueBird', 'Bunny', 'Chameleon',
+    'Chicken', 'Duck', 'FatBird', 'Ghost', 'Mushroom', 'Plant',
+    'Radish', 'Rino', 'Rocks', 'Skull', 'Slime', 'Snail', 'Trunk', 'Turtle'
+  ]);
+
+  // Animation priority mapping for Pixel Adventure 2 enemies
+  private static readonly PIXEL_ADVENTURE_2_ANIMATIONS = {
+    'AngryPig': ['Run', 'Idle'],
+    'Bat': ['Flying', 'Idle'],
+    'Bee': ['Run', 'Idle'],
+    'BlueBird': ['Flying', 'Idle'],
+    'Bunny': ['Run', 'Idle'],
+    'Chameleon': ['Run', 'Idle'],
+    'Chicken': ['Run', 'Idle'],
+    'Duck': ['Run', 'Idle'],
+    'FatBird': ['Flying', 'Idle'],
+    'Ghost': ['Idle'],
+    'Mushroom': ['Run', 'Idle'],
+    'Plant': ['Idle'],
+    'Radish': ['Run', 'Idle'],
+    'Rino': ['Run', 'Idle'],
+    'Rocks': ['Rock1_Run', 'Rock1_Idle'],
+    'Skull': ['Flying', 'Idle'],
+    'Slime': ['Idle-Run'],
+    'Snail': ['Walk', 'Idle'],
+    'Trunk': ['Run', 'Idle'],
+    'Turtle': ['Run', 'Idle']
+  };
+
+  private static readonly STENDHAL_ANIMALS = new Set([
+    'bull', 'cow', 'lion', 'monkey', 'ram', 'tiger'
+  ]);
+
+  /**
+   * Get the appropriate animation type for a Pixel Adventure 2 enemy
+   */
+  static getPixelAdventure2Animation(enemyTypeName: string): string {
+    const animations = this.PIXEL_ADVENTURE_2_ANIMATIONS[enemyTypeName as keyof typeof this.PIXEL_ADVENTURE_2_ANIMATIONS];
+    return animations?.[0] || 'Idle';
+  }
+
+  /**
+   * Load textures for Pixel Adventure 2 enemies
+   */
+  static loadPixelAdventure2Textures(enemyId: string, enemyTypeName: string, animationType: string): number {
+    const textureLoader = new THREE.TextureLoader();
+    const basePath = `/assets/sprites/Pixel Adventure 2/parsed/${enemyTypeName}/${animationType}`;
+    
+    // Pre-determine frame count based on known enemy types and animations
+    // This is more reliable than trying to load and catch errors
+    const frameCount = this.getPixelAdventure2FrameCount(enemyTypeName, animationType);
+    
+    console.log(`🖼️ Loading ${frameCount} frames for ${enemyTypeName}/${animationType}`);
+    
+    const textures: THREE.Texture[] = [];
+    
+    for (let i = 1; i <= frameCount; i++) {
+      const framePath = `${basePath}/${i}.png`;
+      
+      const texture = textureLoader.load(
+        framePath,
+        (loadedTexture) => {
+          console.log(`✅ Loaded Pixel Adventure 2 frame ${i}: ${framePath} for ${enemyId}`);
+          loadedTexture.magFilter = THREE.NearestFilter;
+          loadedTexture.minFilter = THREE.NearestFilter;
+          loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
+          loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
+        },
+        undefined,
+        (error) => {
+          console.error(`❌ Failed to load Pixel Adventure 2 frame ${i}: ${framePath} for ${enemyId}`, error);
+        }
+      );
+      
+      textures.push(texture);
+    }
+    
+    // Store textures
+    this.spriteTextures.set(enemyId, textures);
+    
+    return frameCount;
+  }
+
+  /**
+   * Get the frame count for a specific Pixel Adventure 2 enemy animation
+   */
+  static getPixelAdventure2FrameCount(enemyTypeName: string, animationType: string): number {
+    // Frame counts determined by examining the actual sprite sheets
+    const frameCounts: { [key: string]: { [key: string]: number } } = {
+      'AngryPig': { 'Run': 12, 'Idle': 11, 'Walk': 16, 'Hit 1': 5, 'Hit 2': 5 },
+      'Bat': { 'Flying': 7, 'Idle': 4, 'Hit': 5, 'Ceiling In': 8, 'Ceiling Out': 8 },
+      'Bee': { 'Run': 8, 'Idle': 4, 'Hit': 5 },
+      'BlueBird': { 'Flying': 9, 'Idle': 4 },
+      'Bunny': { 'Run': 12, 'Idle': 4, 'Hit': 5, 'Jump': 8, 'Fall': 3 },
+      'Chameleon': { 'Run': 8, 'Idle': 10, 'Hit': 5 },
+      'Chicken': { 'Run': 14, 'Idle': 13, 'Hit': 5 },
+      'Duck': { 'Run': 10, 'Idle': 10, 'Hit': 5, 'Jump': 8, 'Fall': 3 },
+      'FatBird': { 'Flying': 8, 'Idle': 4, 'Hit': 5, 'Ground': 9, 'Fall': 4 },
+      'Ghost': { 'Idle': 10, 'Hit': 5, 'Appear': 7, 'Desappear': 7 },
+      'Mushroom': { 'Run': 16, 'Idle': 14, 'Hit': 5 },
+      'Plant': { 'Idle': 11, 'Hit': 5, 'Attack': 8 },
+      'Radish': { 'Run': 12, 'Idle': 10, 'Hit': 4 },
+      'Rino': { 'Run': 6, 'Idle': 11, 'Hit': 5 },
+      'Rocks': { 'Rock1_Run': 14, 'Rock1_Idle': 14, 'Rock2_Run': 14, 'Rock2_Idle': 14, 'Rock3_Run': 14, 'Rock3_Idle': 14 },
+      'Skull': { 'Flying': 8, 'Idle': 4, 'Hit': 5 },
+      'Slime': { 'Idle-Run': 10, 'Hit': 5 },
+      'Snail': { 'Walk': 10, 'Idle': 9, 'Hit': 5, 'Shell Idle': 5, 'Shell Top Hit': 4, 'Shell Wall Hit': 4 },
+      'Trunk': { 'Run': 18, 'Idle': 13, 'Hit': 5 },
+      'Turtle': { 'Run': 14, 'Idle': 14, 'Hit': 8 }
+    };
+
+    const enemyFrames = frameCounts[enemyTypeName];
+    if (enemyFrames && enemyFrames[animationType]) {
+      return enemyFrames[animationType];
+    }
+
+    // Default fallback
+    console.warn(`⚠️ Unknown frame count for ${enemyTypeName}/${animationType}, using default of 4`);
+    return 4;
+  }
+
+  /**
+   * Load textures for Stendhal animals (legacy system)
+   */
+  static loadStendhalAnimalTextures(enemyId: string, enemyTypeName: string, direction: string): number {
+    const textureLoader = new THREE.TextureLoader();
+    const frame1Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_1.png`;
+    const frame2Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_2.png`;
+    const frame3Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_3.png`;
+    
+    console.log('🖼️ Loading stendhal animal textures:', {
+      id: enemyId,
+      frame1Path,
+      frame2Path,
+      frame3Path
+    });
+    
+    const frame1Texture = textureLoader.load(frame1Path, 
+      (texture) => {
+        console.log(`✅ Loaded stendhal frame 1: ${frame1Path} for ${enemyId}`);
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+      },
+      undefined,
+      (error) => {
+        console.error(`❌ Failed to load stendhal frame 1: ${frame1Path} for ${enemyId}`, error);
+      }
+    );
+    
+    const frame2Texture = textureLoader.load(frame2Path, 
+      (texture) => {
+        console.log(`✅ Loaded stendhal frame 2: ${frame2Path} for ${enemyId}`);
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+      },
+      undefined,
+      (error) => {
+        console.error(`❌ Failed to load stendhal frame 2: ${frame2Path} for ${enemyId}`, error);
+      }
+    );
+
+    const frame3Texture = textureLoader.load(frame3Path, 
+      (texture) => {
+        console.log(`✅ Loaded stendhal frame 3: ${frame3Path} for ${enemyId}`);
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+      },
+      undefined,
+      (error) => {
+        console.error(`❌ Failed to load stendhal frame 3: ${frame3Path} for ${enemyId}`, error);
+      }
+    );
+    
+    // Store textures as array
+    this.spriteTextures.set(enemyId, [frame1Texture, frame2Texture, frame3Texture]);
+    
+    return 3; // Stendhal animals always have 3 frames
+  }
 
   /**
    * Create sprite-based enemy model using enemy type data
@@ -52,75 +237,31 @@ export class EnemyManager {
     // Create the sprite geometry and material
     const spriteGeometry = new THREE.PlaneGeometry(3.2, 4.8);
     
-    // Determine initial direction and frame
-    const direction = 'front';
-    const frame = 1;
+    // Determine if this is a Pixel Adventure 2 enemy or stendhal animal
+    const isPixelAdventure2 = this.PIXEL_ADVENTURE_2_ENEMIES.has(enemyTypeName);
     
-    // Pre-load all frame textures for animation
-    const textureLoader = new THREE.TextureLoader();
-    const frame1Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_1.png`;
-    const frame2Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_2.png`;
-    const frame3Path = `/assets/sprites/stendhal_animals/frames/${enemyTypeName}_${direction}_3.png`;
+    // Get the appropriate animation type and load textures
+    let animationType: string;
+    let totalFrames: number;
     
-    console.log('🖼️ Loading enemy textures:', {
-      id: enemy.id,
-      frame1Path,
-      frame2Path,
-      frame3Path
-    });
+    if (isPixelAdventure2) {
+      animationType = this.getPixelAdventure2Animation(enemyTypeName);
+      totalFrames = this.loadPixelAdventure2Textures(enemy.id, enemyTypeName, animationType);
+    } else {
+      // Use old system for stendhal animals
+      animationType = 'front';
+      totalFrames = this.loadStendhalAnimalTextures(enemy.id, enemyTypeName, 'front');
+    }
     
-    const frame1Texture = textureLoader.load(frame1Path, 
-      (texture) => {
-        console.log(`✅ Loaded enemy frame 1: ${frame1Path} for ${enemy.id}`);
-        console.log('📏 Texture dimensions:', { width: texture.image?.width, height: texture.image?.height });
-      },
-      undefined,
-      (error) => {
-        console.error(`❌ Failed to load enemy frame 1: ${frame1Path} for ${enemy.id}`, error);
-      }
-    );
+    // Get the first texture for initial display
+    const textures = this.spriteTextures.get(enemy.id);
+    if (!textures || textures.length === 0) {
+      throw new Error(`Failed to load textures for enemy ${enemyTypeName}`);
+    }
     
-    const frame2Texture = textureLoader.load(frame2Path, 
-      (texture) => {
-        console.log(`✅ Loaded enemy frame 2: ${frame2Path} for ${enemy.id}`);
-      },
-      undefined,
-      (error) => {
-        console.error(`❌ Failed to load enemy frame 2: ${frame2Path} for ${enemy.id}`, error);
-      }
-    );
-
-    const frame3Texture = textureLoader.load(frame3Path, 
-      (texture) => {
-        console.log(`✅ Loaded enemy frame 3: ${frame3Path} for ${enemy.id}`);
-      },
-      undefined,
-      (error) => {
-        console.error(`❌ Failed to load enemy frame 3: ${frame3Path} for ${enemy.id}`, error);
-      }
-    );
-    
-    // Configure textures
-    [frame1Texture, frame2Texture, frame3Texture].forEach(texture => {
-      texture.magFilter = THREE.NearestFilter; // Pixelated look for retro sprites
-      texture.minFilter = THREE.NearestFilter;
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-    });
-    
-    // Store pre-loaded textures
-    this.spriteTextures.set(enemy.id, {
-      frame1: frame1Texture,
-      frame2: frame2Texture,
-      frame3: frame3Texture
-    });
-
-    // Store initial direction
-    this.spriteDirections.set(enemy.id, direction);
-    
-    // Create material with transparency using frame 1 initially
+    // Create material with transparency using first frame
     const spriteMaterial = new THREE.MeshBasicMaterial({
-      map: frame1Texture,
+      map: textures[0],
       transparent: true,
       alphaTest: 0.1, // Remove pixels with alpha below 0.1
       side: THREE.DoubleSide // Show sprite from both sides
@@ -131,7 +272,9 @@ export class EnemyManager {
       hasTexture: !!spriteMaterial.map,
       transparent: spriteMaterial.transparent,
       alphaTest: spriteMaterial.alphaTest,
-      side: spriteMaterial.side
+      side: spriteMaterial.side,
+      totalFrames: totalFrames,
+      animationType: animationType
     });
     
     // Create the sprite mesh
@@ -187,7 +330,9 @@ export class EnemyManager {
       currentFrame: 1,
       lastFrameTime: Date.now(),
       isMoving: enemy.isMoving,
-      direction: direction
+      direction: isPixelAdventure2 ? 'front' : 'front',
+      totalFrames: totalFrames,
+      animationType: animationType
     });
 
     return {
@@ -261,15 +406,15 @@ export class EnemyManager {
     
     // Animate if moving (cycle through frames every 200ms)
     if (animState.isMoving && deltaTime > 200) {
-      animState.currentFrame = (animState.currentFrame % 3) + 1; // Cycle 1, 2, 3, 1, 2, 3...
+      animState.currentFrame = (animState.currentFrame % animState.totalFrames) + 1; // Cycle through all available frames
       animState.lastFrameTime = now;
       
-      // Update texture based on current frame and direction
-      this.updateEnemySpriteTexture(enemyId, animState.currentFrame, animState.direction);
+      // Update texture based on current frame
+      this.updateEnemySpriteTexture(enemyId, animState.currentFrame);
     } else if (!animState.isMoving) {
       // Reset to frame 1 when not moving
       animState.currentFrame = 1;
-      this.updateEnemySpriteTexture(enemyId, 1, animState.direction);
+      this.updateEnemySpriteTexture(enemyId, 1);
     }
   }
 
@@ -282,10 +427,17 @@ export class EnemyManager {
     enemyRotationY: number,
     localPlayerPosition: THREE.Vector3
   ): void {
+    const enemy = this.enemyReferences.get(enemyId);
     const animState = this.spriteAnimations.get(enemyId);
-    if (!animState) return;
+    if (!animState || !enemy) return;
 
-    // Calculate sprite direction similar to player system
+    // For Pixel Adventure 2 enemies, direction doesn't matter since they don't have directional sprites
+    // Only stendhal animals use directional sprites
+    if (this.PIXEL_ADVENTURE_2_ENEMIES.has(enemy.enemyTypeName)) {
+      return; // No direction changes needed for Pixel Adventure 2 enemies
+    }
+
+    // Calculate sprite direction for stendhal animals
     const newDirection = this.calculateEnemySpriteDirection(enemyPosition, enemyRotationY, localPlayerPosition);
     
     if (newDirection !== animState.direction) {
@@ -299,11 +451,11 @@ export class EnemyManager {
       animState.direction = newDirection;
       this.spriteDirections.set(enemyId, newDirection);
       
-      // Reload textures for new direction
-      this.loadEnemySpriteTextures(enemyId, newDirection);
+      // Reload textures for new direction (stendhal animals only)
+      this.loadStendhalAnimalTextures(enemyId, enemy.enemyTypeName, newDirection);
       
       // Update current texture immediately
-      this.updateEnemySpriteTexture(enemyId, animState.currentFrame, newDirection);
+      this.updateEnemySpriteTexture(enemyId, animState.currentFrame);
     }
   }
 
@@ -353,52 +505,26 @@ export class EnemyManager {
     const enemy = this.getEnemyFromSpriteId(enemyId);
     if (!enemy) return;
 
-    const textureLoader = new THREE.TextureLoader();
-    const frame1Path = `/assets/sprites/stendhal_animals/frames/${enemy.enemyTypeName}_${direction}_1.png`;
-    const frame2Path = `/assets/sprites/stendhal_animals/frames/${enemy.enemyTypeName}_${direction}_2.png`;
-    const frame3Path = `/assets/sprites/stendhal_animals/frames/${enemy.enemyTypeName}_${direction}_3.png`;
-    
-    const frame1Texture = textureLoader.load(frame1Path);
-    const frame2Texture = textureLoader.load(frame2Path);
-    const frame3Texture = textureLoader.load(frame3Path);
-    
-    // Configure textures
-    [frame1Texture, frame2Texture, frame3Texture].forEach(texture => {
-      texture.magFilter = THREE.NearestFilter;
-      texture.minFilter = THREE.NearestFilter;
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-    });
-    
-    // Update stored textures
-    this.spriteTextures.set(enemyId, {
-      frame1: frame1Texture,
-      frame2: frame2Texture,
-      frame3: frame3Texture
-    });
+    // Only reload for stendhal animals
+    if (this.STENDHAL_ANIMALS.has(enemy.enemyTypeName)) {
+      this.loadStendhalAnimalTextures(enemyId, enemy.enemyTypeName, direction);
+    }
   }
 
   /**
-   * Update enemy sprite texture based on frame and direction
+   * Update enemy sprite texture based on frame
    */
-  static updateEnemySpriteTexture(enemyId: string, frame: number, direction: 'front' | 'back' | 'left' | 'right'): void {
+  static updateEnemySpriteTexture(enemyId: string, frame: number): void {
     const spriteMesh = this.spriteMeshReferences.get(enemyId);
     const textures = this.spriteTextures.get(enemyId);
     
-    if (!spriteMesh || !textures) return;
+    if (!spriteMesh || !textures || textures.length === 0) return;
 
     const material = spriteMesh.material as THREE.MeshBasicMaterial;
-    switch (frame) {
-      case 1:
-        material.map = textures.frame1;
-        break;
-      case 2:
-        material.map = textures.frame2;
-        break;
-      case 3:
-        material.map = textures.frame3;
-        break;
-    }
+    
+    // Use 0-based indexing for the texture array
+    const frameIndex = Math.max(0, Math.min(frame - 1, textures.length - 1));
+    material.map = textures[frameIndex];
     material.needsUpdate = true;
   }
 
@@ -430,7 +556,7 @@ export class EnemyManager {
     });
   }
 
-  /**
+    /**
    * Remove enemy and clean up resources
    */
   static removeEnemy(enemyId: string): void {
@@ -443,9 +569,7 @@ export class EnemyManager {
     // Clean up textures
     const textures = this.spriteTextures.get(enemyId);
     if (textures) {
-      textures.frame1.dispose();
-      textures.frame2.dispose();
-      textures.frame3.dispose();
+      textures.forEach(texture => texture.dispose());
       this.spriteTextures.delete(enemyId);
     }
     
@@ -454,6 +578,8 @@ export class EnemyManager {
     
     // Clean up enemy reference
     this.enemyReferences.delete(enemyId);
+    
+    console.log('🗑️ Cleaned up enemy resources:', enemyId);
   }
 
   /**
