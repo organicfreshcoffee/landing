@@ -273,6 +273,32 @@ export default function Game() {
     return () => clearInterval(manaRegenInterval);
   }, []);
 
+  // Health regeneration
+  useEffect(() => {
+    const healthRegenInterval = setInterval(() => {
+      setPlayerHealth(prev => {
+        // Only regenerate if player is alive and health is below max
+        if (!prev.isAlive || prev.health >= prev.maxHealth) {
+          return prev;
+        }
+
+        const newHealth = Math.min(prev.maxHealth, prev.health + 1); // Regen 1 health per second
+        
+        // Send health update to server when health changes
+        if (newHealth !== prev.health && gameManagerRef.current) {
+          gameManagerRef.current.sendHealthUpdate(newHealth, prev.maxHealth);
+        }
+
+        return {
+          ...prev,
+          health: newHealth
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(healthRegenInterval);
+  }, []);
+
   // Stamina consumption function
   const consumeStamina = (amount: number): boolean => {
     const currentStamina = staminaRef.current.stamina;

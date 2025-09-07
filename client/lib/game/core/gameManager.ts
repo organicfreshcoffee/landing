@@ -771,6 +771,25 @@ export class GameManager {
         this.webSocketManager.send(JSON.stringify(actionMessage));
   }
 
+  public sendHealthUpdate(health: number, maxHealth: number): void {
+    if (!this.webSocketManager.isConnected) {
+      console.warn('⚠️ Cannot send health update - not connected to server');
+      return;
+    }
+
+    const healthMessage = {
+      type: 'health_update',
+      data: {
+        playerId: this.currentPlayerId,
+        health: health,
+        maxHealth: maxHealth
+      }
+    };
+
+    console.log('💖 Sending health update to server:', healthMessage);
+    this.webSocketManager.send(JSON.stringify(healthMessage));
+  }
+
   private handlePlayerAction(actionData: any): void {
         
     // Handle potential nested structure from server
