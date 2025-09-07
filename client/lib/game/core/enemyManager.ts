@@ -607,7 +607,14 @@ export class EnemyManager {
     }
 
     // Check for damage (new health < old health)
-    if (currentHealthData && newHealth < currentHealthData.lastHealth && particleSystem) {      
+    if (currentHealthData && newHealth < currentHealthData.health && particleSystem) {
+      console.log('🩸 Enemy took damage:', {
+        enemyId,
+        oldHealth: currentHealthData.health,
+        newHealth,
+        damage: currentHealthData.health - newHealth
+      });
+      
       // Create damage particle effect at enemy position (lowered Y offset)
       const enemyPosition = enemy.mesh.position.clone();
       enemyPosition.y += 0.5; // Reduced from 2 to 0.5 to be more inline with enemy
@@ -625,10 +632,19 @@ export class EnemyManager {
     enemy.health = newHealth;
     enemy.maxHealth = effectiveMaxHealth;
 
-    // Create or update health bar only if health is below max (removed testing mode)
+    console.log('� Health data updated, checking if health bar needed:', {
+      enemyId,
+      health: newHealth,
+      maxHealth: effectiveMaxHealth,
+      needsHealthBar: newHealth < effectiveMaxHealth
+    });
+
+    // Create or update health bar only if health is below max
     if (newHealth < effectiveMaxHealth) {
+      console.log('🔨 Creating/updating health bar for enemy:', enemyId);
       this.createOrUpdateHealthBar(enemyId, newHealth, effectiveMaxHealth, enemy.mesh);
     } else {
+      console.log('❌ Removing health bar - enemy at full health:', enemyId);
       // Remove health bar if at full health
       this.removeHealthBar(enemyId);
     }
@@ -692,6 +708,9 @@ export class EnemyManager {
       // Set render order to ensure health bars render on top
       container.renderOrder = 999;
       
+      // Set initial rotation to face forward (prevents initial flipping)
+      container.rotation.set(0, 0, 0);
+      
       // Add to enemy mesh
       enemyMesh.add(container);
       
@@ -733,20 +752,14 @@ export class EnemyManager {
     // Adjust position to keep bar left-aligned
     healthBarData.foreground.position.x = (maxWidth - currentWidth) / -2;
     
-    // Change color based on health percentage
+    // Keep health bar color always green (simplified)
     const healthMaterial = healthBarData.foreground.material as THREE.MeshBasicMaterial;
-    if (healthPercentage > 0.6) {
-      healthMaterial.color.setHex(0x00cc00); // Green
-    } else if (healthPercentage > 0.3) {
-      healthMaterial.color.setHex(0xcccc00); // Yellow
-    } else {
-      healthMaterial.color.setHex(0xcc0000); // Red
-    }
+    healthMaterial.color.setHex(0x00cc00); // Always green
     
-    console.log('🎨 Health bar color updated:', {
+    console.log('📊 Health bar updated:', {
       enemyId,
       healthPercentage,
-      color: healthMaterial.color.getHexString()
+      width: currentWidth
     });
   }
 
@@ -798,11 +811,23 @@ export class EnemyManager {
         const worldPosition = new THREE.Vector3();
         healthBarData.container.getWorldPosition(worldPosition);
         
-        // Calculate direction from health bar to camera
-        const direction = new THREE.Vector3().subVectors(cameraPosition, worldPosition).normalize();
+        // Calculate direction from health bar to camera (only Y rotation)
+        const direction = new THREE.Vector3().subVectors(cameraPosition, worldPosition);
+        direction.y = 0; // Ignore Y difference to keep health bar level
+        direction.normalize();
         
-        // Make health bar face the camera
-        healthBarData.container.lookAt(cameraPosition);
+        // Calculate Y rotation angle to face camera
+        const targetAngle = Math.atan2(direction.x, direction.z);
+        const currentAngle = healthBarData.container.rotation.y;
+        
+        // Only update rotation if the angle difference is significant (reduces jitter)
+        const angleDifference = Math.abs(targetAngle - currentAngle);
+        const normalizedDifference = Math.min(angleDifference, 2 * Math.PI - angleDifference);
+        
+        if (normalizedDifference > 0.1) { // 0.1 radians threshold (~5.7 degrees)
+          // Apply only Y rotation to prevent flipping
+          healthBarData.container.rotation.set(0, targetAngle, 0);
+        }
       }
     });
   }
