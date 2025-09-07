@@ -31,6 +31,8 @@ export interface Player {
   isMoving?: boolean;
   movementDirection?: 'forward' | 'backward' | 'none';
   character?: CharacterData;
+  health?: number;
+  maxHealth?: number;
 }
 
 export interface PlayerUpdate {
@@ -40,6 +42,8 @@ export interface PlayerUpdate {
   isMoving?: boolean;
   movementDirection?: 'forward' | 'backward' | 'none';
   character?: CharacterData;
+  health?: number;
+  maxHealth?: number;
 }
 
 export interface PlayerAnimationData {

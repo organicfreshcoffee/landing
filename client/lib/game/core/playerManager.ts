@@ -24,6 +24,23 @@ export class PlayerManager {
   // Store current sprite direction for each player
   private static spriteDirections = new Map<string, 'fr' | 'bk' | 'lf' | 'rt'>();
 
+  // Health tracking for players (maps player ID to health info)
+  private static playerHealthData = new Map<string, { 
+    health: number; 
+    maxHealth: number; 
+    lastHealth: number; // Track previous health for damage detection
+  }>();
+
+  // Health bar references (maps player ID to health bar mesh)
+  private static healthBarReferences = new Map<string, {
+    container: THREE.Group;
+    background: THREE.Mesh;
+    foreground: THREE.Mesh;
+  }>();
+
+  // Store player references for accessing player data
+  private static playerReferences = new Map<string, Player>();
+
   static generatePlayerColor(playerId: string): string {
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
@@ -118,6 +135,9 @@ export class PlayerManager {
     playerGroup.userData.isLocalPlayer = isLocalPlayer;
     playerGroup.userData.spriteMesh = spriteMesh;
     playerGroup.userData.character = character;
+    
+    // Store player reference for later access
+    this.playerReferences.set(player.id, player);
     
     // Initialize sprite animation state
     this.spriteAnimations.set(player.id, {
@@ -476,6 +496,11 @@ export class PlayerManager {
       // Clean up other references
       this.spriteMeshReferences.delete(playerId);
       this.spriteAnimations.delete(playerId);
+      this.playerReferences.delete(playerId);
+      
+      // Clean up health data
+      this.removeHealthBar(playerId);
+      this.playerHealthData.delete(playerId);
     }
 
     if (mesh instanceof THREE.Mesh) {
@@ -494,5 +519,272 @@ export class PlayerManager {
         }
       });
     }
+  }
+
+  /**
+   * Update player health data and create/update health bar if needed
+   */
+  static updatePlayerHealth(
+    playerId: string, 
+    newHealth: number | undefined, 
+    maxHealth: number | undefined,
+    particleSystem?: any
+  ): void {
+    console.log('🔍 PlayerManager.updatePlayerHealth called:', {
+      playerId,
+      newHealth,
+      maxHealth,
+      hasParticleSystem: !!particleSystem
+    });
+
+    // Skip if no health data provided
+    if (newHealth === undefined || newHealth === null) {
+      console.log('⚠️ Skipping health update - no valid health value provided for player:', playerId);
+      return;
+    }
+
+    // If maxHealth is not provided, assume a default of 100
+    const effectiveMaxHealth = maxHealth !== undefined ? maxHealth : 100;
+    const currentHealthData = this.playerHealthData.get(playerId);
+    const player = this.playerReferences.get(playerId);
+    
+    if (!player || !player.mesh) {
+      console.log('⚠️ Skipping health update - player or mesh not found:', {
+        hasPlayer: !!player,
+        hasMesh: !!player?.mesh,
+        playerId
+      });
+      return;
+    }
+
+    // Check for damage (new health < old health)
+    if (currentHealthData && newHealth < currentHealthData.health && particleSystem) {
+      console.log('🩸 Player took damage:', {
+        playerId,
+        oldHealth: currentHealthData.health,
+        newHealth,
+        damage: currentHealthData.health - newHealth
+      });
+      
+      // Create damage particle effect at player position
+      const playerPosition = player.mesh.position.clone();
+      playerPosition.y += 1.0; // Position above player
+      particleSystem.createDamageEffect(playerPosition);
+    }
+
+    // Update health data
+    this.playerHealthData.set(playerId, {
+      health: newHealth,
+      maxHealth: effectiveMaxHealth,
+      lastHealth: currentHealthData ? currentHealthData.health : newHealth
+    });
+
+    // Update player object
+    player.health = newHealth;
+    player.maxHealth = effectiveMaxHealth;
+
+    console.log('💖 Health data updated, checking if health bar needed:', {
+      playerId,
+      health: newHealth,
+      maxHealth: effectiveMaxHealth,
+      needsHealthBar: newHealth < effectiveMaxHealth
+    });
+
+    // Create or update health bar only if health is below max
+    if (newHealth < effectiveMaxHealth) {
+      console.log('🔨 Creating/updating health bar for player:', playerId);
+      this.createOrUpdateHealthBar(playerId, newHealth, effectiveMaxHealth, player.mesh);
+    } else {
+      console.log('❌ Removing health bar - player at full health:', playerId);
+      // Remove health bar if at full health
+      this.removeHealthBar(playerId);
+    }
+  }
+
+  /**
+   * Create or update health bar for a player
+   */
+  static createOrUpdateHealthBar(
+    playerId: string, 
+    health: number, 
+    maxHealth: number, 
+    playerMesh: THREE.Object3D
+  ): void {
+    console.log('🔨 createOrUpdateHealthBar called for player:', {
+      playerId,
+      health,
+      maxHealth,
+      healthPercentage: health / maxHealth
+    });
+
+    let healthBarData = this.healthBarReferences.get(playerId);
+
+    if (!healthBarData) {
+      console.log('✨ Creating new health bar for player:', playerId);
+      
+      // Create new health bar
+      const container = new THREE.Group();
+      
+      // Background (red bar)
+      const backgroundGeometry = new THREE.PlaneGeometry(3, 0.3);
+      const backgroundMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x660000, 
+        transparent: true, 
+        opacity: 0.9,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      const background = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+      
+      // Foreground (green bar)
+      const foregroundGeometry = new THREE.PlaneGeometry(3, 0.25);
+      const foregroundMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00cc00, 
+        transparent: true, 
+        opacity: 1.0,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      const foreground = new THREE.Mesh(foregroundGeometry, foregroundMaterial);
+      
+      // Position foreground slightly in front of background
+      foreground.position.z = 0.001;
+      
+      container.add(background);
+      container.add(foreground);
+      
+      // Position health bar above player
+      container.position.y = 3.0;
+      
+      // Set render order to ensure health bars render on top
+      container.renderOrder = 999;
+      background.renderOrder = 999;
+      foreground.renderOrder = 999;
+      
+      // Prevent frustum culling
+      container.frustumCulled = false;
+      background.frustumCulled = false;
+      foreground.frustumCulled = false;
+      
+      // Set a very large bounding sphere to prevent culling
+      container.userData.isHealthBar = true;
+      const largeBoundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1000);
+      background.geometry.boundingSphere = largeBoundingSphere;
+      foreground.geometry.boundingSphere = largeBoundingSphere;
+      
+      // Also prevent culling on the player mesh itself
+      playerMesh.frustumCulled = false;
+      
+      // Set initial rotation to face forward
+      container.rotation.set(0, 0, 0);
+      
+      // Add to player mesh
+      playerMesh.add(container);
+      
+      healthBarData = {
+        container,
+        background,
+        foreground
+      };
+      
+      this.healthBarReferences.set(playerId, healthBarData);
+      
+      console.log('✅ Created health bar for player:', {
+        playerId,
+        containerUuid: container.uuid,
+        parentUuid: playerMesh.uuid,
+        position: container.position,
+        childrenCount: playerMesh.children.length
+      });
+    } else {
+      console.log('🔄 Updating existing health bar for player:', playerId);
+    }
+
+    // Update health bar width based on health percentage
+    const healthPercentage = Math.max(0, Math.min(1, health / maxHealth));
+    
+    // Use scaling and keep centered to avoid frustum culling issues
+    healthBarData.foreground.scale.x = healthPercentage;
+    healthBarData.foreground.position.x = 0;
+    
+    // Keep health bar color always green
+    const healthMaterial = healthBarData.foreground.material as THREE.MeshBasicMaterial;
+    healthMaterial.color.setHex(0x00cc00);
+    
+    console.log('📊 Player health bar updated:', {
+      playerId,
+      healthPercentage
+    });
+  }
+
+  /**
+   * Remove health bar for a player
+   */
+  static removeHealthBar(playerId: string): void {
+    const healthBarData = this.healthBarReferences.get(playerId);
+    
+    if (healthBarData) {
+      // Remove from player mesh
+      if (healthBarData.container.parent) {
+        healthBarData.container.parent.remove(healthBarData.container);
+      }
+      
+      // Dispose materials and geometry
+      healthBarData.background.geometry.dispose();
+      (healthBarData.background.material as THREE.Material).dispose();
+      healthBarData.foreground.geometry.dispose();
+      (healthBarData.foreground.material as THREE.Material).dispose();
+      
+      this.healthBarReferences.delete(playerId);
+    }
+  }
+
+  /**
+   * Update all player health bars to face the camera
+   */
+  static updateAllPlayerHealthBarsFacing(cameraPosition: THREE.Vector3): void {
+    this.healthBarReferences.forEach((healthBarData, playerId) => {
+      if (healthBarData.container && healthBarData.container.parent) {
+        // Get world position of the health bar
+        const worldPosition = new THREE.Vector3();
+        healthBarData.container.getWorldPosition(worldPosition);
+        
+        // Calculate direction from health bar to camera (only Y rotation)
+        const direction = new THREE.Vector3().subVectors(cameraPosition, worldPosition);
+        direction.y = 0; // Ignore Y difference to keep health bar level
+        direction.normalize();
+        
+        // Calculate Y rotation angle to face camera
+        const targetAngle = Math.atan2(direction.x, direction.z);
+        const currentAngle = healthBarData.container.rotation.y;
+        
+        // Only update rotation if the angle difference is significant
+        const angleDifference = Math.abs(targetAngle - currentAngle);
+        const normalizedDifference = Math.min(angleDifference, 2 * Math.PI - angleDifference);
+        
+        if (normalizedDifference > 0.1) {
+          // Apply only Y rotation to prevent flipping
+          healthBarData.container.rotation.set(0, targetAngle, 0);
+        }
+      }
+    });
+  }
+
+  /**
+   * Clear all player health data (called when changing floors)
+   */
+  static clearAllPlayerHealthData(): void {
+    console.log('🧹 Clearing all player health data');
+    
+    // Remove all health bars
+    this.healthBarReferences.forEach((healthBarData, playerId) => {
+      this.removeHealthBar(playerId);
+    });
+    
+    // Clear health tracking
+    this.playerHealthData.clear();
+    this.healthBarReferences.clear();
   }
 }
