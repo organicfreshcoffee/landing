@@ -77,6 +77,8 @@ export interface Enemy {
   rotation?: { x: number; y: number; z: number };
   isMoving: boolean;
   mesh?: THREE.Object3D;
+  health?: number;
+  maxHealth?: number;
 }
 
 export interface EnemyUpdate {
@@ -87,6 +89,8 @@ export interface EnemyUpdate {
   positionY: number;
   rotationY?: number;
   isMoving: boolean;
+  health?: number;
+  maxHealth?: number;
 }
 
 export interface Item {

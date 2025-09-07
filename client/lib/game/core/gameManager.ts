@@ -135,6 +135,9 @@ export class GameManager {
           // Make enemies face the local player
           EnemyManager.updateAllEnemiesFacing(this.localPlayerRef.current.position);
           
+          // Update enemy health bars to face the camera
+          EnemyManager.updateAllHealthBarsFacing(this.sceneManager.camera.position);
+          
           // Make items face the local player
           ItemManager.updateAllItemsFacing(this.localPlayerRef.current.position);
         }
@@ -373,7 +376,17 @@ export class GameManager {
 
       case 'enemy-moved':
         if (message.data && message.data.enemies && Array.isArray(message.data.enemies)) {
+          console.log('🐉 Received enemy-moved message with enemies:', {
+            count: message.data.enemies.length,
+            firstEnemy: message.data.enemies[0]
+          });
           message.data.enemies.forEach((enemyData: EnemyUpdate) => {
+            console.log('🐉 Processing enemy update:', {
+              id: enemyData.id,
+              health: enemyData.health,
+              maxHealth: enemyData.maxHealth,
+              hasHealth: enemyData.health !== undefined
+            });
             this.updateEnemy(enemyData).catch(console.error);
           });
         } else {
@@ -568,6 +581,13 @@ export class GameManager {
   }
 
   private async updateEnemy(enemyData: EnemyUpdate): Promise<void> {
+    console.log('🤖 GameManager.updateEnemy called:', {
+      enemyId: enemyData.id,
+      health: enemyData.health,
+      maxHealth: enemyData.maxHealth,
+      hasHealthData: enemyData.health !== undefined && enemyData.maxHealth !== undefined
+    });
+
     const existingEnemy = this.enemies.get(enemyData.id);
 
     if (existingEnemy) {
@@ -588,6 +608,30 @@ export class GameManager {
       
       existingEnemy.isMoving = enemyData.isMoving;
 
+      console.log('🔄 Updating existing enemy health:', {
+        enemyId: enemyData.id,
+        health: enemyData.health,
+        maxHealth: enemyData.maxHealth,
+        hasHealthData: enemyData.health !== undefined && enemyData.health !== null
+      });
+
+      // Only update health data if health information is provided and is a valid number
+      if (enemyData.health !== undefined && enemyData.health !== null && typeof enemyData.health === 'number') {
+        console.log('✅ Valid health data found, updating health for enemy:', enemyData.id);
+        EnemyManager.updateEnemyHealth(
+          enemyData.id, 
+          enemyData.health, 
+          enemyData.maxHealth, 
+          this.particleSystem
+        );
+      } else {
+        console.log('⏭️ Skipping health update - no valid health data provided for enemy:', {
+          enemyId: enemyData.id,
+          health: enemyData.health,
+          healthType: typeof enemyData.health
+        });
+      }
+
       // Update position and animation
       try {
         EnemyManager.updateEnemyPosition(existingEnemy, enemyData, this.movementController.getCurrentPlayerPosition() || undefined);
@@ -595,6 +639,12 @@ export class GameManager {
         console.error('❌ Error updating enemy position:', enemyData.id, error);
       }
     } else {
+      console.log('✨ Creating new enemy with health:', {
+        enemyId: enemyData.id,
+        health: enemyData.health,
+        maxHealth: enemyData.maxHealth
+      });
+
       try {
         const newEnemy: Enemy = {
           id: enemyData.id,
@@ -610,7 +660,9 @@ export class GameManager {
             y: enemyData.rotationY || 0,
             z: 0
           },
-          isMoving: enemyData.isMoving
+          isMoving: enemyData.isMoving,
+          health: enemyData.health,
+          maxHealth: enemyData.maxHealth
         };
 
         const enemyResult = EnemyManager.createSpriteEnemyModel(newEnemy);
@@ -639,6 +691,25 @@ export class GameManager {
         this.sceneManager.addToScene(enemyResult.model);
 
         this.enemies.set(enemyData.id, newEnemy);
+
+        console.log('🆕 Initializing health for new enemy:', {
+          enemyId: enemyData.id,
+          health: enemyData.health,
+          maxHealth: enemyData.maxHealth,
+          hasHealthData: enemyData.health !== undefined
+        });
+
+        // Initialize health data for new enemy only if health data is provided
+        if (enemyData.health !== undefined) {
+          EnemyManager.updateEnemyHealth(
+            enemyData.id, 
+            enemyData.health, 
+            enemyData.maxHealth, 
+            this.particleSystem
+          );
+        } else {
+          console.log('⏭️ Skipping initial health setup - no health data provided for new enemy:', enemyData.id);
+        }
       } catch (error) {
         console.error('❌ Error creating new enemy:', enemyData.id, error);
         // Clean up any partial state
@@ -1761,6 +1832,8 @@ export class GameManager {
       if (isFloorChange) {
         console.log(`🧹 Clearing items due to floor change from "${currentFloor}" to "${floorName}"`);
         this.clearAllItems();
+        // Also clear enemy health data when changing floors
+        EnemyManager.clearAllHealthData();
       } else {
         console.log(`🔄 Same floor or initial load - preserving existing items`);
       }

@@ -25,6 +25,20 @@ export class EnemyManager {
   // Store enemy references for accessing enemy data
   private static enemyReferences = new Map<string, Enemy>();
 
+  // Health tracking for enemies (maps enemy ID to health info)
+  private static enemyHealthData = new Map<string, { 
+    health: number; 
+    maxHealth: number; 
+    lastHealth: number; // Track previous health for damage detection
+  }>();
+
+  // Health bar references (maps enemy ID to health bar mesh)
+  private static healthBarReferences = new Map<string, {
+    container: THREE.Group;
+    background: THREE.Mesh;
+    foreground: THREE.Mesh;
+  }>();
+
   // Enemy type configurations
   private static readonly PIXEL_ADVENTURE_2_ENEMIES = new Set([
     'AngryPig', 'Bat', 'Bee', 'BlueBird', 'Bunny', 'Chameleon',
@@ -556,30 +570,295 @@ export class EnemyManager {
     });
   }
 
-    /**
-   * Remove enemy and clean up resources
+  /**
+   * Update enemy health data and create/update health bar if needed
+   */
+  static updateEnemyHealth(
+    enemyId: string, 
+    newHealth: number | undefined, 
+    maxHealth: number | undefined,
+    particleSystem?: any
+  ): void {
+    console.log('🔍 EnemyManager.updateEnemyHealth called:', {
+      enemyId,
+      newHealth,
+      maxHealth,
+      hasParticleSystem: !!particleSystem
+    });
+
+    // Enemy despawns when health is 0 so it will never be 0
+    if (newHealth === undefined || newHealth === null || newHealth === 0) {
+      console.log('⚠️ Skipping health update - no valid health value provided for enemy:', enemyId);
+      return;
+    }
+
+    // If maxHealth is not provided, assume a default of 100
+    const effectiveMaxHealth = maxHealth !== undefined ? maxHealth : 100;
+    const currentHealthData = this.enemyHealthData.get(enemyId);
+    const enemy = this.enemyReferences.get(enemyId);
+    
+    if (!enemy || !enemy.mesh) {
+      console.log('⚠️ Skipping health update - enemy or mesh not found:', {
+        hasEnemy: !!enemy,
+        hasMesh: !!enemy?.mesh,
+        enemyId
+      });
+      return;
+    }
+
+    // Check for damage (new health < old health)
+    if (currentHealthData && newHealth < currentHealthData.health && particleSystem) {
+      console.log('🩸 Enemy took damage:', {
+        enemyId,
+        oldHealth: currentHealthData.health,
+        newHealth,
+        damage: currentHealthData.health - newHealth
+      });
+      
+      // Create damage particle effect at enemy position (lowered Y offset)
+      const enemyPosition = enemy.mesh.position.clone();
+      enemyPosition.y += 0.5; // Reduced from 2 to 0.5 to be more inline with enemy
+      particleSystem.createDamageEffect(enemyPosition);
+    }
+
+    // Update health data
+    this.enemyHealthData.set(enemyId, {
+      health: newHealth,
+      maxHealth: effectiveMaxHealth,
+      lastHealth: currentHealthData ? currentHealthData.health : newHealth
+    });
+
+    // Update enemy object
+    enemy.health = newHealth;
+    enemy.maxHealth = effectiveMaxHealth;
+
+    console.log('� Health data updated, checking if health bar needed:', {
+      enemyId,
+      health: newHealth,
+      maxHealth: effectiveMaxHealth,
+      needsHealthBar: newHealth < effectiveMaxHealth
+    });
+
+    // Create or update health bar only if health is below max
+    if (newHealth < effectiveMaxHealth) {
+      console.log('🔨 Creating/updating health bar for enemy:', enemyId);
+      this.createOrUpdateHealthBar(enemyId, newHealth, effectiveMaxHealth, enemy.mesh);
+    } else {
+      console.log('❌ Removing health bar - enemy at full health:', enemyId);
+      // Remove health bar if at full health
+      this.removeHealthBar(enemyId);
+    }
+  }
+
+  /**
+   * Create or update health bar for an enemy
+   */
+  static createOrUpdateHealthBar(
+    enemyId: string, 
+    health: number, 
+    maxHealth: number, 
+    enemyMesh: THREE.Object3D
+  ): void {
+    console.log('🔨 createOrUpdateHealthBar called:', {
+      enemyId,
+      health,
+      maxHealth,
+      healthPercentage: health / maxHealth
+    });
+
+    let healthBarData = this.healthBarReferences.get(enemyId);
+
+    if (!healthBarData) {
+      console.log('✨ Creating new health bar for enemy:', enemyId);
+      
+      // Create new health bar
+      const container = new THREE.Group();
+      
+      // Background (red bar)
+      const backgroundGeometry = new THREE.PlaneGeometry(3, 0.3);
+      const backgroundMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x660000, 
+        transparent: true, 
+        opacity: 0.9,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide // Render both front and back faces
+      });
+      const background = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+      
+      // Foreground (green bar)
+      const foregroundGeometry = new THREE.PlaneGeometry(3, 0.25);
+      const foregroundMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00cc00, 
+        transparent: true, 
+        opacity: 1.0,
+        depthTest: false,  // Disable depth testing to prevent side-dependent visibility
+        depthWrite: false, // Don't write to depth buffer
+        side: THREE.DoubleSide // Render both front and back faces
+      });
+      const foreground = new THREE.Mesh(foregroundGeometry, foregroundMaterial);
+      
+      // Position foreground slightly in front of background
+      foreground.position.z = 0.001;
+      
+      container.add(background);
+      container.add(foreground);
+      
+      // Position health bar above enemy (reduced from 4.5 to 3.0)
+      container.position.y = 3.0;
+      
+      // Set render order to ensure health bars render on top
+      container.renderOrder = 999;
+      background.renderOrder = 999;
+      foreground.renderOrder = 999;
+      
+      // Prevent frustum culling
+      container.frustumCulled = false;
+      background.frustumCulled = false;
+      foreground.frustumCulled = false;
+      
+      // Set a very large bounding sphere to prevent culling
+      container.userData.isHealthBar = true;
+      const largeBoundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1000);
+      background.geometry.boundingSphere = largeBoundingSphere;
+      foreground.geometry.boundingSphere = largeBoundingSphere;
+      
+      // Also prevent culling on the enemy mesh itself to be safe
+      enemyMesh.frustumCulled = false;
+      
+      // Set initial rotation to face forward (prevents initial flipping)
+      container.rotation.set(0, 0, 0);
+      
+      // Add to enemy mesh
+      enemyMesh.add(container);
+      
+      healthBarData = {
+        container,
+        background,
+        foreground
+      };
+      
+      this.healthBarReferences.set(enemyId, healthBarData);
+      
+      console.log('✅ Created health bar for enemy:', {
+        enemyId,
+        containerUuid: container.uuid,
+        parentUuid: enemyMesh.uuid,
+        position: container.position,
+        childrenCount: enemyMesh.children.length
+      });
+    } else {
+      console.log('🔄 Updating existing health bar for enemy:', enemyId);
+    }
+
+    // Update health bar width based on health percentage
+    const healthPercentage = Math.max(0, Math.min(1, health / maxHealth));
+    const maxWidth = 3; // Same as background width
+    
+    // Use scaling instead of recreating geometry (more stable for frustum culling)
+    healthBarData.foreground.scale.x = healthPercentage;
+    
+    // Keep the bar centered (don't adjust position) - this avoids frustum culling issues
+    // The positioning offset was causing the frustum culling bug
+    healthBarData.foreground.position.x = 0;
+    
+    // Keep health bar color always green (simplified)
+    const healthMaterial = healthBarData.foreground.material as THREE.MeshBasicMaterial;
+    healthMaterial.color.set(0x00cc00);
+    healthMaterial.needsUpdate = true;
+    healthMaterial.color.setHex(0x00cc00); // Always green
+    
+    console.log('📊 Health bar updated:', {
+      enemyId,
+      healthPercentage
+    });
+  }
+
+  /**
+   * Remove health bar for an enemy
+   */
+  static removeHealthBar(enemyId: string): void {
+    const healthBarData = this.healthBarReferences.get(enemyId);
+    
+    if (healthBarData) {
+      // Remove from enemy mesh
+      if (healthBarData.container.parent) {
+        healthBarData.container.parent.remove(healthBarData.container);
+      }
+      
+      // Dispose materials and geometry
+      healthBarData.background.geometry.dispose();
+      (healthBarData.background.material as THREE.Material).dispose();
+      healthBarData.foreground.geometry.dispose();
+      (healthBarData.foreground.material as THREE.Material).dispose();
+      
+      this.healthBarReferences.delete(enemyId);
+    }
+  }
+
+  /**
+   * Clear all enemy health data (called when changing floors)
+   */
+  static clearAllHealthData(): void {
+    console.log('🧹 Clearing all enemy health data');
+    
+    // Remove all health bars
+    this.healthBarReferences.forEach((healthBarData, enemyId) => {
+      this.removeHealthBar(enemyId);
+    });
+    
+    // Clear health tracking
+    this.enemyHealthData.clear();
+    this.healthBarReferences.clear();
+  }
+
+  /**
+   * Update all health bars to face the camera
+   */
+  static updateAllHealthBarsFacing(cameraPosition: THREE.Vector3): void {
+    this.healthBarReferences.forEach((healthBarData, enemyId) => {
+      if (healthBarData.container && healthBarData.container.parent) {
+        // Get world position of the health bar
+        const worldPosition = new THREE.Vector3();
+        healthBarData.container.getWorldPosition(worldPosition);
+        
+        // Calculate direction from health bar to camera (only Y rotation)
+        const direction = new THREE.Vector3().subVectors(cameraPosition, worldPosition);
+        direction.y = 0; // Ignore Y difference to keep health bar level
+        direction.normalize();
+        
+        // Calculate Y rotation angle to face camera
+        const targetAngle = Math.atan2(direction.x, direction.z);
+        const currentAngle = healthBarData.container.rotation.y;
+        
+        // Only update rotation if the angle difference is significant (reduces jitter)
+        const angleDifference = Math.abs(targetAngle - currentAngle);
+        const normalizedDifference = Math.min(angleDifference, 2 * Math.PI - angleDifference);
+        
+        if (normalizedDifference > 0.1) { // 0.1 radians threshold (~5.7 degrees)
+          // Apply only Y rotation to prevent flipping
+          healthBarData.container.rotation.set(0, targetAngle, 0);
+        }
+      }
+    });
+  }
+
+  /**
+   * Remove enemy and clean up health data
    */
   static removeEnemy(enemyId: string): void {
-    // Clean up animation state
+    // Remove health bar if exists
+    this.removeHealthBar(enemyId);
+    
+    // Clear health data
+    this.enemyHealthData.delete(enemyId);
+    
+    // Clear other enemy data
     this.spriteAnimations.delete(enemyId);
-    
-    // Clean up mesh reference
     this.spriteMeshReferences.delete(enemyId);
-    
-    // Clean up textures
-    const textures = this.spriteTextures.get(enemyId);
-    if (textures) {
-      textures.forEach(texture => texture.dispose());
-      this.spriteTextures.delete(enemyId);
-    }
-    
-    // Clean up direction
+    this.spriteTextures.delete(enemyId);
     this.spriteDirections.delete(enemyId);
-    
-    // Clean up enemy reference
     this.enemyReferences.delete(enemyId);
-    
-    console.log('🗑️ Cleaned up enemy resources:', enemyId);
   }
 
   /**
