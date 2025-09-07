@@ -586,9 +586,9 @@ export class EnemyManager {
       hasParticleSystem: !!particleSystem
     });
 
-    // Skip if no health data provided
-    if (newHealth === undefined) {
-      console.log('⚠️ Skipping health update - no health value provided');
+    // Enemy despawns when health is 0 so it will never be 0
+    if (newHealth === undefined || newHealth === null || newHealth === 0) {
+      console.log('⚠️ Skipping health update - no valid health value provided for enemy:', enemyId);
       return;
     }
 
@@ -681,7 +681,8 @@ export class EnemyManager {
         transparent: true, 
         opacity: 0.9,
         depthTest: false,
-        depthWrite: false
+        depthWrite: false,
+        side: THREE.DoubleSide // Render both front and back faces
       });
       const background = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
       
@@ -691,8 +692,9 @@ export class EnemyManager {
         color: 0x00cc00, 
         transparent: true, 
         opacity: 1.0,
-        depthTest: false,
-        depthWrite: false
+        depthTest: false,  // Disable depth testing to prevent side-dependent visibility
+        depthWrite: false, // Don't write to depth buffer
+        side: THREE.DoubleSide // Render both front and back faces
       });
       const foreground = new THREE.Mesh(foregroundGeometry, foregroundMaterial);
       
@@ -707,6 +709,22 @@ export class EnemyManager {
       
       // Set render order to ensure health bars render on top
       container.renderOrder = 999;
+      background.renderOrder = 999;
+      foreground.renderOrder = 999;
+      
+      // Prevent frustum culling
+      container.frustumCulled = false;
+      background.frustumCulled = false;
+      foreground.frustumCulled = false;
+      
+      // Set a very large bounding sphere to prevent culling
+      container.userData.isHealthBar = true;
+      const largeBoundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1000);
+      background.geometry.boundingSphere = largeBoundingSphere;
+      foreground.geometry.boundingSphere = largeBoundingSphere;
+      
+      // Also prevent culling on the enemy mesh itself to be safe
+      enemyMesh.frustumCulled = false;
       
       // Set initial rotation to face forward (prevents initial flipping)
       container.rotation.set(0, 0, 0);
@@ -733,27 +751,30 @@ export class EnemyManager {
       console.log('🔄 Updating existing health bar for enemy:', enemyId);
     }
 
-    // Update health bar width based on health percentage
-    const healthPercentage = Math.max(0, Math.min(1, health / maxHealth));
-    const maxWidth = 3; // Same as background width (updated to match new size)
+    const healthPercentage = health / maxHealth;
+    const maxWidth = 3; // Same as background width
     const currentWidth = maxWidth * healthPercentage;
     
-    console.log('📊 Health bar update details:', {
+    console.log('📊 Health bar update details (TESTING - ALWAYS 100%):', {
       enemyId,
       healthPercentage,
       maxWidth,
       currentWidth,
-      scaleX: healthPercentage
+      actualHealth: health,
+      actualMaxHealth: maxHealth
     });
     
-    // Update foreground width
+    // Use scaling instead of recreating geometry (more stable for frustum culling)
     healthBarData.foreground.scale.x = healthPercentage;
     
-    // Adjust position to keep bar left-aligned
-    healthBarData.foreground.position.x = (maxWidth - currentWidth) / -2;
+    // Keep the bar centered (don't adjust position) - this avoids frustum culling issues
+    // The positioning offset was causing the frustum culling bug
+    healthBarData.foreground.position.x = 0;
     
     // Keep health bar color always green (simplified)
     const healthMaterial = healthBarData.foreground.material as THREE.MeshBasicMaterial;
+    healthMaterial.color.set(0x00cc00);
+    healthMaterial.needsUpdate = true;
     healthMaterial.color.setHex(0x00cc00); // Always green
     
     console.log('📊 Health bar updated:', {

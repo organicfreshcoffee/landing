@@ -135,8 +135,8 @@ export class GameManager {
           // Make enemies face the local player
           EnemyManager.updateAllEnemiesFacing(this.localPlayerRef.current.position);
           
-          // Update enemy health bars to face the camera
-          EnemyManager.updateAllHealthBarsFacing(this.sceneManager.camera.position);
+          // Update enemy health bars to face the camera (temporarily disabled to test flickering)
+          // EnemyManager.updateAllHealthBarsFacing(this.sceneManager.camera.position);
           
           // Make items face the local player
           ItemManager.updateAllItemsFacing(this.localPlayerRef.current.position);
@@ -612,11 +612,12 @@ export class GameManager {
         enemyId: enemyData.id,
         health: enemyData.health,
         maxHealth: enemyData.maxHealth,
-        hasHealthData: enemyData.health !== undefined
+        hasHealthData: enemyData.health !== undefined && enemyData.health !== null
       });
 
-      // Only update health data if health information is provided
-      if (enemyData.health !== undefined) {
+      // Only update health data if health information is provided and is a valid number
+      if (enemyData.health !== undefined && enemyData.health !== null && typeof enemyData.health === 'number') {
+        console.log('✅ Valid health data found, updating health for enemy:', enemyData.id);
         EnemyManager.updateEnemyHealth(
           enemyData.id, 
           enemyData.health, 
@@ -624,7 +625,11 @@ export class GameManager {
           this.particleSystem
         );
       } else {
-        console.log('⏭️ Skipping health update - no health data provided for enemy:', enemyData.id);
+        console.log('⏭️ Skipping health update - no valid health data provided for enemy:', {
+          enemyId: enemyData.id,
+          health: enemyData.health,
+          healthType: typeof enemyData.health
+        });
       }
 
       // Update position and animation
