@@ -135,8 +135,8 @@ export class GameManager {
           // Make enemies face the local player
           EnemyManager.updateAllEnemiesFacing(this.localPlayerRef.current.position);
           
-          // Update enemy health bars to face the camera (temporarily disabled to test flickering)
-          // EnemyManager.updateAllHealthBarsFacing(this.sceneManager.camera.position);
+          // Update enemy health bars to face the camera
+          EnemyManager.updateAllHealthBarsFacing(this.sceneManager.camera.position);
           
           // Make items face the local player
           ItemManager.updateAllItemsFacing(this.localPlayerRef.current.position);

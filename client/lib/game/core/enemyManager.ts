@@ -751,18 +751,9 @@ export class EnemyManager {
       console.log('🔄 Updating existing health bar for enemy:', enemyId);
     }
 
-    const healthPercentage = health / maxHealth;
+    // Update health bar width based on health percentage
+    const healthPercentage = Math.max(0, Math.min(1, health / maxHealth));
     const maxWidth = 3; // Same as background width
-    const currentWidth = maxWidth * healthPercentage;
-    
-    console.log('📊 Health bar update details (TESTING - ALWAYS 100%):', {
-      enemyId,
-      healthPercentage,
-      maxWidth,
-      currentWidth,
-      actualHealth: health,
-      actualMaxHealth: maxHealth
-    });
     
     // Use scaling instead of recreating geometry (more stable for frustum culling)
     healthBarData.foreground.scale.x = healthPercentage;
@@ -779,8 +770,7 @@ export class EnemyManager {
     
     console.log('📊 Health bar updated:', {
       enemyId,
-      healthPercentage,
-      width: currentWidth
+      healthPercentage
     });
   }
 
