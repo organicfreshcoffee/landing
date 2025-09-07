@@ -101,8 +101,12 @@ export class MovementController {
         return;
       }
 
+      // Handle spacebar attack (only when not in admin mode)
       if (event.code === 'Space') {
         event.preventDefault();
+        if (!this.isAdminMode) {
+          this.performAttackBasedOnEquippedWeapon();
+        }
       }
 
       this.keysPressed.add(event.code);
@@ -258,6 +262,9 @@ export class MovementController {
     // Apply movement with collision detection
     this.applyMovementWithCollision(localPlayer, movement, oldPosition);
 
+    // Handle arrow key camera rotation
+    this.handleArrowKeyRotation(delta);
+
     // Update HUD if in admin mode
     if (this.isAdminMode && this.localPlayerRef.current) {
       this.gameHUD.updatePlayerInfo(
@@ -276,6 +283,44 @@ export class MovementController {
 
     // Send updates to server
     this.sendMovementUpdateIfNeeded(userId, moved, oldRotation);
+  }
+
+  private handleArrowKeyRotation(delta: number): void {
+    if (!this.localPlayerRef.current) return;
+
+    const rotationSpeed = 2.0; // Radians per second
+    let rotationChanged = false;
+
+    // Handle horizontal rotation (left/right arrows)
+    if (this.keysPressed.has('ArrowLeft')) {
+      this.localPlayerRotation.y += rotationSpeed * delta;
+      rotationChanged = true;
+    }
+    if (this.keysPressed.has('ArrowRight')) {
+      this.localPlayerRotation.y -= rotationSpeed * delta;
+      rotationChanged = true;
+    }
+
+    // Handle vertical rotation (up/down arrows)
+    if (this.keysPressed.has('ArrowUp')) {
+      this.localPlayerRotation.x += rotationSpeed * delta;
+      rotationChanged = true;
+    }
+    if (this.keysPressed.has('ArrowDown')) {
+      this.localPlayerRotation.x -= rotationSpeed * delta;
+      rotationChanged = true;
+    }
+
+    // Apply rotation limits and update player rotation if changed
+    if (rotationChanged) {
+      // Limit vertical rotation
+      this.localPlayerRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.localPlayerRotation.x));
+      
+      // Apply only Y rotation to local player (same as mouse control)
+      this.localPlayerRef.current.rotation.y = this.localPlayerRotation.y + Math.PI;
+      this.localPlayerRef.current.rotation.x = 0;
+      this.localPlayerRef.current.rotation.z = 0;
+    }
   }
 
   private toggleAdminMode(): void {
