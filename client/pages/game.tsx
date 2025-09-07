@@ -10,6 +10,7 @@ import HealthHUD from '../components/HealthHUD';
 import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
 import { VisitedNode } from '../lib/game/types/api';
+import { ToastManager } from '../lib/game/ui/toastManager';
 import styles from '../styles/Game.module.css';
 
 export default function Game() {
@@ -314,10 +315,22 @@ export default function Game() {
     return false;
   };
 
-  // Toast notification function (placeholder)
+  // Toast notification function using existing ToastManager
   const showToast = (message: string, type?: 'error' | 'warning' | 'info') => {
-    console.log(`🔔 ${type?.toUpperCase() || 'INFO'}: ${message}`);
-    // TODO: Implement actual toast notification UI
+    const toastManager = ToastManager.getInstance();
+    
+    switch (type) {
+      case 'error':
+        toastManager.showError(message);
+        break;
+      case 'warning':
+        toastManager.showWarning(message);
+        break;
+      case 'info':
+      default:
+        toastManager.showInfo(message);
+        break;
+    }
   };
 
   // Handle character selection
