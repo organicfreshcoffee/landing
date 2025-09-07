@@ -38,6 +38,19 @@ export default function Game() {
     mana: 100,
     maxMana: 100
   });
+
+  // Use refs to store current values for consumption functions
+  const staminaRef = useRef(playerStamina);
+  const manaRef = useRef(playerMana);
+
+  // Update refs when state changes
+  useEffect(() => {
+    staminaRef.current = playerStamina;
+  }, [playerStamina]);
+
+  useEffect(() => {
+    manaRef.current = playerMana;
+  }, [playerMana]);
   const [isRespawning, setIsRespawning] = useState<boolean>(false);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
@@ -261,25 +274,43 @@ export default function Game() {
 
   // Stamina consumption function
   const consumeStamina = (amount: number): boolean => {
-    if (playerStamina.stamina >= amount) {
+    const currentStamina = staminaRef.current.stamina;
+    console.log('🔍 Stamina consumption check:', {
+      currentStamina,
+      requiredAmount: amount,
+      hasEnough: currentStamina >= amount
+    });
+    
+    if (currentStamina >= amount) {
       setPlayerStamina(prev => ({
         ...prev,
         stamina: Math.max(0, prev.stamina - amount)
       }));
+      console.log('✅ Stamina consumed successfully');
       return true;
     }
+    console.log('❌ Insufficient stamina');
     return false;
   };
 
   // Mana consumption function
   const consumeMana = (amount: number): boolean => {
-    if (playerMana.mana >= amount) {
+    const currentMana = manaRef.current.mana;
+    console.log('🔍 Mana consumption check:', {
+      currentMana,
+      requiredAmount: amount,
+      hasEnough: currentMana >= amount
+    });
+    
+    if (currentMana >= amount) {
       setPlayerMana(prev => ({
         ...prev,
         mana: Math.max(0, prev.mana - amount)
       }));
+      console.log('✅ Mana consumed successfully');
       return true;
     }
+    console.log('❌ Insufficient mana');
     return false;
   };
 

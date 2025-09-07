@@ -594,10 +594,19 @@ export class MovementController {
 
     // Check if player has enough mana
     const manaCost = 15;
+    console.log('🔍 Spell cast - checking mana:', {
+      manaCost,
+      hasOnManaConsume: !!this.onManaConsume,
+      hasOnShowToast: !!this.onShowToast
+    });
+    
     if (this.onManaConsume && !this.onManaConsume(manaCost)) {
+      console.log('⚠️ Spell cast blocked - insufficient mana');
       this.onShowToast?.('Out of mana', 'warning');
       return;
     }
+    
+    console.log('✅ Spell cast - mana consumed successfully');
 
     
     // Get the actual player model's world position
@@ -684,10 +693,19 @@ export class MovementController {
 
     // Check if player has enough stamina
     const staminaCost = 5;
+    console.log('🔍 Punch attack - checking stamina:', {
+      staminaCost,
+      hasOnStaminaConsume: !!this.onStaminaConsume,
+      hasOnShowToast: !!this.onShowToast
+    });
+    
     if (this.onStaminaConsume && !this.onStaminaConsume(staminaCost)) {
+      console.log('⚠️ Punch attack blocked - insufficient stamina');
       this.onShowToast?.('Out of stamina', 'warning');
       return;
     }
+    
+    console.log('✅ Punch attack - stamina consumed successfully');
 
     // Get the actual player model's world position
     const playerWorldPosition = new THREE.Vector3();
