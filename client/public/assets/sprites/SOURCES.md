@@ -1,3 +1,10 @@
+## Pixel Adventure 2
+
+https://pixelfrog-assets.itch.io/pixel-adventure-2
+
+License: Creative Commons Zero (CC0)
+https://creativecommons.org/publicdomain/zero/1.0/
+
 ## Raven Fantasy Icons
 
 https://clockworkraven.itch.io/raven-fantasy-icons
