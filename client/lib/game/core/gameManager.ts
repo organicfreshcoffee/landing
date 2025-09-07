@@ -138,6 +138,9 @@ export class GameManager {
           // Update enemy health bars to face the camera
           EnemyManager.updateAllHealthBarsFacing(this.sceneManager.camera.position);
           
+          // Update player health bars to face the camera
+          PlayerManager.updateAllPlayerHealthBarsFacing(this.sceneManager.camera.position);
+          
           // Make items face the local player
           ItemManager.updateAllItemsFacing(this.localPlayerRef.current.position);
         }
@@ -294,7 +297,9 @@ export class GameManager {
             rotation: message.data.rotation || { x: 0, y: 0, z: 0 },
             isMoving: false, // New players start stationary
             movementDirection: 'none',
-            character: message.data.character
+            character: message.data.character,
+            health: message.data.health,
+            maxHealth: message.data.maxHealth
           }).catch(console.error);
         } else {
           console.warn('⚠️ Invalid player_joined message data:', message.data);
@@ -311,7 +316,9 @@ export class GameManager {
             rotation: message.data.rotation,
             isMoving: message.data.isMoving || false,
             movementDirection: message.data.movementDirection || 'none',
-            character: message.data.character
+            character: message.data.character,
+            health: message.data.health,
+            maxHealth: message.data.maxHealth
           }).catch(console.error);
         } else {
           console.warn('⚠️ Invalid player_moved message - missing playerId or position:', {
@@ -508,6 +515,33 @@ export class GameManager {
       try {
         PlayerManager.updatePlayerPosition(existingPlayer, playerData);
         PlayerManager.updatePlayerAnimation(playerData.id, playerData, this.playersAnimations);
+        
+        // Update player health if health data is provided
+        if (playerData.health !== undefined || playerData.maxHealth !== undefined) {
+          console.log('🔄 Updating existing player health:', {
+            playerId: playerData.id,
+            health: playerData.health,
+            maxHealth: playerData.maxHealth,
+            hasHealthData: playerData.health !== undefined && playerData.health !== null
+          });
+
+          // Only update health data if health information is provided and is a valid number
+          if (playerData.health !== undefined && playerData.health !== null && typeof playerData.health === 'number') {
+            console.log('✅ Valid health data found, updating health for player:', playerData.id);
+            PlayerManager.updatePlayerHealth(
+              playerData.id, 
+              playerData.health, 
+              playerData.maxHealth, 
+              this.particleSystem
+            );
+          } else {
+            console.log('⏭️ Skipping health update - no valid health data provided for player:', {
+              playerId: playerData.id,
+              health: playerData.health,
+              healthType: typeof playerData.health
+            });
+          }
+        }
         
         // Update sprite direction based on rotation and local player position
         if (this.localPlayerRef.current && existingPlayer.mesh && existingPlayer.mesh.userData.spriteMesh) {
@@ -1834,6 +1868,8 @@ export class GameManager {
         this.clearAllItems();
         // Also clear enemy health data when changing floors
         EnemyManager.clearAllHealthData();
+        // Also clear player health data when changing floors
+        PlayerManager.clearAllPlayerHealthData();
       } else {
         console.log(`🔄 Same floor or initial load - preserving existing items`);
       }
