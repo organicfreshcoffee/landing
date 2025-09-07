@@ -7,7 +7,7 @@ interface Particle {
   maxLife: number;
   size: number;
   color: THREE.Color;
-  attackType: 'spell' | 'punch' | 'melee' | 'range'; // Add attack type
+  attackType: 'spell' | 'punch' | 'melee' | 'range' | 'damage'; // Add damage attack type
 }
 
 export class ParticleSystem {
@@ -131,6 +131,58 @@ export class ParticleSystem {
     });
     
     this.createRangeEffect(fromPosition, toPosition, true); // true = from other player
+  }
+
+  public createDamageEffect(position: THREE.Vector3): void {
+    console.log('🩸 ParticleSystem.createDamageEffect called!', {
+      position: position
+    });
+    
+    // Ensure particle system is in the scene
+    if (!this.scene.children.includes(this.particleSystem)) {
+      this.scene.add(this.particleSystem);
+    }
+    
+    // Create red damage particles that burst upward from the enemy position
+    const particleCount = 15;
+    
+    for (let i = 0; i < particleCount; i++) {
+      // Create particles that burst outward and upward
+      const angle = (i / particleCount) * Math.PI * 2;
+      const velocity = new THREE.Vector3(
+        Math.cos(angle) * (2 + Math.random() * 3), // Horizontal spread
+        3 + Math.random() * 4, // Strong upward velocity
+        Math.sin(angle) * (2 + Math.random() * 3)  // Horizontal spread
+      );
+
+      // Add some randomness to initial position around the enemy
+      const startPosition = position.clone().add(new THREE.Vector3(
+        (Math.random() - 0.5) * 0.5,
+        Math.random() * 0.5,
+        (Math.random() - 0.5) * 0.5
+      ));
+
+      const particle: Particle = {
+        position: startPosition,
+        velocity: velocity,
+        life: 1.0,
+        maxLife: 1.0 + Math.random() * 0.5,
+        size: 0.08 + Math.random() * 0.08,
+        color: new THREE.Color().setHSL(
+          0.0 + Math.random() * 0.05, // Pure red to slightly orange-red
+          0.9 + Math.random() * 0.1,  // High saturation
+          0.6 + Math.random() * 0.3   // Bright but not too bright
+        ),
+        attackType: 'damage'
+      };
+
+      this.particles.push(particle);
+    }
+
+    // Remove old particles if we exceed the limit
+    while (this.particles.length > this.maxParticles) {
+      this.particles.shift();
+    }
   }
 
   private createSpellEffect(fromPosition: THREE.Vector3, toPosition: THREE.Vector3, isFromOtherPlayer: boolean): void {
@@ -646,6 +698,9 @@ export class ParticleSystem {
           break;
         case 'range':
           baseColor = new THREE.Color(0x333333); // Dark gray
+          break;
+        case 'damage':
+          baseColor = new THREE.Color(0xff0000); // Red
           break;
         default:
           baseColor = new THREE.Color(0xffffff); // White fallback
