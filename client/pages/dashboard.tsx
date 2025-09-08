@@ -6,6 +6,7 @@ import axios from 'axios';
 import JSZip from 'jszip';
 import styles from '../styles/Dashboard.module.css';
 import PrivacyPolicy from '../components/PrivacyPolicy';
+import ArtCredits from '../components/ArtCredits';
 
 interface AccountData {
   firebase: any;
@@ -1362,6 +1363,7 @@ export default function Dashboard() {
       )}
       
       <PrivacyPolicy />
+      <ArtCredits />
     </div>
   );
 }
