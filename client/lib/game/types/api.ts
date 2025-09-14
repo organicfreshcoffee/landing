@@ -293,3 +293,13 @@ export interface UnequipItemResponse {
   success: boolean;
   message: string;
 }
+
+export interface SpawnPlayerResponse {
+  success: boolean;
+  message?: string;
+}
+
+export interface PlayerDeathResponse {
+  success: boolean;
+  deathSummary: string;
+}

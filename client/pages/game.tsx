@@ -7,6 +7,7 @@ import CharacterSelection, { CharacterData } from '../components/CharacterSelect
 import ServerConnectionError from '../components/ServerConnectionError';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
 import HealthHUD from '../components/HealthHUD';
+import DeathSummary from '../components/DeathSummary';
 import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
 import { VisitedNode } from '../lib/game/types/api';
@@ -53,6 +54,7 @@ export default function Game() {
     manaRef.current = playerMana;
   }, [playerMana]);
   const [isRespawning, setIsRespawning] = useState<boolean>(false);
+  const [deathSummary, setDeathSummary] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
@@ -107,6 +109,7 @@ export default function Game() {
         setCurrentFloor, // Pass current floor state setter
         setPlayerHealth, // Pass health update callback
         () => setIsRespawning(true), // Pass death callback
+        setDeathSummary, // Pass death summary callback
         handleOpenGraphViewer, // Pass graph viewer callback
         consumeStamina, // Pass stamina consumption function
         consumeMana, // Pass mana consumption function
@@ -114,8 +117,15 @@ export default function Game() {
       );
       gameManagerRef.current = gameManager;
       
-      // Connect to server
+      // Connect to server (but not WebSocket yet)
       await gameManager.connectToServer(serverAddress);
+      
+      // If this is an existing live character, also connect WebSocket
+      if (checkingExistingCharacter) {
+        console.log('🔌 Connecting WebSocket for existing live character');
+        await gameManager.connectWebSocket();
+        setCheckingExistingCharacter(false);
+      }
       
       // Add debug info to global scope for console debugging
       if (typeof window !== 'undefined') {
@@ -127,9 +137,15 @@ export default function Game() {
         // Also expose gameManager directly for easier access
         (window as any).gameManager = gameManager;
       }
+      
+      console.log('🎮 Game initialized successfully');
     };
     
-    initGame();
+    initGame().catch((error) => {
+      console.error('❌ Failed to initialize game:', error);
+      setConnectionState('failed');
+      setConnectionError('Failed to initialize game: ' + error.message);
+    });
 
     return () => {
       if (gameManagerRef.current) {
@@ -187,27 +203,30 @@ export default function Game() {
                 style: characterData.style,
                 name: characterData.name
               });
+              
+              // Set the health from server response
+              setPlayerHealth({
+                health: statusResponse.data.health,
+                maxHealth: 100,
+                isAlive: statusResponse.data.isAlive
+              });
+
+              // Store the player position and rotation for later use
+              const playerPosition = statusResponse.data.position;
+              const playerRotation = statusResponse.data.rotation;
+              
+              // Store these in sessionStorage so GameManager can use them
+              sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
+              sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
+              
+              // Mark as having an existing live character so GameManager will connect WebSocket
+              setCheckingExistingCharacter(true);
             } else {
               console.warn('⚠️ Invalid character data received:', characterData);
               setConnectionState('failed');
               setConnectionError('Invalid character data received from server');
               return;
             }
-
-            // Set the health from server response
-            setPlayerHealth({
-              health: statusResponse.data.health,
-              maxHealth: 100,
-              isAlive: statusResponse.data.isAlive
-            });
-
-            // Store the player position and rotation for later use
-            const playerPosition = statusResponse.data.position;
-            const playerRotation = statusResponse.data.rotation;
-            
-            // Store these in sessionStorage so GameManager can use them
-            sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
-            sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
           } else {
             console.log('🏗️ Player needs to create/select character');
           }
@@ -360,44 +379,61 @@ export default function Game() {
   };
 
   // Handle character selection
-  const handleCharacterSelected = (character: CharacterData) => {
+  const handleCharacterSelected = async (character: CharacterData) => {
+    try {
+      // Update the character state
+      setSelectedCharacter(character);
+      
+      // If we have a GameManager, spawn the player using the new spawn endpoint
+      if (gameManagerRef.current) {
+        console.log('🚀 Spawning player with character:', character);
+        const success = await gameManagerRef.current.spawnPlayer(character);
         
-    // Update the character state
-    setSelectedCharacter(character);
-    
-    // If we're respawning, send respawn request
-    if (isRespawning && gameManagerRef.current) {
-            gameManagerRef.current.sendRespawnRequest(character);
-      setIsRespawning(false);
-      
-      // Reset health to alive state (will be updated by server response)
-      setPlayerHealth({
-        health: 100,
-        maxHealth: 100,
-        isAlive: true
-      });
-      
-      // Reset stamina and mana on respawn
-      setPlayerStamina({
-        stamina: 100,
-        maxStamina: 100
-      });
-      
-      setPlayerMana({
-        mana: 100,
-        maxMana: 100
-      });
-    }
-    
-    // If we already have a running GameManager, update its character data
-    if (gameManagerRef.current && !isRespawning) {
-            gameManagerRef.current.updateSelectedCharacter(character);
+        if (success) {
+          console.log('✅ Player spawned successfully, connecting WebSocket');
+          // After successful spawn, connect to WebSocket
+          await gameManagerRef.current.connectWebSocket();
+          
+          // Reset health and resources to alive state
+          setPlayerHealth({
+            health: 100,
+            maxHealth: 100,
+            isAlive: true
+          });
+          
+          setPlayerStamina({
+            stamina: 100,
+            maxStamina: 100
+          });
+          
+          setPlayerMana({
+            mana: 100,
+            maxMana: 100
+          });
+          
+          // Clear any existing death/respawn states
+          setIsRespawning(false);
+          setDeathSummary(null);
+        } else {
+          console.error('❌ Failed to spawn player');
+          // Could show an error message to the user here
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error during character selection:', error);
+      // Could show an error message to the user here
     }
   };
 
   // Handle back from character selection
   const handleBackFromCharacterSelection = () => {
     router.push('/dashboard');
+  };
+
+  // Handle death summary continue - shows character selection
+  const handleDeathSummaryContinue = () => {
+    setDeathSummary(null);
+    setIsRespawning(true);
   };
 
   // Manual reconnect handler
@@ -482,6 +518,16 @@ export default function Game() {
         error={connectionError}
         onRetry={handleConnectionRetry}
         onBack={handleBackToDashboard}
+      />
+    );
+  }
+
+  // Show death summary if player died
+  if (deathSummary) {
+    return (
+      <DeathSummary 
+        deathSummary={deathSummary}
+        onContinue={handleDeathSummaryContinue}
       />
     );
   }

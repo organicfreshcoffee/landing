@@ -1,0 +1,121 @@
+.deathSummaryContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  font-family: 'Courier New', monospace;
+}
+
+.deathSummaryModal {
+  background: linear-gradient(145deg, #2a0a0a, #1a0505);
+  border: 3px solid #8b0000;
+  border-radius: 15px;
+  padding: 3rem;
+  max-width: 600px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 
+    0 10px 30px rgba(139, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: fadeIn 0.5s ease-out;
+}
+
+.skullIcon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: pulse 2s infinite;
+}
+
+.title {
+  color: #ff4444;
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  letter-spacing: 2px;
+}
+
+.deathMessage {
+  color: #cccccc;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border-left: 4px solid #ff4444;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.continueButton {
+  background: linear-gradient(145deg, #8b0000, #a00000);
+  color: white;
+  border: 2px solid #ff4444;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.continueButton:hover {
+  background: linear-gradient(145deg, #a00000, #b50000);
+  border-color: #ff6666;
+  box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
+  transform: translateY(-2px);
+}
+
+.continueButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(255, 68, 68, 0.2);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@media (max-width: 768px) {
+  .deathSummaryModal {
+    padding: 2rem;
+    margin: 1rem;
+  }
+  
+  .title {
+    font-size: 2rem;
+  }
+  
+  .deathMessage {
+    font-size: 1rem;
+  }
+  
+  .continueButton {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+  }
+}

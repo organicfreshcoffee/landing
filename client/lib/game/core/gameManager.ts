@@ -62,6 +62,7 @@ export class GameManager {
     private onFloorChange?: (floorName: string) => void,
     private onHealthUpdate?: (health: { health: number; maxHealth: number; isAlive: boolean }) => void,
     private onPlayerDeath?: () => void,
+    private onDeathSummary?: (deathSummary: string) => void,
     private onOpenGraphViewer?: () => void,
     private onStaminaConsume?: (amount: number) => boolean,
     private onManaConsume?: (amount: number) => boolean,
@@ -269,8 +270,18 @@ export class GameManager {
     if (this.onFloorChange && initialFloor) {
       this.onFloorChange(initialFloor);
     }
-        
-    // Connect to WebSocket
+    
+    // Note: WebSocket connection is now initiated after successful spawn
+    // This method only sets up the server connection and prepares the scene
+  }
+
+  async connectWebSocket(): Promise<void> {
+    const serverAddress = this.sceneManager.getServerAddress();
+    if (!serverAddress) {
+      throw new Error('No server address set');
+    }
+    
+    // Connect to WebSocket after player is spawned
     await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
   }
 
@@ -445,6 +456,14 @@ export class GameManager {
           this.handleItemPickedUp(message.data.itemId, message.data.playerId);
         } else {
           console.warn('⚠️ Invalid item-picked-up message data:', message.data);
+        }
+        break;
+
+      case 'you-died':
+        if (message.data && typeof message.data === 'string') {
+          this.handleServerDeath(message.data);
+        } else {
+          console.warn('⚠️ Invalid you-died message data:', message.data);
         }
         break;
     }
@@ -1012,34 +1031,35 @@ export class GameManager {
   }
 
   private async handlePlayerDeath(): Promise<void> {
-        
+    // Note: This method is called when player dies from health updates,
+    // which means server already knows about the death. 
+    // The server should send a 'you-died' WebSocket message with death summary.
+    // If we don't receive it, we'll show a generic death message.
+    
     try {
-      // Notify the UI about death
-      if (this.onPlayerDeath) {
-        this.onPlayerDeath();
+      // For now, just show a generic death message
+      // The proper death summary should come via 'you-died' WebSocket message
+      if (this.onDeathSummary) {
+        this.onDeathSummary('You died!');
       }
-
-      // Move player back to floor A (spawn area)
+      
+      // Move player back to floor A (spawn area) for cleanup
       if (this.localPlayerRef.current) {
         this.localPlayerRef.current.position.set(0, 0, 0);
         this.positionPlayerOnGround();
       }
 
-      // Notify server about floor change to A
+      // Load floor A for cleanup
       const serverAddress = this.sceneManager.getServerAddress();
       if (serverAddress) {
-        await DungeonApi.notifyPlayerMovedFloor(serverAddress, 'A');
-                
-        // Load floor A
         await this.loadFloor('A');
-              }
+      }
     } catch (error) {
       console.error('❌ Error handling player death:', error);
     }
   }
 
-  private handleDebugDeath(): void {
-        
+  private async handleDebugDeath(): Promise<void> {
     // Update health to show death
     if (this.onHealthUpdate) {
       this.onHealthUpdate({
@@ -1049,8 +1069,27 @@ export class GameManager {
       });
     }
 
-    // Trigger the death sequence (this will open character selection)
-    this.handlePlayerDeath();
+    // Call the death endpoint to get death summary
+    const serverAddress = this.sceneManager.getServerAddress();
+    if (serverAddress) {
+      try {
+        const response = await DungeonApi.playerDeath(serverAddress);
+        if (response.success && this.onDeathSummary) {
+          this.onDeathSummary(response.deathSummary);
+        }
+      } catch (error) {
+        console.error('❌ Error calling death endpoint:', error);
+        // Fallback to showing a default death message
+        if (this.onDeathSummary) {
+          this.onDeathSummary('You died!');
+        }
+      }
+    } else {
+      // Fallback if no server address
+      if (this.onDeathSummary) {
+        this.onDeathSummary('You died!');
+      }
+    }
   }
 
   private handleRespawnSuccess(playerData: any): void {
@@ -1070,24 +1109,65 @@ export class GameManager {
           }
   }
 
-  sendRespawnRequest(characterData: CharacterData): void {
-    if (!this.webSocketManager.isConnected) {
-      console.warn('⚠️ Cannot send respawn request - not connected to server');
-      return;
+  private handleServerDeath(deathSummary: string): void {
+    // Update health to show death
+    if (this.onHealthUpdate) {
+      this.onHealthUpdate({
+        health: 0,
+        maxHealth: 100,
+        isAlive: false
+      });
     }
 
-    const respawnMessage = {
-      type: 'player_respawn',
-      data: {
-        characterData: {
-          name: characterData.name,
-          style: characterData.style,
-          type: characterData.type
-        }
-      }
-    };
+    // Show the death summary to the user
+    if (this.onDeathSummary) {
+      this.onDeathSummary(deathSummary);
+    }
+  }
 
-        this.webSocketManager.send(JSON.stringify(respawnMessage));
+  async spawnPlayer(characterData: CharacterData): Promise<boolean> {
+    const serverAddress = this.sceneManager.getServerAddress();
+    if (!serverAddress) {
+      console.error('❌ Cannot spawn player - no server address');
+      return false;
+    }
+
+    try {
+      const response = await DungeonApi.spawnPlayer(serverAddress, {
+        name: characterData.name,
+        style: characterData.style,
+        type: characterData.type
+      });
+
+      if (response.success) {
+        console.log('✅ Player spawned successfully');
+        // Update selected character
+        this.selectedCharacter = characterData;
+        
+        // Reset health to alive state
+        if (this.onHealthUpdate) {
+          this.onHealthUpdate({
+            health: 100,
+            maxHealth: 100,
+            isAlive: true
+          });
+        }
+        
+        return true;
+      } else {
+        console.error('❌ Failed to spawn player:', response.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error spawning player:', error);
+      return false;
+    }
+  }
+
+  // Deprecated: Use spawnPlayer instead
+  sendRespawnRequest(characterData: CharacterData): void {
+    console.warn('⚠️ sendRespawnRequest is deprecated, use spawnPlayer instead');
+    this.spawnPlayer(characterData);
   }
 
   private removePlayer(playerId: string): void {
