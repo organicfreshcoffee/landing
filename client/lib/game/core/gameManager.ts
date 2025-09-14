@@ -410,6 +410,20 @@ export class GameManager {
         }
         break;
 
+      case 'enemy_attack':
+        if (message.data && message.data.attackPosition && message.data.enemyId) {
+          console.log('⚔️ Received enemy_attack message:', {
+            enemyId: message.data.enemyId,
+            attackPosition: message.data.attackPosition,
+            enemyTypeName: message.data.enemyTypeName,
+            targetPlayerId: message.data.targetPlayerId
+          });
+          this.handleEnemyAttack(message.data);
+        } else {
+          console.warn('⚠️ Invalid enemy_attack message data:', message.data);
+        }
+        break;
+
       case 'item-spawned':
         if (message.data && message.data.item) {
           this.handleItemSpawned(message.data.item);
@@ -1130,6 +1144,46 @@ export class GameManager {
       this.enemies.delete(enemyId);
       EnemyManager.removeEnemy(enemyId);
       console.log('🧹 Cleaned up orphaned enemy data:', enemyId);
+    }
+  }
+
+  private handleEnemyAttack(attackData: any): void {
+    console.log('⚔️ GameManager.handleEnemyAttack called:', attackData);
+    
+    if (!attackData.attackPosition || !attackData.enemyId) {
+      console.warn('⚠️ Invalid enemy attack data - missing attackPosition or enemyId');
+      return;
+    }
+
+    const attackPosition = new THREE.Vector3(
+      attackData.attackPosition.x,
+      attackData.attackPosition.y,
+      attackData.attackPosition.z
+    );
+
+    // Check if this is an existing attack that needs position update
+    if (this.particleSystem && this.particleSystem.hasEnemyAttack && this.particleSystem.hasEnemyAttack(attackData.enemyId)) {
+      // Update existing attack position
+      this.updateEnemyAttackPosition(attackData.enemyId, attackPosition);
+    } else {
+      // Create new attack particle effect
+      this.createEnemyAttackParticle(attackPosition, attackData.enemyId);
+    }
+  }
+
+  private createEnemyAttackParticle(position: THREE.Vector3, enemyId: string): void {
+    // Use the particle system to create a red ball at the attack position
+    if (this.particleSystem) {
+      this.particleSystem.createEnemyAttackEffect(position, enemyId);
+    } else {
+      console.warn('⚠️ ParticleSystem not available for enemy attack effect');
+    }
+  }
+
+  private updateEnemyAttackPosition(enemyId: string, newPosition: THREE.Vector3): void {
+    // Update the attack particle position if it exists
+    if (this.particleSystem) {
+      this.particleSystem.updateEnemyAttackPosition(enemyId, newPosition);
     }
   }
 

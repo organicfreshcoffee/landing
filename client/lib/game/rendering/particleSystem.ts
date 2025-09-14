@@ -7,7 +7,15 @@ interface Particle {
   maxLife: number;
   size: number;
   color: THREE.Color;
-  attackType: 'spell' | 'punch' | 'melee' | 'range' | 'damage'; // Add damage attack type
+  attackType: 'spell' | 'punch' | 'melee' | 'range' | 'damage' | 'enemy_attack';
+  enemyId?: string; // For tracking enemy attack particles
+}
+
+interface EnemyAttack {
+  enemyId: string;
+  attackPosition: THREE.Vector3;
+  particles: Particle[];
+  lastUpdate: number;
 }
 
 export class ParticleSystem {
@@ -18,6 +26,7 @@ export class ParticleSystem {
   private scene: THREE.Scene;
   private maxParticles = 200;
   private clock = new THREE.Clock();
+  private enemyAttacks = new Map<string, EnemyAttack>(); // Track active enemy attacks
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -182,6 +191,143 @@ export class ParticleSystem {
     // Remove old particles if we exceed the limit
     while (this.particles.length > this.maxParticles) {
       this.particles.shift();
+    }
+  }
+
+  public createEnemyAttackEffect(position: THREE.Vector3, enemyId?: string): void {
+    console.log('⚔️ ParticleSystem.createEnemyAttackEffect called!', {
+      position: position,
+      enemyId: enemyId,
+      particleSystemInScene: this.scene.children.includes(this.particleSystem)
+    });
+    
+    // Ensure particle system is in the scene
+    if (!this.scene.children.includes(this.particleSystem)) {
+      this.scene.add(this.particleSystem);
+    }
+    
+    // Create a larger, more persistent red ball particle for enemy attacks
+    const particleCount = 15; // Fewer particles for a more focused ball effect
+    const attackParticles: Particle[] = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+      // Create particles in a small spherical cluster to form a ball
+      const sphereRadius = 0.3;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      
+      const sphereOffset = new THREE.Vector3(
+        sphereRadius * Math.sin(phi) * Math.cos(theta),
+        sphereRadius * Math.sin(phi) * Math.sin(theta),
+        sphereRadius * Math.cos(phi)
+      );
+      
+      const particlePosition = position.clone().add(sphereOffset);
+      
+      // Create slower moving particles that stay clustered
+      const velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 1,
+        Math.random() * 1 + 0.5, // Less upward drift to keep ball together
+        (Math.random() - 0.5) * 1
+      );
+
+      // Create a bright red particle
+      const particle: Particle = {
+        position: particlePosition.clone(),
+        velocity: velocity,
+        life: 3.0 + Math.random() * 2.0, // Longer lifetime for persistent effect
+        maxLife: 3.0 + Math.random() * 2.0,
+        size: 0.15 + Math.random() * 0.1, // Larger particles for ball effect
+        color: new THREE.Color().setHSL(
+          0.0, // Pure red
+          1.0, // Full saturation
+          0.6 + Math.random() * 0.2 // Bright red
+        ),
+        attackType: 'enemy_attack',
+        enemyId: enemyId
+      };
+
+      this.particles.push(particle);
+      attackParticles.push(particle);
+    }
+
+    // Track this enemy attack if we have an enemyId
+    if (enemyId) {
+      this.enemyAttacks.set(enemyId, {
+        enemyId: enemyId,
+        attackPosition: position.clone(),
+        particles: attackParticles,
+        lastUpdate: Date.now()
+      });
+    }
+
+    // Remove old particles if we exceed the limit
+    while (this.particles.length > this.maxParticles) {
+      this.particles.shift();
+    }
+  }
+
+  public updateEnemyAttackPosition(enemyId: string, newPosition: THREE.Vector3): void {
+    const attack = this.enemyAttacks.get(enemyId);
+    if (!attack) {
+      console.warn('⚠️ Cannot update enemy attack position - attack not found:', enemyId);
+      return;
+    }
+
+    console.log('⚔️ Updating enemy attack position:', {
+      enemyId: enemyId,
+      oldPosition: attack.attackPosition,
+      newPosition: newPosition
+    });
+
+    // Calculate the offset to move all particles
+    const offset = new THREE.Vector3().subVectors(newPosition, attack.attackPosition);
+    
+    // Update all particles in this attack
+    attack.particles.forEach(particle => {
+      particle.position.add(offset);
+    });
+
+    // Update the stored position
+    attack.attackPosition.copy(newPosition);
+    attack.lastUpdate = Date.now();
+  }
+
+  public hasEnemyAttack(enemyId: string): boolean {
+    return this.enemyAttacks.has(enemyId);
+  }
+
+  private cleanupExpiredEnemyAttacks(): void {
+    const now = Date.now();
+    const expireTime = 10000; // 10 seconds
+    const attacksToRemove: string[] = [];
+    
+    this.enemyAttacks.forEach((attack: EnemyAttack, enemyId: string) => {
+      // Check if the attack has expired or if all its particles are dead
+      const hasLiveParticles = attack.particles.some((particle: Particle) => particle.life > 0);
+      const isExpired = (now - attack.lastUpdate) > expireTime;
+      
+      if (!hasLiveParticles || isExpired) {
+        console.log('🧹 Cleaning up expired enemy attack:', enemyId);
+        attacksToRemove.push(enemyId);
+      }
+    });
+    
+    // Remove expired attacks
+    attacksToRemove.forEach(enemyId => {
+      this.enemyAttacks.delete(enemyId);
+    });
+  }
+
+  public removeEnemyAttack(enemyId: string): void {
+    const attack = this.enemyAttacks.get(enemyId);
+    if (attack) {
+      console.log('🗑️ Manually removing enemy attack:', enemyId);
+      // Mark all particles for immediate removal by setting life to 0
+      attack.particles.forEach((particle: Particle) => {
+        particle.life = 0;
+      });
+      this.enemyAttacks.delete(enemyId);
     }
   }
 
@@ -648,6 +794,9 @@ export class ParticleSystem {
         this.particles.splice(i, 1);
       }
     }
+
+    // Clean up expired enemy attacks
+    this.cleanupExpiredEnemyAttacks();
 
     // Always update the particle system buffers, even if no particles
     this.updateParticleBuffers();
