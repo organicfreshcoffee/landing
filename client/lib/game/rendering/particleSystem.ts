@@ -8,11 +8,11 @@ interface Particle {
   size: number;
   color: THREE.Color;
   attackType: 'spell' | 'punch' | 'melee' | 'range' | 'damage' | 'enemy_attack';
-  enemyId?: string; // For tracking enemy attack particles
+  enemyId?: string; // For tracking enemy attack particles (now stores attackId for enemy_attack type)
 }
 
 interface EnemyAttack {
-  enemyId: string;
+  attackId: string;
   attackPosition: THREE.Vector3;
   particles: Particle[];
   lastUpdate: number;
@@ -194,10 +194,10 @@ export class ParticleSystem {
     }
   }
 
-  public createEnemyAttackEffect(position: THREE.Vector3, enemyId?: string): void {
+  public createEnemyAttackEffect(position: THREE.Vector3, attackId?: string): void {
     console.log('⚔️ ParticleSystem.createEnemyAttackEffect called!', {
       position: position,
-      enemyId: enemyId,
+      attackId: attackId,
       particleSystemInScene: this.scene.children.includes(this.particleSystem)
     });
     
@@ -244,17 +244,17 @@ export class ParticleSystem {
           0.6 + Math.random() * 0.2 // Bright red
         ),
         attackType: 'enemy_attack',
-        enemyId: enemyId
+        enemyId: attackId
       };
 
       this.particles.push(particle);
       attackParticles.push(particle);
     }
 
-    // Track this enemy attack if we have an enemyId
-    if (enemyId) {
-      this.enemyAttacks.set(enemyId, {
-        enemyId: enemyId,
+    // Track this enemy attack if we have an attackId
+    if (attackId) {
+      this.enemyAttacks.set(attackId, {
+        attackId: attackId, // Now stores the unique attackId
         attackPosition: position.clone(),
         particles: attackParticles,
         lastUpdate: Date.now()
@@ -267,34 +267,16 @@ export class ParticleSystem {
     }
   }
 
-  public updateEnemyAttackPosition(enemyId: string, newPosition: THREE.Vector3): void {
-    const attack = this.enemyAttacks.get(enemyId);
-    if (!attack) {
-      console.warn('⚠️ Cannot update enemy attack position - attack not found:', enemyId);
-      return;
+  public removeEnemyAttack(attackId: string): void {
+    const attack = this.enemyAttacks.get(attackId);
+    if (attack) {
+      console.log('🗑️ Manually removing enemy attack:', attackId);
+      // Mark all particles for immediate removal by setting life to 0
+      attack.particles.forEach((particle: Particle) => {
+        particle.life = 0;
+      });
+      this.enemyAttacks.delete(attackId);
     }
-
-    console.log('⚔️ Updating enemy attack position:', {
-      enemyId: enemyId,
-      oldPosition: attack.attackPosition,
-      newPosition: newPosition
-    });
-
-    // Calculate the offset to move all particles
-    const offset = new THREE.Vector3().subVectors(newPosition, attack.attackPosition);
-    
-    // Update all particles in this attack
-    attack.particles.forEach(particle => {
-      particle.position.add(offset);
-    });
-
-    // Update the stored position
-    attack.attackPosition.copy(newPosition);
-    attack.lastUpdate = Date.now();
-  }
-
-  public hasEnemyAttack(enemyId: string): boolean {
-    return this.enemyAttacks.has(enemyId);
   }
 
   private cleanupExpiredEnemyAttacks(): void {
@@ -302,33 +284,21 @@ export class ParticleSystem {
     const expireTime = 10000; // 10 seconds
     const attacksToRemove: string[] = [];
     
-    this.enemyAttacks.forEach((attack: EnemyAttack, enemyId: string) => {
+    this.enemyAttacks.forEach((attack: EnemyAttack, attackId: string) => {
       // Check if the attack has expired or if all its particles are dead
       const hasLiveParticles = attack.particles.some((particle: Particle) => particle.life > 0);
       const isExpired = (now - attack.lastUpdate) > expireTime;
       
       if (!hasLiveParticles || isExpired) {
-        console.log('🧹 Cleaning up expired enemy attack:', enemyId);
-        attacksToRemove.push(enemyId);
+        console.log('🧹 Cleaning up expired enemy attack:', attackId);
+        attacksToRemove.push(attackId);
       }
     });
     
     // Remove expired attacks
-    attacksToRemove.forEach(enemyId => {
-      this.enemyAttacks.delete(enemyId);
+    attacksToRemove.forEach(attackId => {
+      this.enemyAttacks.delete(attackId);
     });
-  }
-
-  public removeEnemyAttack(enemyId: string): void {
-    const attack = this.enemyAttacks.get(enemyId);
-    if (attack) {
-      console.log('🗑️ Manually removing enemy attack:', enemyId);
-      // Mark all particles for immediate removal by setting life to 0
-      attack.particles.forEach((particle: Particle) => {
-        particle.life = 0;
-      });
-      this.enemyAttacks.delete(enemyId);
-    }
   }
 
   private createSpellEffect(fromPosition: THREE.Vector3, toPosition: THREE.Vector3, isFromOtherPlayer: boolean): void {

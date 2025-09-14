@@ -1161,31 +1161,22 @@ export class GameManager {
       attackData.attackPosition.z
     );
 
-    // Check if this is an existing attack that needs position update
-    if (this.particleSystem && this.particleSystem.hasEnemyAttack && this.particleSystem.hasEnemyAttack(attackData.enemyId)) {
-      // Update existing attack position
-      this.updateEnemyAttackPosition(attackData.enemyId, attackPosition);
-    } else {
-      // Create new attack particle effect
-      this.createEnemyAttackParticle(attackPosition, attackData.enemyId);
-    }
+    // Create a particle effect for every enemy attack message
+    // Each attack gets a unique identifier based on enemyId + timestamp
+    const attackId = `${attackData.enemyId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.createEnemyAttackParticle(attackPosition, attackId);
   }
 
-  private createEnemyAttackParticle(position: THREE.Vector3, enemyId: string): void {
+  private createEnemyAttackParticle(position: THREE.Vector3, attackId: string): void {
     // Use the particle system to create a red ball at the attack position
     if (this.particleSystem) {
-      this.particleSystem.createEnemyAttackEffect(position, enemyId);
+      this.particleSystem.createEnemyAttackEffect(position, attackId);
     } else {
       console.warn('⚠️ ParticleSystem not available for enemy attack effect');
     }
   }
 
-  private updateEnemyAttackPosition(enemyId: string, newPosition: THREE.Vector3): void {
-    // Update the attack particle position if it exists
-    if (this.particleSystem) {
-      this.particleSystem.updateEnemyAttackPosition(enemyId, newPosition);
-    }
-  }
+
 
   // Item management methods
   private handleItemSpawned(itemData: GameItem): void {
