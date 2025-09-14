@@ -103,7 +103,6 @@ export class EnemyManager {
       const texture = textureLoader.load(
         framePath,
         (loadedTexture) => {
-          console.log(`✅ Loaded Pixel Adventure 2 frame ${i}: ${framePath} for ${enemyId}`);
           loadedTexture.magFilter = THREE.NearestFilter;
           loadedTexture.minFilter = THREE.NearestFilter;
           loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
@@ -180,7 +179,6 @@ export class EnemyManager {
     
     const frame1Texture = textureLoader.load(frame1Path, 
       (texture) => {
-        console.log(`✅ Loaded stendhal frame 1: ${frame1Path} for ${enemyId}`);
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
         texture.wrapS = THREE.ClampToEdgeWrapping;
@@ -194,7 +192,6 @@ export class EnemyManager {
     
     const frame2Texture = textureLoader.load(frame2Path, 
       (texture) => {
-        console.log(`✅ Loaded stendhal frame 2: ${frame2Path} for ${enemyId}`);
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
         texture.wrapS = THREE.ClampToEdgeWrapping;
@@ -208,7 +205,6 @@ export class EnemyManager {
 
     const frame3Texture = textureLoader.load(frame3Path, 
       (texture) => {
-        console.log(`✅ Loaded stendhal frame 3: ${frame3Path} for ${enemyId}`);
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
         texture.wrapS = THREE.ClampToEdgeWrapping;
@@ -579,13 +575,6 @@ export class EnemyManager {
     maxHealth: number | undefined,
     particleSystem?: any
   ): void {
-    console.log('🔍 EnemyManager.updateEnemyHealth called:', {
-      enemyId,
-      newHealth,
-      maxHealth,
-      hasParticleSystem: !!particleSystem
-    });
-
     // Enemy despawns when health is 0 so it will never be 0
     if (newHealth === undefined || newHealth === null || newHealth === 0) {
       console.log('⚠️ Skipping health update - no valid health value provided for enemy:', enemyId);
@@ -632,19 +621,10 @@ export class EnemyManager {
     enemy.health = newHealth;
     enemy.maxHealth = effectiveMaxHealth;
 
-    console.log('� Health data updated, checking if health bar needed:', {
-      enemyId,
-      health: newHealth,
-      maxHealth: effectiveMaxHealth,
-      needsHealthBar: newHealth < effectiveMaxHealth
-    });
-
     // Create or update health bar only if health is below max
     if (newHealth < effectiveMaxHealth) {
-      console.log('🔨 Creating/updating health bar for enemy:', enemyId);
       this.createOrUpdateHealthBar(enemyId, newHealth, effectiveMaxHealth, enemy.mesh);
     } else {
-      console.log('❌ Removing health bar - enemy at full health:', enemyId);
       // Remove health bar if at full health
       this.removeHealthBar(enemyId);
     }

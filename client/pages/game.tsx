@@ -7,6 +7,7 @@ import CharacterSelection, { CharacterData } from '../components/CharacterSelect
 import ServerConnectionError from '../components/ServerConnectionError';
 import FloorTransitionLoader from '../components/FloorTransitionLoader';
 import HealthHUD from '../components/HealthHUD';
+import DeathSummary from '../components/DeathSummary';
 import { DungeonGraphViewer } from '../components/DungeonGraphViewer';
 import { DungeonApi } from '../lib/game/network/dungeonApi';
 import { VisitedNode } from '../lib/game/types/api';
@@ -53,6 +54,7 @@ export default function Game() {
     manaRef.current = playerMana;
   }, [playerMana]);
   const [isRespawning, setIsRespawning] = useState<boolean>(false);
+  const [deathSummary, setDeathSummary] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>({
     connected: false,
     error: null,
@@ -90,14 +92,15 @@ export default function Game() {
     setSelectedCharacter(null);
   }, [server, user, authLoading]);
 
-  // Initialize game when component mounts and server is available
+  // Initialize game for existing live characters only
   useEffect(() => {
-    if (!server || !user || !canvasRef.current || !selectedCharacter || connectionState !== 'connected') return;
+    if (!server || !user || !canvasRef.current || connectionState !== 'connected' || !selectedCharacter || !checkingExistingCharacter) return;
 
     const serverAddress = ensureProtocol(decodeURIComponent(server as string));
     
     // Initialize game manager
     const initGame = async () => {
+      console.log('🏗️ Initializing GameManager for existing live character:', selectedCharacter);
       const gameManager = new GameManager(
         canvasRef.current!, 
         setGameState, 
@@ -107,6 +110,7 @@ export default function Game() {
         setCurrentFloor, // Pass current floor state setter
         setPlayerHealth, // Pass health update callback
         () => setIsRespawning(true), // Pass death callback
+        setDeathSummary, // Pass death summary callback
         handleOpenGraphViewer, // Pass graph viewer callback
         consumeStamina, // Pass stamina consumption function
         consumeMana, // Pass mana consumption function
@@ -114,8 +118,26 @@ export default function Game() {
       );
       gameManagerRef.current = gameManager;
       
-      // Connect to server
+      console.log('🔗 Connecting to server for existing character...');
+      // Connect to server and WebSocket for existing live character
       await gameManager.connectToServer(serverAddress);
+      console.log('✅ Server connection complete for existing character');
+      
+      console.log('🔌 Connecting WebSocket for existing live character');
+      await gameManager.connectWebSocket();
+      console.log('✅ WebSocket connection complete for existing character');
+      
+      // Ensure movement controller is updated with character data for existing characters
+      console.log('🔧 Updating movement controller for existing character...');
+      if (gameManager.updateSelectedCharacter) {
+        gameManager.updateSelectedCharacter(selectedCharacter);
+        console.log('✅ Movement controller updated for existing character');
+      }
+      
+      // Debug: Check if game manager is properly set up
+      console.log('🎮 Game manager state for existing character initialized');
+      
+      setCheckingExistingCharacter(false);
       
       // Add debug info to global scope for console debugging
       if (typeof window !== 'undefined') {
@@ -127,9 +149,15 @@ export default function Game() {
         // Also expose gameManager directly for easier access
         (window as any).gameManager = gameManager;
       }
+      
+      console.log('🎮 Game initialized successfully for existing character');
     };
     
-    initGame();
+    initGame().catch((error) => {
+      console.error('❌ Failed to initialize game:', error);
+      setConnectionState('failed');
+      setConnectionError('Failed to initialize game: ' + error.message);
+    });
 
     return () => {
       if (gameManagerRef.current) {
@@ -137,7 +165,7 @@ export default function Game() {
         gameManagerRef.current = null;
       }
     };
-  }, [server, user, selectedCharacter, connectionState]);
+  }, [server, user, selectedCharacter, connectionState, checkingExistingCharacter]);
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
@@ -176,38 +204,48 @@ export default function Game() {
           console.log('✅ Server connection successful:', statusResponse);
           setConnectionState('connected');
           
-          if (statusResponse.success && statusResponse.data.isAlive) {
-            console.log('🎮 Player has live character, loading directly into game');
-            
-            // Safely access character data with defensive checks
-            const characterData = statusResponse.data.character;
-            if (characterData && characterData.type && characterData.style !== undefined && characterData.name) {
-              setSelectedCharacter({
-                type: characterData.type,
-                style: characterData.style,
-                name: characterData.name
-              });
+          if (statusResponse.success) {
+            if (statusResponse.data.isAlive) {
+              console.log('🎮 Player has live character, loading directly into game');
+              
+              // Safely access character data with defensive checks
+              const characterData = statusResponse.data.character;
+              if (characterData && characterData.type && characterData.style !== undefined && characterData.name) {
+                setSelectedCharacter({
+                  type: characterData.type,
+                  style: characterData.style,
+                  name: characterData.name
+                });
+                
+                // Set the health from server response
+                setPlayerHealth({
+                  health: statusResponse.data.health,
+                  maxHealth: 100,
+                  isAlive: statusResponse.data.isAlive
+                });
+
+                // Store the player position and rotation for later use
+                const playerPosition = statusResponse.data.position;
+                const playerRotation = statusResponse.data.rotation;
+                
+                // Store these in sessionStorage so GameManager can use them
+                sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
+                sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
+                
+                // Mark as having an existing live character so GameManager will connect WebSocket
+                setCheckingExistingCharacter(true);
+              } else {
+                console.warn('⚠️ Invalid character data received:', characterData);
+                setConnectionState('failed');
+                setConnectionError('Invalid character data received from server');
+                return;
+              }
             } else {
-              console.warn('⚠️ Invalid character data received:', characterData);
-              setConnectionState('failed');
-              setConnectionError('Invalid character data received from server');
-              return;
+              console.log('💀 Player is dead, showing character selection for respawn');
+              // Player is dead, show character selection screen
+              // Don't set selectedCharacter or checkingExistingCharacter
+              // The character selection screen will handle respawning
             }
-
-            // Set the health from server response
-            setPlayerHealth({
-              health: statusResponse.data.health,
-              maxHealth: 100,
-              isAlive: statusResponse.data.isAlive
-            });
-
-            // Store the player position and rotation for later use
-            const playerPosition = statusResponse.data.position;
-            const playerRotation = statusResponse.data.rotation;
-            
-            // Store these in sessionStorage so GameManager can use them
-            sessionStorage.setItem('playerPosition', JSON.stringify(playerPosition));
-            sessionStorage.setItem('playerRotation', JSON.stringify(playerRotation));
           } else {
             console.log('🏗️ Player needs to create/select character');
           }
@@ -360,44 +398,98 @@ export default function Game() {
   };
 
   // Handle character selection
-  const handleCharacterSelected = (character: CharacterData) => {
+  const handleCharacterSelected = async (character: CharacterData) => {
+    console.log('🎯 handleCharacterSelected called with character:', character);
+    try {
+      // Update the character state
+      setSelectedCharacter(character);
+      
+      const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+      console.log('🌐 Server address for spawn:', serverAddress);
+      
+      // If we don't have a GameManager yet, create it now with the selected character
+      if (!gameManagerRef.current && canvasRef.current) {
+        console.log('🎮 Creating GameManager for new character');
+        const gameManager = new GameManager(
+          canvasRef.current!, 
+          setGameState, 
+          user,
+          character,
+          setFloorTransition,
+          setCurrentFloor,
+          setPlayerHealth,
+          () => setIsRespawning(true),
+          setDeathSummary,
+          handleOpenGraphViewer,
+          consumeStamina,
+          consumeMana,
+          showToast
+        );
+        gameManagerRef.current = gameManager;
         
-    // Update the character state
-    setSelectedCharacter(character);
-    
-    // If we're respawning, send respawn request
-    if (isRespawning && gameManagerRef.current) {
-            gameManagerRef.current.sendRespawnRequest(character);
-      setIsRespawning(false);
+        console.log('🔗 Connecting to server...');
+        // Connect to server (but not WebSocket yet)
+        await gameManager.connectToServer(serverAddress);
+        console.log('✅ Connected to server successfully');
+      } else if (gameManagerRef.current) {
+        console.log('🔄 Using existing GameManager');
+      } else {
+        console.error('❌ No canvas available for GameManager creation');
+        return;
+      }
       
-      // Reset health to alive state (will be updated by server response)
-      setPlayerHealth({
-        health: 100,
-        maxHealth: 100,
-        isAlive: true
-      });
-      
-      // Reset stamina and mana on respawn
-      setPlayerStamina({
-        stamina: 100,
-        maxStamina: 100
-      });
-      
-      setPlayerMana({
-        mana: 100,
-        maxMana: 100
-      });
-    }
-    
-    // If we already have a running GameManager, update its character data
-    if (gameManagerRef.current && !isRespawning) {
-            gameManagerRef.current.updateSelectedCharacter(character);
+      // Spawn the player using the new spawn endpoint
+      if (gameManagerRef.current) {
+        console.log('🚀 Spawning player with character:', character);
+        const success = await gameManagerRef.current.spawnPlayer(character);
+        
+        if (success) {
+          console.log('✅ Player spawned successfully, connecting WebSocket');
+          // Small delay to ensure server has processed the spawn
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // After successful spawn, connect to WebSocket
+          await gameManagerRef.current.connectWebSocket();
+          
+          // Reset health and resources to alive state
+          setPlayerHealth({
+            health: 100,
+            maxHealth: 100,
+            isAlive: true
+          });
+          
+          setPlayerStamina({
+            stamina: 100,
+            maxStamina: 100
+          });
+          
+          setPlayerMana({
+            mana: 100,
+            maxMana: 100
+          });
+          
+          // Clear any existing death/respawn states
+          setIsRespawning(false);
+          setDeathSummary(null);
+        } else {
+          console.error('❌ Failed to spawn player');
+          // Could show an error message to the user here
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error during character selection:', error);
+      // Could show an error message to the user here
     }
   };
 
   // Handle back from character selection
   const handleBackFromCharacterSelection = () => {
     router.push('/dashboard');
+  };
+
+  // Handle death summary continue - shows character selection
+  const handleDeathSummaryContinue = () => {
+    setDeathSummary(null);
+    setIsRespawning(true);
   };
 
   // Manual reconnect handler
@@ -486,94 +578,108 @@ export default function Game() {
     );
   }
 
-  // Show character selection if connection is established but no character is selected yet or if respawning
-  if (connectionState === 'connected' && (!selectedCharacter || isRespawning)) {
+  // Show death summary if player died
+  if (deathSummary) {
     return (
-      <CharacterSelection 
-        onCharacterSelected={handleCharacterSelected}
-        onBack={handleBackFromCharacterSelection}
+      <DeathSummary 
+        deathSummary={deathSummary}
+        onContinue={handleDeathSummaryContinue}
       />
     );
   }
 
-  if (!selectedCharacter) {
-    return (<div className={styles.gameContainer}></div>);
-  }
+  // Show character selection overlay if connection is established but no character is selected yet or if respawning
+  const showCharacterSelection = connectionState === 'connected' && (!selectedCharacter || isRespawning);
+
+  // Always render the main container, but show character selection when needed
+  // Don't return early when no character is selected - let the overlay handle it
 
   return (
     <div className={styles.gameContainer}>
-      {/* HUD */}
-      <div className={styles.hud}>
-        <div className={styles.topLeft}>
-          <button onClick={handleBackToDashboard} className={styles.backButton}>
-            Back to Dashboard
-          </button>
-          <div className={styles.serverInfo}>
-            Server: {ensureProtocol(decodeURIComponent(server as string))}
-          </div>
-          <div className={styles.characterInfo}>
-            Character: {selectedCharacter.name} (Style {selectedCharacter.style})
-          </div>
-          <div className={styles.floorInfo}>
-            Floor: {currentFloor}
-          </div>
-          <HealthHUD 
-            health={playerHealth.health} 
-            maxHealth={playerHealth.maxHealth} 
-            isAlive={playerHealth.isAlive}
-            stamina={playerStamina.stamina}
-            maxStamina={playerStamina.maxStamina}
-            mana={playerMana.mana}
-            maxMana={playerMana.maxMana}
+      {/* Character Selection Overlay */}
+      {showCharacterSelection && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}>
+          <CharacterSelection 
+            onCharacterSelected={handleCharacterSelected}
+            onBack={handleBackFromCharacterSelection}
           />
         </div>
-        
-        <div className={styles.topRight}>
-          <div className={styles.connectionStatus}>
-            {renderConnectionStatus()}
-          </div>
-        </div>
+      )}
 
-        {gameState.error && (
-          <div className={styles.centerMessage}>
-            <div className={styles.error}>{gameState.error}</div>
-            <div>
-              <button onClick={handleBackToDashboard} className={styles.backButton}>
-                Back to Dashboard
-              </button>
-              {!gameState.loading && (
+      {/* HUD - only show when character is selected and not in character selection */}
+      {selectedCharacter && !showCharacterSelection && (
+        <div className={styles.hud}>
+          <div className={styles.topLeft}>
+            <button onClick={handleBackToDashboard} className={styles.backButton}>
+              Back to Dashboard
+            </button>
+            <div className={styles.serverInfo}>
+              Server: {ensureProtocol(decodeURIComponent(server as string))}
+            </div>
+            <div className={styles.characterInfo}>
+              Character: {selectedCharacter.name} (Style {selectedCharacter.style})
+            </div>
+            <div className={styles.floorInfo}>
+              Floor: {currentFloor}
+            </div>
+            <HealthHUD 
+              health={playerHealth.health} 
+              maxHealth={playerHealth.maxHealth} 
+              isAlive={playerHealth.isAlive}
+              stamina={playerStamina.stamina}
+              maxStamina={playerStamina.maxStamina}
+              mana={playerMana.mana}
+              maxMana={playerMana.maxMana}
+            />
+          </div>
+          
+          <div className={styles.topRight}>
+            <div className={styles.connectionStatus}>
+              {renderConnectionStatus()}
+            </div>
+          </div>
+
+          {gameState.error && (
+            <div className={styles.centerMessage}>
+              <div className={styles.error}>{gameState.error}</div>
+              <div>
+                <button onClick={handleBackToDashboard} className={styles.backButton}>
+                  Back to Dashboard
+                </button>
+                {!gameState.loading && (
+                  <button onClick={handleManualReconnect} className={styles.backButton} style={{ marginLeft: '10px' }}>
+                    Reconnect
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!gameState.connected && !gameState.error && !gameState.loading && (
+            <div className={styles.centerMessage}>
+              <div className={styles.error}>Connection lost</div>
+              <div>
+                <button onClick={handleBackToDashboard} className={styles.backButton}>
+                  Back to Dashboard
+                </button>
                 <button onClick={handleManualReconnect} className={styles.backButton} style={{ marginLeft: '10px' }}>
                   Reconnect
                 </button>
-              )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {!gameState.connected && !gameState.error && !gameState.loading && (
-          <div className={styles.centerMessage}>
-            <div className={styles.error}>Connection lost</div>
-            <div>
-              <button onClick={handleBackToDashboard} className={styles.backButton}>
-                Back to Dashboard
-              </button>
-              <button onClick={handleManualReconnect} className={styles.backButton} style={{ marginLeft: '10px' }}>
-                Reconnect
-              </button>
+          {gameState.connected && (
+            <div className={styles.controls}>
+              <div>Controls: WASD to move, Tab for Admin mode, 9 for Debug death, P for Dungeon Graph</div>
+              <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
+              <div>Players online: {gameManagerRef.current?.playersCount || 1}</div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
-        {gameState.connected && (
-          <div className={styles.controls}>
-            <div>Controls: WASD to move, Tab for Admin mode, 9 for Debug death, P for Dungeon Graph</div>
-            <div>Mouse: Click to lock cursor, move mouse to look around (FPS-style camera controls)</div>
-            <div>Players online: {gameManagerRef.current?.playersCount || 1}</div>
-          </div>
-        )}
-      </div>
-
-      {/* Game Canvas */}
+      {/* Game Canvas - always render so it's available for GameManager creation */}
       <canvas ref={canvasRef} className={styles.gameCanvas} />
 
       {/* Floor Transition Loading Screen */}

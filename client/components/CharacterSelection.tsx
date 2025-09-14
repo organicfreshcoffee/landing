@@ -143,7 +143,10 @@ export default function CharacterSelection({ onCharacterSelected, onBack }: Char
         style: selectedStyle,
         name: CHARACTER_CLASSES[selectedClass as keyof typeof CHARACTER_CLASSES]
       };
-            onCharacterSelected(characterData);
+      console.log('🎮 Character selection: Starting game with character:', characterData);
+      onCharacterSelected(characterData);
+    } else {
+      console.warn('⚠️ Cannot start game: missing character selection', { selectedClass, selectedStyle });
     }
   };
 
