@@ -177,6 +177,14 @@ export class GameManager {
   }
 
   private async createLocalPlayer(): Promise<void> {
+    // Clean up existing local player if it exists
+    if (this.localPlayerRef.current) {
+      console.log('🧹 Cleaning up existing local player');
+      this.sceneManager.removeFromScene(this.localPlayerRef.current);
+      this.localPlayerRef.current = null;
+      this.localPlayerMixer.current = null;
+      this.localPlayerActions.current = {};
+    }
         
     // Create local player object with character data
     const localPlayer: Player = {
@@ -270,6 +278,14 @@ export class GameManager {
     if (this.onFloorChange && initialFloor) {
       this.onFloorChange(initialFloor);
     }
+    
+    // Signal that server connection is ready (but WebSocket is not yet connected)
+    // This allows the UI to progress past the loading state
+    this.onStateChange({
+      connected: false, // WebSocket not connected yet
+      error: null,
+      loading: false    // Server connection is ready
+    });
     
     // Note: WebSocket connection is now initiated after successful spawn
     // This method only sets up the server connection and prepares the scene
@@ -1133,17 +1149,32 @@ export class GameManager {
     }
 
     try {
+      console.log('📡 Calling spawn endpoint for character:', characterData);
       const response = await DungeonApi.spawnPlayer(serverAddress, {
         name: characterData.name,
         style: characterData.style,
         type: characterData.type
       });
+      console.log('📡 Spawn endpoint response:', response);
 
       if (response.success) {
-        console.log('✅ Player spawned successfully');
-        // Update selected character
-        this.selectedCharacter = characterData;
+        console.log('✅ Player spawned successfully on server');
+        // Update selected character and movement controller
+        this.updateSelectedCharacter(characterData);
         
+        console.log('🎮 Recreating local player...');
+        // Recreate the local player with the new character data
+        await this.createLocalPlayer();
+        
+        console.log('📍 Positioning player on ground...');
+        // Position player on ground level at spawn
+        this.positionPlayerOnGround();
+        
+        console.log('🏗️ Reloading floor...');
+        // Reload floor to ensure everything is properly initialized
+        await this.loadFloor();
+        
+        console.log('❤️ Resetting health state...');
         // Reset health to alive state
         if (this.onHealthUpdate) {
           this.onHealthUpdate({
@@ -1153,6 +1184,7 @@ export class GameManager {
           });
         }
         
+        console.log('🎉 Player spawn process completed successfully');
         return true;
       } else {
         console.error('❌ Failed to spawn player:', response.message);
