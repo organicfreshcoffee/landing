@@ -82,13 +82,13 @@ export class PlayerManager {
     const frame2Path = `/assets/sprites/last-guardian-sprites/png/${character.type}${character.style}_${direction}2.png`;
     
     const frame1Texture = textureLoader.load(frame1Path, 
-      () => console.log(`✅ Loaded frame 1: ${frame1Path}`),
+      () => {},
       undefined,
       (error) => console.error(`❌ Failed to load frame 1: ${frame1Path}`, error)
     );
     
     const frame2Texture = textureLoader.load(frame2Path, 
-      () => console.log(`✅ Loaded frame 2: ${frame2Path}`),
+      () => {},
       undefined,
       (error) => console.error(`❌ Failed to load frame 2: ${frame2Path}`, error)
     );
@@ -583,19 +583,10 @@ export class PlayerManager {
     player.health = newHealth;
     player.maxHealth = effectiveMaxHealth;
 
-    console.log('💖 Health data updated, checking if health bar needed:', {
-      playerId,
-      health: newHealth,
-      maxHealth: effectiveMaxHealth,
-      needsHealthBar: newHealth < effectiveMaxHealth
-    });
-
     // Create or update health bar only if health is below max
     if (newHealth < effectiveMaxHealth) {
-      console.log('🔨 Creating/updating health bar for player:', playerId);
       this.createOrUpdateHealthBar(playerId, newHealth, effectiveMaxHealth, player.mesh);
     } else {
-      console.log('❌ Removing health bar - player at full health:', playerId);
       // Remove health bar if at full health
       this.removeHealthBar(playerId);
     }

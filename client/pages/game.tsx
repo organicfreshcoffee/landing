@@ -100,6 +100,7 @@ export default function Game() {
     
     // Initialize game manager
     const initGame = async () => {
+      console.log('🏗️ Initializing GameManager for existing live character:', selectedCharacter);
       const gameManager = new GameManager(
         canvasRef.current!, 
         setGameState, 
@@ -117,10 +118,25 @@ export default function Game() {
       );
       gameManagerRef.current = gameManager;
       
+      console.log('🔗 Connecting to server for existing character...');
       // Connect to server and WebSocket for existing live character
       await gameManager.connectToServer(serverAddress);
+      console.log('✅ Server connection complete for existing character');
+      
       console.log('🔌 Connecting WebSocket for existing live character');
       await gameManager.connectWebSocket();
+      console.log('✅ WebSocket connection complete for existing character');
+      
+      // Ensure movement controller is updated with character data for existing characters
+      console.log('🔧 Updating movement controller for existing character...');
+      if (gameManager.updateSelectedCharacter) {
+        gameManager.updateSelectedCharacter(selectedCharacter);
+        console.log('✅ Movement controller updated for existing character');
+      }
+      
+      // Debug: Check if game manager is properly set up
+      console.log('🎮 Game manager state for existing character initialized');
+      
       setCheckingExistingCharacter(false);
       
       // Add debug info to global scope for console debugging

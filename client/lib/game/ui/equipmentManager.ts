@@ -190,7 +190,6 @@ export class EquipmentManager {
       
       if (response.success) {
         this.inventory = response.data.inventory;
-        console.log('✅ Loaded inventory for equipment view');
       } else {
         console.error('❌ Failed to load inventory');
       }

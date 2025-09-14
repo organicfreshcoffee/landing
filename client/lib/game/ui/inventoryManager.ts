@@ -131,7 +131,6 @@ export class InventoryManager {
       
       if (response.success) {
         this.inventory = response.data.inventory;
-        console.log('✅ Loaded inventory:', this.inventory.statistics);
       } else {
         console.error('❌ Failed to load inventory');
       }

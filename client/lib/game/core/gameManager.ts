@@ -410,17 +410,7 @@ export class GameManager {
 
       case 'enemy-moved':
         if (message.data && message.data.enemies && Array.isArray(message.data.enemies)) {
-          console.log('🐉 Received enemy-moved message with enemies:', {
-            count: message.data.enemies.length,
-            firstEnemy: message.data.enemies[0]
-          });
           message.data.enemies.forEach((enemyData: EnemyUpdate) => {
-            console.log('🐉 Processing enemy update:', {
-              id: enemyData.id,
-              health: enemyData.health,
-              maxHealth: enemyData.maxHealth,
-              hasHealth: enemyData.health !== undefined
-            });
             this.updateEnemy(enemyData).catch(console.error);
           });
         } else {
@@ -576,19 +566,12 @@ export class GameManager {
 
           // Only update health data if health information is provided and is a valid number
           if (playerData.health !== undefined && playerData.health !== null && typeof playerData.health === 'number') {
-            console.log('✅ Valid health data found, updating health for player:', playerData.id);
             PlayerManager.updatePlayerHealth(
               playerData.id, 
               playerData.health, 
               playerData.maxHealth, 
               this.particleSystem
             );
-          } else {
-            console.log('⏭️ Skipping health update - no valid health data provided for player:', {
-              playerId: playerData.id,
-              health: playerData.health,
-              healthType: typeof playerData.health
-            });
           }
         }
         
@@ -664,13 +647,6 @@ export class GameManager {
   }
 
   private async updateEnemy(enemyData: EnemyUpdate): Promise<void> {
-    console.log('🤖 GameManager.updateEnemy called:', {
-      enemyId: enemyData.id,
-      health: enemyData.health,
-      maxHealth: enemyData.maxHealth,
-      hasHealthData: enemyData.health !== undefined && enemyData.maxHealth !== undefined
-    });
-
     const existingEnemy = this.enemies.get(enemyData.id);
 
     if (existingEnemy) {
@@ -691,28 +667,14 @@ export class GameManager {
       
       existingEnemy.isMoving = enemyData.isMoving;
 
-      console.log('🔄 Updating existing enemy health:', {
-        enemyId: enemyData.id,
-        health: enemyData.health,
-        maxHealth: enemyData.maxHealth,
-        hasHealthData: enemyData.health !== undefined && enemyData.health !== null
-      });
-
       // Only update health data if health information is provided and is a valid number
       if (enemyData.health !== undefined && enemyData.health !== null && typeof enemyData.health === 'number') {
-        console.log('✅ Valid health data found, updating health for enemy:', enemyData.id);
         EnemyManager.updateEnemyHealth(
           enemyData.id, 
           enemyData.health, 
           enemyData.maxHealth, 
           this.particleSystem
         );
-      } else {
-        console.log('⏭️ Skipping health update - no valid health data provided for enemy:', {
-          enemyId: enemyData.id,
-          health: enemyData.health,
-          healthType: typeof enemyData.health
-        });
       }
 
       // Update position and animation
@@ -1233,8 +1195,6 @@ export class GameManager {
   }
 
   private removeEnemy(enemyId: string): void {
-    console.log('🗑️ Removing enemy:', enemyId);
-    
     const enemy = this.enemies.get(enemyId);
     
     if (enemy && enemy.mesh) {

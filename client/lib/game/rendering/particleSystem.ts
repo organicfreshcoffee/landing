@@ -270,7 +270,6 @@ export class ParticleSystem {
   public removeEnemyAttack(attackId: string): void {
     const attack = this.enemyAttacks.get(attackId);
     if (attack) {
-      console.log('🗑️ Manually removing enemy attack:', attackId);
       // Mark all particles for immediate removal by setting life to 0
       attack.particles.forEach((particle: Particle) => {
         particle.life = 0;

@@ -95,9 +95,7 @@ export class ItemManager {
     // Load the item texture
     const textureLoader = new THREE.TextureLoader();
     const itemTexture = textureLoader.load(spritePath, 
-      (texture) => {
-        console.log(`✅ Loaded item texture for ${item.id} (${category})`);
-      },
+      (texture) => {},
       undefined,
       (error) => {
         console.error(`❌ Failed to load item texture for ${item.id} (${category})`, error);
