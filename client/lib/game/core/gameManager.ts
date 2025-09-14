@@ -410,6 +410,20 @@ export class GameManager {
         }
         break;
 
+      case 'enemy_attack':
+        if (message.data && message.data.attackPosition && message.data.enemyId) {
+          console.log('⚔️ Received enemy_attack message:', {
+            enemyId: message.data.enemyId,
+            attackPosition: message.data.attackPosition,
+            enemyTypeName: message.data.enemyTypeName,
+            targetPlayerId: message.data.targetPlayerId
+          });
+          this.handleEnemyAttack(message.data);
+        } else {
+          console.warn('⚠️ Invalid enemy_attack message data:', message.data);
+        }
+        break;
+
       case 'item-spawned':
         if (message.data && message.data.item) {
           this.handleItemSpawned(message.data.item);
@@ -1132,6 +1146,37 @@ export class GameManager {
       console.log('🧹 Cleaned up orphaned enemy data:', enemyId);
     }
   }
+
+  private handleEnemyAttack(attackData: any): void {
+    console.log('⚔️ GameManager.handleEnemyAttack called:', attackData);
+    
+    if (!attackData.attackPosition || !attackData.enemyId) {
+      console.warn('⚠️ Invalid enemy attack data - missing attackPosition or enemyId');
+      return;
+    }
+
+    const attackPosition = new THREE.Vector3(
+      attackData.attackPosition.x,
+      attackData.attackPosition.y,
+      attackData.attackPosition.z
+    );
+
+    // Create a particle effect for every enemy attack message
+    // Each attack gets a unique identifier based on enemyId + timestamp
+    const attackId = `${attackData.enemyId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.createEnemyAttackParticle(attackPosition, attackId);
+  }
+
+  private createEnemyAttackParticle(position: THREE.Vector3, attackId: string): void {
+    // Use the particle system to create a red ball at the attack position
+    if (this.particleSystem) {
+      this.particleSystem.createEnemyAttackEffect(position, attackId);
+    } else {
+      console.warn('⚠️ ParticleSystem not available for enemy attack effect');
+    }
+  }
+
+
 
   // Item management methods
   private handleItemSpawned(itemData: GameItem): void {
