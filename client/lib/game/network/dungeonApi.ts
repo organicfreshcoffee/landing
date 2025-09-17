@@ -6,6 +6,8 @@ import {
   GeneratedFloorTilesResponse,
   RoomStairsResponse,
   SpawnLocationResponse,
+  SpawnPlayerResponse,
+  PlayerDeathResponse,
   PlayerMovedFloorResponse,
   CurrentFloorResponse,
   CurrentStatusResponse,
@@ -42,6 +44,8 @@ const buildDungeonEndpoints = (serverAddress: string) => {
     dropItem: () => `${baseUrl}/api/dungeon/drop-item`,
     equipItem: () => `${baseUrl}/api/dungeon/equip-item`,
     unequipItem: () => `${baseUrl}/api/dungeon/unequip-item`,
+    spawnPlayer: () => `${baseUrl}/api/dungeon/spawn`,
+    playerDeath: () => `${baseUrl}/api/dungeon/death`,
   };
 };
 
@@ -347,6 +351,44 @@ export class DungeonApi {
       return response.data;
     } catch (error) {
       console.error('❌ Error unequipping item:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Spawn player with character data
+   */
+  static async spawnPlayer(serverAddress: string, characterData: any): Promise<SpawnPlayerResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const response = await axios.post(
+        endpoints.spawnPlayer(),
+        { characterData },
+        config
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error spawning player:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger player death and get death summary
+   */
+  static async playerDeath(serverAddress: string): Promise<PlayerDeathResponse> {
+    try {
+      const config = await getAuthConfig();
+      const endpoints = buildDungeonEndpoints(serverAddress);
+      const response = await axios.post(
+        endpoints.playerDeath(),
+        {},
+        config
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error triggering player death:', error);
       throw error;
     }
   }

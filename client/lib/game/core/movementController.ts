@@ -1032,6 +1032,16 @@ export class MovementController {
     console.log('⚔️ Weapon equipment changed, will update on next attack');
   }
 
+  /**
+   * Force update camera position based on current player position
+   * Useful after teleporting or respawning player
+   */
+  updateCameraPosition(): void {
+    if (!this.localPlayerRef.current || !this.cameraRef.current) return;
+    
+    this.updateCamera(this.cameraRef.current, this.localPlayerRef.current.position);
+  }
+
   cleanup(): void {
     this.keysPressed.clear();
     this.isMoving = false;

@@ -11,7 +11,7 @@ import { ItemInteractionManager, ItemInteractionData } from '../ui/itemInteracti
 import { InventoryManager } from '../ui/inventoryManager';
 import { ToastManager } from '../ui/toastManager';
 import { DungeonApi } from '../network/dungeonApi';
-import { StairInfo, GameItem } from '../types/api';
+import { StairInfo, GameItem, SpawnPlayerResponse } from '../types/api';
 import { CubeConfig } from '../config/cubeConfig';
 
 export class GameManager {
@@ -35,6 +35,10 @@ export class GameManager {
   // Floor verification tracking
   private lastFloorVerificationTime = 0;
   private floorVerificationInterval = 30000; // Check every 30 seconds
+
+  // Death summary state
+  private isDeathSummaryVisible = false;
+  private currentDeathMessage = '';
 
   // Cleanup handler
   private handleBeforeUnload = () => {
@@ -222,7 +226,8 @@ export class GameManager {
     
   }
 
-  async connectToServer(serverAddress: string): Promise<void> {
+  // Initialize server connection and load world without connecting to WebSocket
+  async initializeServer(serverAddress: string): Promise<void> {
     // Set server address for dungeon API calls
     this.sceneManager.setServerAddress(serverAddress);
     
@@ -269,9 +274,15 @@ export class GameManager {
     if (this.onFloorChange && initialFloor) {
       this.onFloorChange(initialFloor);
     }
-        
-    // Connect to WebSocket
-    await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
+  }
+
+  // Legacy method for backward compatibility - now uses HTTP spawn first
+  async connectToServer(serverAddress: string): Promise<void> {
+    // Initialize server without WebSocket connection
+    await this.initializeServer(serverAddress);
+    
+    // Use HTTP spawn to join the game
+    await this.spawnPlayer(serverAddress);
   }
 
   private handleGameMessage(message: GameMessage): void {
@@ -445,6 +456,15 @@ export class GameManager {
           this.handleItemPickedUp(message.data.itemId, message.data.playerId);
         } else {
           console.warn('⚠️ Invalid item-picked-up message data:', message.data);
+        }
+        break;
+
+      case 'you-died':
+        if (message.data && message.data.deathMessage) {
+          this.handleServerDeath(message.data.deathMessage);
+        } else {
+          console.warn('⚠️ Invalid you-died message data:', message.data);
+          this.handleServerDeath('You have died');
         }
         break;
     }
@@ -2164,6 +2184,85 @@ export class GameManager {
       totalPlayersInMap: this.players.size,
       totalAnimationsTracked: this.playersAnimations.size
     };
+  }
+
+  // New method: Spawn player using HTTP endpoint
+  async spawnPlayer(serverAddress: string): Promise<void> {
+    try {
+      // Call the HTTP spawn endpoint
+      const response: SpawnPlayerResponse = await DungeonApi.spawnPlayer(
+        this.user,
+        this.selectedCharacter
+      );
+
+      if (response.success) {
+        console.log('✨ Player spawned successfully via HTTP:', response.message);
+        
+        // Reset local player position to spawn (0, 0, 0)
+        if (this.localPlayerRef.current) {
+          this.localPlayerRef.current.position.set(0, 0, 0);
+          
+          // Position player on ground to ensure proper footing
+          this.positionPlayerOnGround();
+          
+          // Force camera update to sync with new player position
+          this.movementController.updateCameraPosition();
+        }
+        
+        // Small delay to ensure positioning is complete before WebSocket connection
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Connect to WebSocket for real-time updates
+        await this.webSocketManager.connect(serverAddress, this.user, this.selectedCharacter);
+        
+      } else {
+        console.error('Failed to spawn player:', response.message);
+        throw new Error(response.message || 'Failed to spawn player');
+      }
+    } catch (error) {
+      console.error('Error spawning player:', error);
+      throw error;
+    }
+  }
+
+  // New method: Handle server death message
+  handleServerDeath(deathMessage: string): void {
+    console.log('💀 Player died, showing death summary:', deathMessage);
+    
+    // Store death message and show summary
+    this.currentDeathMessage = deathMessage;
+    this.isDeathSummaryVisible = true;
+    
+    // Trigger onPlayerDeath callback if available
+    if (this.onPlayerDeath) {
+      this.onPlayerDeath();
+    }
+  }
+
+  // New method: Get death summary state
+  getDeathSummaryState(): { isVisible: boolean; message: string } {
+    return {
+      isVisible: this.isDeathSummaryVisible,
+      message: this.currentDeathMessage
+    };
+  }
+
+  // New method: Hide death summary and trigger respawn
+  async hideDeathSummaryAndRespawn(): Promise<void> {
+    console.log('🔄 Hiding death summary and respawning player');
+    
+    // Hide death summary
+    this.isDeathSummaryVisible = false;
+    this.currentDeathMessage = '';
+    
+    // Get server address and respawn the player using HTTP endpoint
+    const serverAddress = this.getServerAddress();
+    if (serverAddress) {
+      await this.spawnPlayer(serverAddress);
+    } else {
+      console.error('No server address available for respawn');
+      throw new Error('No server address available for respawn');
+    }
   }
 
   cleanup(): void {
