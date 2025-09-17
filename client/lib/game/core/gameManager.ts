@@ -39,6 +39,9 @@ export class GameManager {
   // Death summary state
   private isDeathSummaryVisible = false;
   private currentDeathMessage = '';
+  
+  // Server address storage
+  private serverAddress: string | null = null;
 
   // Cleanup handler
   private handleBeforeUnload = () => {
@@ -106,7 +109,7 @@ export class GameManager {
   }
 
   private getServerAddress(): string | null {
-    return this.sceneManager.getServerAddress();
+    return this.serverAddress || this.sceneManager.getServerAddress();
   }
 
   private async initializeGame(): Promise<void> {
@@ -228,6 +231,9 @@ export class GameManager {
 
   // Initialize server connection and load world without connecting to WebSocket
   async initializeServer(serverAddress: string): Promise<void> {
+    // Store server address
+    this.serverAddress = serverAddress;
+    
     // Set server address for dungeon API calls
     this.sceneManager.setServerAddress(serverAddress);
     
@@ -2248,21 +2254,21 @@ export class GameManager {
   }
 
   // New method: Hide death summary and trigger respawn
-  async hideDeathSummaryAndRespawn(): Promise<void> {
+  async hideDeathSummaryAndRespawn(serverAddress?: string): Promise<void> {
     console.log('🔄 Hiding death summary and respawning player');
     
     // Hide death summary
     this.isDeathSummaryVisible = false;
     this.currentDeathMessage = '';
     
-    // Get server address and respawn the player using HTTP endpoint
-    const serverAddress = this.getServerAddress();
-    if (serverAddress) {
-      await this.spawnPlayer(serverAddress);
-    } else {
+    // Use provided server address or get stored one
+    const address = serverAddress || this.getServerAddress();
+    if (!address) {
       console.error('No server address available for respawn');
       throw new Error('No server address available for respawn');
     }
+    
+    await this.spawnPlayer(address);
   }
 
   cleanup(): void {

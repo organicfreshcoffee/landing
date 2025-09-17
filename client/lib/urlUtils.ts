@@ -9,8 +9,8 @@
  * @returns A properly formatted URL with protocol
  */
 export function ensureProtocol(serverAddress: string, defaultProtocol: 'http' | 'https' = 'https'): string {
-  if (!serverAddress) {
-    throw new Error('Server address cannot be empty');
+  if (!serverAddress || typeof serverAddress !== 'string') {
+    throw new Error('Server address must be a non-empty string');
   }
 
   // If it already has a protocol, return as-is

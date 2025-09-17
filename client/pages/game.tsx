@@ -383,9 +383,10 @@ export default function Game() {
 
   // Handle death summary continue
   const handleDeathSummaryContinue = async () => {
-    if (gameManagerRef.current) {
+    if (gameManagerRef.current && server) {
       try {
-        await gameManagerRef.current.hideDeathSummaryAndRespawn();
+        const serverAddress = ensureProtocol(decodeURIComponent(server as string));
+        await gameManagerRef.current.hideDeathSummaryAndRespawn(serverAddress);
       } catch (error) {
         console.error('Failed to respawn after death:', error);
         showToast('Failed to respawn. Please try again.', 'error');
